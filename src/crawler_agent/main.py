@@ -7,6 +7,7 @@ from pathlib import Path
 import structlog
 
 from .cognitive.orchestrator import CognitiveOrchestrator
+from .cognitive.goals import GoalSource, GoalPriority
 from .cli_colors import (
     ONTOGENY_LOGO, red, green, yellow, blue, cyan, bright_red, bold, dim, RESET
 )
