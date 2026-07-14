@@ -2,7 +2,7 @@
 
 **Proto-AGI cognitive agent with recursive self-improvement, 33 web crawlers, and multi-layer persistent memory.**
 
-Runs on Ollama llama3.2 locally by default, with optional hybrid LLM support (codellama:13b or Claude/GPT for complex reasoning). CLI-only. No web UI.
+Runs on Ollama llama3.2 locally by default, with hybrid LLM support (codellama:13b for complex reasoning). CLI-only. No web UI.
 
 ---
 
@@ -86,12 +86,12 @@ Isolated code execution in Docker containers with resource limits and automatic 
 ### Prerequisites
 - Python 3.11+
 - Docker Desktop (for code execution sandbox)
-- Ollama with llama3.2 (and optionally codellama:13b for hybrid mode)
+- Ollama with llama3.2 and codellama:13b
 
 ```bash
 # Install Ollama and pull models
 ollama pull llama3.2
-ollama pull codellama:13b  # optional, for hybrid mode
+ollama pull codellama:13b
 
 # Clone and install
 git clone https://github.com/anglonordicinvader-max/ontogeny.git
