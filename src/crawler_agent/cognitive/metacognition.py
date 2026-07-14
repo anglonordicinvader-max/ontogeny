@@ -1,13 +1,13 @@
 """Meta-cognition module for self-evaluation and reasoning monitoring."""
 
-import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any
 
 import structlog
-from openai import AsyncOpenAI
+
+from .backend import CognitiveBackend, CognitiveResponse
 
 
 class ConfidenceLevel(str, Enum):
@@ -56,9 +56,8 @@ Alternatives: {', '.join(self.alternatives_considered) if self.alternatives_cons
 class MetaCognition:
     """Meta-cognitive monitoring and self-evaluation."""
 
-    def __init__(self, api_key: str, model: str = "gpt-4-turbo-preview", api_base: str | None = None):
-        self.client = AsyncOpenAI(api_key=api_key or "ollama", base_url=api_base)
-        self.model = model
+    def __init__(self, backend: CognitiveBackend):
+        self.backend = backend
         self.logger = structlog.get_logger()
         self.traces: list[ReasoningTrace] = []
 
@@ -71,38 +70,33 @@ class MetaCognition:
         """Evaluate the quality of reasoning."""
         trace = ReasoningTrace(id=f"trace_{datetime.utcnow().timestamp()}")
 
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """You are a meta-cognitive evaluator. Analyze the reasoning process and provide:
+        system_prompt = """You are a meta-cognitive evaluator. Analyze the reasoning process and provide:
 1. Step-by-step breakdown of reasoning quality
 2. Confidence assessment (0-1)
 3. Potential biases detected
 4. Alternative reasoning paths considered
 5. Overall quality score (0-1)
 
-Return JSON with: steps (list of {thought, quality, issues}), confidence, biases, alternatives, quality_score""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Query: {query}
+Return JSON with: steps (list of {thought, quality, issues}), confidence, biases, alternatives, quality_score"""
+
+        user_prompt = f"""Query: {query}
 
 Reasoning to evaluate:
 {reasoning}
 
 Context: {context}
 
-Evaluate this reasoning:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Evaluate this reasoning:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=1500,
+            temperature=0.3,
         )
 
         try:
-            result = json.loads(response.choices[0].message.content or "{}")
+            result = response.parsed_json
 
             trace.conclusion = reasoning[:500]
             trace.confidence = result.get("confidence", 0.5)
@@ -132,29 +126,24 @@ Evaluate this reasoning:""",
         evidence: list[str],
     ) -> tuple[float, str]:
         """Calibrate confidence in a claim based on evidence."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "Assess confidence in a claim based on provided evidence. Return JSON with confidence (0-1) and reasoning.",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Claim: {claim}
+        system_prompt = "Assess confidence in a claim based on provided evidence. Return JSON with confidence (0-1) and reasoning."
+
+        user_prompt = f"""Claim: {claim}
 
 Evidence:
 {chr(10).join(f'- {e}' for e in evidence)}
 
-Assess confidence:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Assess confidence:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=500,
+            temperature=0.3,
         )
 
         try:
-            result = json.loads(response.choices[0].message.content or "{}")
+            result = response.parsed_json
             confidence = result.get("confidence", 0.5)
             reasoning = result.get("reasoning", "Unable to assess")
             return confidence, reasoning
@@ -167,30 +156,25 @@ Assess confidence:""",
         known_facts: list[str],
     ) -> dict[str, Any]:
         """Check if text contains potential hallucinations."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Check if the text contains claims not supported by known facts.
-Return JSON with: supported_claims, unsupported_claims, hallucination_risk (0-1)""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Text: {text}
+        system_prompt = """Check if the text contains claims not supported by known facts.
+Return JSON with: supported_claims, unsupported_claims, hallucination_risk (0-1)"""
+
+        user_prompt = f"""Text: {text}
 
 Known facts:
 {chr(10).join(f'- {f}' for f in known_facts)}
 
-Check for hallucinations:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Check for hallucinations:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=1000,
+            temperature=0.3,
         )
 
         try:
-            return json.loads(response.choices[0].message.content or "{}")
+            return response.parsed_json
         except Exception:
             return {"hallucination_risk": 0.5, "error": "Assessment failed"}
 
@@ -199,27 +183,22 @@ Check for hallucinations:""",
         reasoning_trace: ReasoningTrace,
     ) -> list[str]:
         """Suggest improvements to reasoning."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "Suggest specific improvements to the reasoning process. Return JSON with suggestions (list of strings).",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Reasoning trace:
+        system_prompt = "Suggest specific improvements to the reasoning process. Return JSON with suggestions (list of strings)."
+
+        user_prompt = f"""Reasoning trace:
 {reasoning_trace.to_context()}
 
-Suggest improvements:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Suggest improvements:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=800,
+            temperature=0.3,
         )
 
         try:
-            result = json.loads(response.choices[0].message.content or "{}")
+            result = response.parsed_json
             return result.get("suggestions", [])
         except Exception:
             return ["Unable to generate suggestions"]
@@ -231,29 +210,24 @@ Suggest improvements:""",
         expected: str,
     ) -> dict[str, Any]:
         """Reflect on an action's outcome."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Reflect on an action and its outcome. 
-Return JSON with: analysis, what_worked, what_failed, lessons_learned, confidence_in_future""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Action: {action}
+        system_prompt = """Reflect on an action and its outcome. 
+Return JSON with: analysis, what_worked, what_failed, lessons_learned, confidence_in_future"""
+
+        user_prompt = f"""Action: {action}
 Expected: {expected}
 Actual Outcome: {outcome}
 
-Reflect:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Reflect:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=1000,
+            temperature=0.3,
         )
 
         try:
-            return json.loads(response.choices[0].message.content or "{}")
+            return response.parsed_json
         except Exception:
             return {"analysis": "Reflection failed"}
 

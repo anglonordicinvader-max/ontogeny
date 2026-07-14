@@ -7,7 +7,8 @@ from enum import Enum
 from typing import Any
 
 import structlog
-from openai import AsyncOpenAI
+
+from .backend import CognitiveBackend
 
 
 class SimulationType(str, Enum):
@@ -57,9 +58,8 @@ class Dream:
 class InternalSimulator:
     """Mental simulation engine for planning and dreaming."""
 
-    def __init__(self, api_key: str, model: str = "gpt-4-turbo-preview", api_base: str | None = None):
-        self.client = AsyncOpenAI(api_key=api_key or "ollama", base_url=api_base)
-        self.model = model
+    def __init__(self, backend: CognitiveBackend):
+        self.backend = backend
         self.simulations: list[Simulation] = []
         self.dreams: list[Dream] = []
         self.world_model: dict[str, Any] = {}  # Simplified world state
@@ -72,12 +72,7 @@ class InternalSimulator:
         simulation_type: SimulationType = SimulationType.PLANNING,
     ) -> Simulation:
         """Simulate an action before executing."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": f"""Simulate the outcome of an action. Type: {simulation_type.value}
+        system_prompt = f"""Simulate the outcome of an action. Type: {simulation_type.value}
 
 Consider:
 1. Preconditions needed
@@ -87,22 +82,22 @@ Consider:
 5. Resource costs
 
 Return JSON with: steps (list of {state, action, outcome, probability}),
-final_state, outcomes (list), risks, confidence""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Current state: {json.dumps(current_state, default=str)[:1000]}
+final_state, outcomes (list), risks, confidence"""
+
+        user_prompt = f"""Current state: {json.dumps(current_state, default=str)[:1000]}
 Action to simulate: {action}
 
-Simulate:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Simulate:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=1500,
+            temperature=0.3,
         )
 
         try:
-            data = json.loads(response.choices[0].message.content or "{}")
+            data = response.parsed_json
             sim = Simulation(
                 id=f"sim_{len(self.simulations)}",
                 simulation_type=simulation_type,
@@ -137,31 +132,26 @@ Simulate:""",
         initial_state: dict[str, Any],
     ) -> Simulation:
         """Simulate a complete plan."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Simulate executing a multi-step plan.
+        system_prompt = """Simulate executing a multi-step plan.
 For each step, track state changes and identify failure points.
 
 Return JSON with: step_results (list of {step, new_state, success_probability, issues}),
-final_state, overall_success_probability, bottlenecks, recommendations""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Initial state: {json.dumps(initial_state, default=str)[:1000]}
+final_state, overall_success_probability, bottlenecks, recommendations"""
+
+        user_prompt = f"""Initial state: {json.dumps(initial_state, default=str)[:1000]}
 Plan steps: {plan}
 
-Simulate plan execution:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Simulate plan execution:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=2000,
+            temperature=0.3,
         )
 
         try:
-            data = json.loads(response.choices[0].message.content or "{}")
+            data = response.parsed_json
             sim = Simulation(
                 id=f"plan_sim_{len(self.simulations)}",
                 simulation_type=SimulationType.PLANNING,
@@ -192,32 +182,27 @@ Simulate plan execution:""",
         alternatives: list[str] | None = None,
     ) -> dict[str, Any]:
         """Reflect on past events by simulating alternatives."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Reflect on a past event by simulating alternative outcomes.
+        system_prompt = """Reflect on a past event by simulating alternative outcomes.
 Consider: what if different decisions had been made?
 
 Return JSON with: analysis, alternatives_simulated (list of {action, predicted_outcome, comparison},
-lessons_learned, better_approaches""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Event: {event}
+lessons_learned, better_approaches"""
+
+        user_prompt = f"""Event: {event}
 Actual outcome: {outcome}
 Alternatives to consider: {alternatives or []}
 
-Reflect:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Reflect:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=1500,
+            temperature=0.3,
         )
 
         try:
-            return json.loads(response.choices[0].message.content or "{}")
+            return response.parsed_json
         except Exception:
             return {"analysis": "Reflection failed"}
 
@@ -227,30 +212,25 @@ Reflect:""",
         time_horizon: str = "1 hour",
     ) -> dict[str, Any]:
         """Predict future state."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Predict the future state based on current conditions.
+        system_prompt = """Predict the future state based on current conditions.
 Consider trends, momentum, and likely events.
 
-Return JSON with: predicted_state, probability, key_factors, wild_cards""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Current state: {json.dumps(current_state, default=str)[:1000]}
+Return JSON with: predicted_state, probability, key_factors, wild_cards"""
+
+        user_prompt = f"""Current state: {json.dumps(current_state, default=str)[:1000]}
 Time horizon: {time_horizon}
 
-Predict future:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Predict future:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=1000,
+            temperature=0.3,
         )
 
         try:
-            return json.loads(response.choices[0].message.content or "{}")
+            return response.parsed_json
         except Exception:
             return {"error": "Prediction failed"}
 
@@ -260,33 +240,28 @@ Predict future:""",
         knowledge_context: str = "",
     ) -> Dream:
         """Generate a dream-like exploration for creative insights."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Generate a dream-like exploration. Connect disparate ideas, 
+        system_prompt = """Generate a dream-like exploration. Connect disparate ideas, 
 find novel associations, and generate creative insights.
 
 Dreams are not bound by practical constraints - explore freely.
 
 Return JSON with: associations (list), novel_connections (list),
-insights (list), creative_ideas (list), emotional_tone""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Theme for dream: {theme}
+insights (list), creative_ideas (list), emotional_tone"""
+
+        user_prompt = f"""Theme for dream: {theme}
 Context: {knowledge_context[:2000]}
 
-Dream:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Dream:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=1500,
+            temperature=0.7,
         )
 
         try:
-            data = json.loads(response.choices[0].message.content or "{}")
+            data = response.parsed_json
             dream = Dream(
                 id=f"dream_{len(self.dreams)}",
                 theme=theme,
@@ -308,32 +283,27 @@ Dream:""",
         goals: list[str],
     ) -> dict[str, Any]:
         """Imagine a novel scenario that satisfies constraints and goals."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Imagine a novel scenario that:
+        system_prompt = """Imagine a novel scenario that:
 1. Satisfies the given constraints
 2. Achieves the given goals
 3. Is creative and non-obvious
 
-Return JSON with: scenario, how_it_meets_goals, novelty_score, implementation_steps""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Constraints: {constraints}
+Return JSON with: scenario, how_it_meets_goals, novelty_score, implementation_steps"""
+
+        user_prompt = f"""Constraints: {constraints}
 Goals: {goals}
 
-Imagine a novel approach:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Imagine a novel approach:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=1200,
+            temperature=0.7,
         )
 
         try:
-            return json.loads(response.choices[0].message.content or "{}")
+            return response.parsed_json
         except Exception:
             return {"error": "Imagination failed"}
 

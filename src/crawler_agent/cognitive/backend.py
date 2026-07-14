@@ -4,11 +4,60 @@ This module defines the protocol for swapping LLM calls with
 trained models, enabling actual learning and model replacement.
 """
 
+import json
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
+
+
+def extract_json(text: str) -> dict:
+    """Extract JSON object from text that may contain non-JSON content. Always returns a dict."""
+    if not text or not text.strip():
+        return {}
+    text = text.strip()
+    try:
+        result = json.loads(text)
+        return result if isinstance(result, dict) else {"items": result} if isinstance(result, list) else {}
+    except (json.JSONDecodeError, ValueError):
+        pass
+    match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
+    if match:
+        try:
+            result = json.loads(match.group(1).strip())
+            return result if isinstance(result, dict) else {"items": result} if isinstance(result, list) else {}
+        except (json.JSONDecodeError, ValueError):
+            pass
+    start = text.find("{")
+    if start >= 0:
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return json.loads(text[start:i + 1])
+                    except (json.JSONDecodeError, ValueError):
+                        break
+    start_arr = text.find("[")
+    if start_arr >= 0:
+        depth = 0
+        for i in range(start_arr, len(text)):
+            if text[i] == "[":
+                depth += 1
+            elif text[i] == "]":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        result = json.loads(text[start_arr:i + 1])
+                        return result if isinstance(result, dict) else {"items": result} if isinstance(result, list) else {}
+                    except (json.JSONDecodeError, ValueError):
+                        break
+    return {}
 
 
 @dataclass
@@ -19,6 +68,13 @@ class CognitiveResponse:
     metadata: dict[str, Any] = field(default_factory=dict)
     model_used: str = "unknown"
     tokens_used: int = 0
+    parsed_json: dict = field(default_factory=dict, repr=False, init=False)
+
+    def __post_init__(self):
+        if self.content:
+            self.parsed_json = extract_json(self.content)
+        if self.parsed_json is None:
+            self.parsed_json = {}
 
 
 class CognitiveBackend(ABC):
@@ -94,19 +150,23 @@ class LLMBackend(CognitiveBackend):
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
 
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
-        content = response.choices[0].message.content or ""
-        return CognitiveResponse(
-            content=content,
-            confidence=0.7,
-            model_used=self.model,
-            tokens_used=response.usage.total_tokens if response.usage else 0,
-        )
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            content = response.choices[0].message.content or ""
+            return CognitiveResponse(
+                content=content,
+                confidence=0.7,
+                model_used=self.model,
+                tokens_used=response.usage.total_tokens if response.usage else 0,
+            )
+        except Exception as e:
+            self.logger.error("llm_backend_error", error=str(e))
+            return CognitiveResponse(content="", confidence=0.0, model_used=self.model)
 
     async def embed(self, text: str) -> list[float]:
         response = await self.client.embeddings.create(
@@ -125,9 +185,8 @@ Text: {text[:2000]}
 Return ONLY a JSON object with category as key and confidence (0-1) as value."""
 
         response = await self.complete(prompt, temperature=0.1)
-        import json
         try:
-            return json.loads(response.content)
+            return response.parsed_json
         except Exception:
             return {c: 1.0 / len(categories) for c in categories}
 
@@ -140,9 +199,8 @@ Return ONLY a JSON object with category as key and confidence (0-1) as value."""
 Return a JSON array of pattern objects with 'type', 'description', 'confidence' fields."""
 
         response = await self.complete(prompt, temperature=0.3)
-        import json
         try:
-            return json.loads(response.content)
+            return response.parsed_json
         except Exception:
             return []
 

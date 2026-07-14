@@ -1,13 +1,13 @@
 """Skill Composition system for combining learned skills."""
 
-import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Callable
 
 import structlog
-from openai import AsyncOpenAI
+
+from .backend import CognitiveBackend
 
 
 class SkillType(str, Enum):
@@ -89,9 +89,8 @@ class SkillChain:
 class SkillComposer:
     """Composes complex behaviors from simpler skills."""
 
-    def __init__(self, api_key: str, model: str = "gpt-4-turbo-preview", api_base: str | None = None):
-        self.client = AsyncOpenAI(api_key=api_key or "ollama", base_url=api_base)
-        self.model = model
+    def __init__(self, backend: CognitiveBackend):
+        self.backend = backend
         self.skills: dict[str, Skill] = {}
         self.chains: dict[str, SkillChain] = {}
         self.execution_history: list[dict[str, Any]] = []
@@ -110,32 +109,27 @@ class SkillComposer:
         """Compose multiple skills into a chain."""
         skills = [self.skills[sid] for sid in skill_ids if sid in self.skills]
 
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Compose skills into an execution chain. Define:
+        system_prompt = """Compose skills into an execution chain. Define:
 1. Execution order
 2. Input/output mappings between steps
 3. Error handling strategy
 
-Return JSON with: steps (list of {skill_id, description, input_mapping, output_mapping, error_handling}), overall_strategy""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Goal: {goal}
+Return JSON with: steps (list of {skill_id, description, input_mapping, output_mapping, error_handling}), overall_strategy"""
+
+        user_prompt = f"""Goal: {goal}
 Available skills: {[{'id': s.id, 'name': s.name, 'inputs': [i.name for i in s.inputs], 'outputs': [o.name for o in s.outputs]} for s in skills]}
 
-Create composition:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Create composition:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=1500,
+            temperature=0.3,
         )
 
         try:
-            data = json.loads(response.choices[0].message.content or "{}")
+            data = response.parsed_json
             chain = SkillChain(
                 id=f"chain_{len(self.chains)}",
                 name=f"Chain for: {goal[:50]}",
@@ -157,34 +151,29 @@ Create composition:""",
         """Discover possible skill compositions for a goal."""
         available = list(self.skills.values())
 
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Given available skills and a goal, suggest skill compositions.
+        system_prompt = """Given available skills and a goal, suggest skill compositions.
 For each composition, specify:
 1. Which skills to use
 2. How to combine them
 3. Expected effectiveness
 
-Return JSON with: compositions (list of {name, skills, strategy, effectiveness})""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Goal: {goal}
+Return JSON with: compositions (list of {name, skills, strategy, effectiveness})"""
+
+        user_prompt = f"""Goal: {goal}
 Context: {context}
 Available skills: {[{'name': s.name, 'type': s.skill_type.value, 'success_rate': s.success_rate} for s in available[:30]]}
 
-Suggest compositions:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Suggest compositions:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=1500,
+            temperature=0.3,
         )
 
         try:
-            data = json.loads(response.choices[0].message.content or "{}")
+            data = response.parsed_json
             chains = []
             for comp in data.get("compositions", []):
                 chain = SkillChain(
@@ -210,36 +199,31 @@ Suggest compositions:""",
         if not skill:
             raise ValueError(f"Skill {skill_id} not found")
 
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Refine a skill based on feedback. Improve:
+        system_prompt = """Refine a skill based on feedback. Improve:
 1. Error handling
 2. Edge cases
 3. Performance
 4. Robustness
 
-Return JSON with: improved_code, improvements_made, expected_improvement""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Skill: {skill.name}
+Return JSON with: improved_code, improvements_made, expected_improvement"""
+
+        user_prompt = f"""Skill: {skill.name}
 Current code: {skill.code}
 Procedure: {skill.procedure}
 Feedback: {feedback}
 Performance: {performance}
 
-Refine:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Refine:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=1500,
+            temperature=0.3,
         )
 
         try:
-            data = json.loads(response.choices[0].message.content or "{}")
+            data = response.parsed_json
             skill.code = data.get("improved_code", skill.code)
             skill.status = SkillStatus.REFINED
             skill.success_rate = min(1.0, skill.success_rate + 0.1)

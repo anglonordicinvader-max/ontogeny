@@ -784,13 +784,37 @@ class CognitiveOrchestrator:
             rewards = [log.get("rl_reward", 0.0) for log in recent if log.get("rl_reward") is not None]
             pre_avg_reward = sum(rewards) / max(len(rewards), 1)
 
-        # If success rate is low, try to improve
-        if success_rate < 0.6:
-            # Get a skill that needs improvement
-            skills = await self.memory.procedural.list_skills()
-            for skill in skills:
+        # === PROACTIVE: Create new skills when performance is decent but capabilities are limited ===
+        existing_skills = await self.memory.procedural.list_skills()
+        if len(existing_skills) < 5 and success_rate >= 0.5:
+            # Agent has few skills — proactively create one based on what it learned
+            recent_learnings = [
+                log.get("actions", [{}])[0].get("step", "")
+                for log in recent[-3:]
+                if log.get("actions")
+            ]
+            if recent_learnings:
+                mod = await self.self_modifier.propose_skill(
+                    name=f"learned_skill_{self.iteration}",
+                    description=f"Skill learned from cycle {self.iteration}: {recent_learnings[0][:100]}",
+                    context=f"Recent actions: {'; '.join(recent_learnings)}",
+                )
+                if mod and mod.code:
+                    applied = await self.self_modifier.apply_modification(mod.id)
+                    if applied:
+                        # Register as usable skill for future planning
+                        self.planner.available_skills[mod.config.get("name", mod.id)] = mod.code
+                        result["self_improvement"] = {
+                            "type": "proactive_creation",
+                            "skill": mod.config.get("name"),
+                            "description": mod.description,
+                            "applied": True,
+                        }
+
+        # === REACTIVE: Optimize existing skills when performance is low ===
+        elif success_rate < 0.6:
+            for skill in existing_skills:
                 if skill.metadata.get("success_rate", 1.0) < 0.7:
-                    # Try to optimize
                     mod = await self.self_modifier.propose_optimization(
                         skill_name=skill.metadata.get("skill_name", "unknown"),
                         current_code=skill.content,
@@ -799,40 +823,46 @@ class CognitiveOrchestrator:
                     if mod:
                         applied = await self.self_modifier.apply_modification(mod.id)
                         if applied:
-                            # Run a test execution to measure improvement
-                            test_result = await self.self_modifier.test_modification(mod.id)
-                            if test_result.get("success"):
-                                # Measure post-modification performance
-                                post_success_rate = success_rate
-                                post_avg_reward = pre_avg_reward
+                            # Actually re-measure after modification
+                            post_result = await self.run_cycle()
+                            post_actions = post_result.get("actions", [])
+                            post_success = all(a.get("success", False) for a in post_actions) if post_actions else False
+                            post_reward = post_result.get("rl_reward", 0.0)
 
-                                # Calculate performance delta
-                                perf_delta = (post_success_rate - pre_success_rate) * 0.5 + \
-                                            (post_avg_reward - pre_avg_reward) * 0.5
+                            perf_delta = (1.0 if post_success else 0.0 - pre_success_rate) * 0.5 + \
+                                        (post_reward - pre_avg_reward) * 0.5
 
-                                await self.self_modifier.learn_from_outcome(
-                                    mod.id,
-                                    success=perf_delta >= 0,
-                                    performance_delta=perf_delta,
-                                )
+                            await self.self_modifier.learn_from_outcome(
+                                mod.id,
+                                success=perf_delta >= 0,
+                                performance_delta=perf_delta,
+                            )
 
-                                result["self_improvement"] = {
-                                    "skill": skill.metadata.get("skill_name"),
-                                    "pre_success_rate": pre_success_rate,
-                                    "post_success_rate": post_success_rate,
-                                    "performance_delta": perf_delta,
-                                    "applied": True,
-                                }
-                            else:
-                                # Test failed, rollback
-                                await self.self_modifier.rollback(mod.id)
-                                result["self_improvement"] = {
-                                    "skill": skill.metadata.get("skill_name"),
-                                    "applied": False,
-                                    "reason": "test_failed",
-                                    "error": test_result.get("error", "Unknown"),
-                                }
+                            result["self_improvement"] = {
+                                "type": "reactive_optimization",
+                                "skill": skill.metadata.get("skill_name"),
+                                "pre_success_rate": pre_success_rate,
+                                "post_success": post_success,
+                                "performance_delta": perf_delta,
+                                "applied": True,
+                            }
                             break
+
+        # === RECURSIVE: Improve the improvement process itself ===
+        mod_stats = self.self_modifier.get_stats()
+        if mod_stats["total_modifications"] >= 5 and mod_stats["rolled_back"] > mod_stats["applied"]:
+            # More rollbacks than successes — the improvement process itself needs fixing
+            mod = await self.self_modifier.propose_optimization(
+                skill_name="self_modification_strategy",
+                current_code=f"# Current strategy: optimize on low success, create on high\n# Success rate: {success_rate}\n# Mods applied: {mod_stats['applied']}, rolled back: {mod_stats['rolled_back']}",
+                issue=f"High rollback rate: {mod_stats['rolled_back']}/{mod_stats['total_modifications']} modifications failed",
+            )
+            if mod:
+                result["self_improvement"] = {
+                    "type": "recursive_improvement",
+                    "issue": "Improvement process itself is underperforming",
+                    "rollback_rate": mod_stats["rolled_back"] / max(mod_stats["total_modifications"], 1),
+                }
 
     async def handle_user_input(self, user_input: str) -> str:
         """Handle user input and respond."""

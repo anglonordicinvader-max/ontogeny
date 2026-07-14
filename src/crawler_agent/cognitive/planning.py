@@ -7,7 +7,8 @@ from enum import Enum
 from typing import Any
 
 import structlog
-from openai import AsyncOpenAI
+
+from .backend import CognitiveBackend, extract_json as _extract_json
 
 
 class PlanStatus(str, Enum):
@@ -73,7 +74,6 @@ class Plan:
         """Get next executable step."""
         for step in self.steps:
             if step.status == StepStatus.PENDING:
-                # Check dependencies
                 deps_met = all(
                     any(s.id == dep and s.status == StepStatus.COMPLETED for s in self.steps)
                     for dep in step.dependencies
@@ -97,11 +97,11 @@ Steps:
 class Planner:
     """Planning engine for goal decomposition."""
 
-    def __init__(self, api_key: str, model: str = "gpt-4-turbo-preview", api_base: str | None = None):
-        self.client = AsyncOpenAI(api_key=api_key or "ollama", base_url=api_base)
-        self.model = model
+    def __init__(self, backend: CognitiveBackend):
+        self.backend = backend
         self.plans: dict[str, Plan] = {}
         self.plan_history: list[dict[str, Any]] = []
+        self.available_skills: dict[str, str] = {}  # name -> code, from self-modification
         self.logger = structlog.get_logger()
 
     async def create_plan(
@@ -116,65 +116,99 @@ class Planner:
         if available_actions:
             actions_hint = f"\nAvailable actions: {', '.join(available_actions)}"
 
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": f"""Create a detailed plan to achieve the goal. Break it into concrete steps.
+        skills_hint = ""
+        if self.available_skills:
+            skills_hint = f"\nLearned skills you can use: {', '.join(self.available_skills.keys())}"
+
+        system_prompt = f"""Create a detailed plan to achieve the goal. Break it into concrete steps.
 Each step should have: description, action (from available actions or 'think', 'search', 'execute', 'verify'), 
 dependencies (step ids), estimated_duration (seconds).
 
-Return JSON with: steps (list), estimated_total_time, success_probability, reasoning{actions_hint}""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Goal: {goal_description}
-Context: {context}
+Return JSON with: steps (list), estimated_total_time, success_probability, reasoning{actions_hint}"""
 
-Create a plan:""",
-                },
-            ],
-            response_format={"type": "json_object"},
-            max_tokens=2000,
-        )
+        user_prompt = f"""Goal: {goal_description}
+Context: {context}{skills_hint}
 
-        try:
-            result = json.loads(response.choices[0].message.content or "{}")
+Create a plan:"""
 
-            plan = Plan(
-                id=f"plan_{goal_id[:8]}",
-                goal_id=goal_id,
-                goal_description=goal_description,
-                status=PlanStatus.DRAFT,
-                estimated_total_time=result.get("estimated_total_time", 0),
-                success_probability=result.get("success_probability", 0.5),
-                metadata={"reasoning": result.get("reasoning", "")},
+        response = None
+        for attempt in range(2):
+            response = await self.backend.complete(
+                prompt=user_prompt,
+                system=system_prompt,
+                max_tokens=2000,
+                temperature=0.3,
             )
+            if response.content and response.content.strip():
+                break
+            self.logger.warning("empty_llm_response", attempt=attempt)
 
-            for i, step_data in enumerate(result.get("steps", [])):
-                step = PlanStep(
-                    id=f"step_{i}",
-                    description=step_data.get("description", ""),
-                    action=step_data.get("action", "execute"),
-                    parameters=step_data.get("parameters", {}),
-                    dependencies=step_data.get("dependencies", []),
-                    estimated_duration=step_data.get("estimated_duration", 10),
-                    confidence=step_data.get("confidence", 0.5),
-                )
-                plan.steps.append(step)
-
-            self.plans[plan.id] = plan
-            return plan
-
-        except Exception as e:
-            self.logger.error("planning_failed", error=str(e))
+        if not response or not response.content or not response.content.strip():
+            self.logger.error("planning_failed", error="LLM returned empty response after retries")
             return Plan(
                 id=f"plan_{goal_id[:8]}",
                 goal_id=goal_id,
                 goal_description=goal_description,
                 status=PlanStatus.FAILED,
             )
+
+        result = _extract_json(response.content)
+
+        plan = Plan(
+            id=f"plan_{goal_id[:8]}",
+            goal_id=goal_id,
+            goal_description=goal_description,
+            status=PlanStatus.DRAFT,
+            estimated_total_time=result.get("estimated_total_time", 0),
+            success_probability=result.get("success_probability", 0.5),
+            metadata={"reasoning": result.get("reasoning", "")},
+        )
+
+        raw_steps = []
+        for i, step_data in enumerate(result.get("steps", [])):
+            step = PlanStep(
+                id=f"step_{i}",
+                description=step_data.get("description", ""),
+                action=step_data.get("action", "execute"),
+                parameters=step_data.get("parameters", {}),
+                dependencies=step_data.get("dependencies", []),
+                estimated_duration=step_data.get("estimated_duration", 10),
+                confidence=step_data.get("confidence", 0.5),
+            )
+            plan.steps.append(step)
+            raw_steps.append(step)
+
+        # Resolve dependency labels to step IDs
+        # LLM may return "Step 1", "Step 2" etc; map to "step_0", "step_1"
+        for i, step in enumerate(raw_steps):
+            resolved = []
+            for dep in step.dependencies:
+                if dep.startswith("step_"):
+                    resolved.append(dep)
+                else:
+                    # Try "Step N" pattern -> step_{N-1}
+                    import re
+                    m = re.match(r"Step\s+(\d+)", dep, re.IGNORECASE)
+                    if m:
+                        idx = int(m.group(1)) - 1
+                        if 0 <= idx < len(raw_steps):
+                            resolved.append(raw_steps[idx].id)
+                        else:
+                            # Fallback: try matching by partial description
+                            for s in raw_steps:
+                                if dep.lower() in s.description.lower():
+                                    resolved.append(s.id)
+                                    break
+                    else:
+                        # Try matching by description
+                        for s in raw_steps:
+                            if dep.lower() in s.description.lower():
+                                resolved.append(s.id)
+                                break
+            step.dependencies = resolved
+
+        self.plans[plan.id] = plan
+        return plan
 
     async def replan(
         self,
@@ -184,101 +218,82 @@ Create a plan:""",
         new_context: str = "",
     ) -> Plan:
         """Create a new plan after failure."""
-        # Get completed steps for context
         completed = [s for s in plan.steps if s.status == StepStatus.COMPLETED]
         completed_str = "\n".join(f"- {s.description}: {s.result}" for s in completed)
 
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """The previous plan failed. Create a new plan considering:
+        system_prompt = """The previous plan failed. Create a new plan considering:
 1. What was already accomplished
 2. What failed and why
 3. Alternative approaches
 
-Return JSON with: steps, reasoning, success_probability""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Original goal: {plan.goal_description}
+Return JSON with: steps, reasoning, success_probability"""
+
+        user_prompt = f"""Original goal: {plan.goal_description}
 Completed steps: {completed_str}
 Failed step: {failure_point.description}
 Error: {error}
 New context: {new_context}
 
-Create new plan:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Create new plan:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=2000,
+            temperature=0.3,
         )
 
-        try:
-            result = json.loads(response.choices[0].message.content or "{}")
+        result = _extract_json(response.content)
 
-            new_plan = Plan(
-                id=f"plan_replan_{plan.goal_id[:8]}",
-                goal_id=plan.goal_id,
-                goal_description=plan.goal_description,
-                status=PlanStatus.ACTIVE,
-                success_probability=result.get("success_probability", 0.4),
-                metadata={
-                    "reasoning": result.get("reasoning", ""),
-                    "replan_reason": error,
-                    "original_plan": plan.id,
-                },
+        new_plan = Plan(
+            id=f"plan_replan_{plan.goal_id[:8]}",
+            goal_id=plan.goal_id,
+            goal_description=plan.goal_description,
+            status=PlanStatus.ACTIVE,
+            success_probability=result.get("success_probability", 0.4),
+            metadata={
+                "reasoning": result.get("reasoning", ""),
+                "replan_reason": error,
+                "original_plan": plan.id,
+            },
+        )
+
+        for i, step_data in enumerate(result.get("steps", [])):
+            step = PlanStep(
+                id=f"step_{i}",
+                description=step_data.get("description", ""),
+                action=step_data.get("action", "execute"),
+                dependencies=step_data.get("dependencies", []),
+                confidence=step_data.get("confidence", 0.5),
             )
+            new_plan.steps.append(step)
 
-            for i, step_data in enumerate(result.get("steps", [])):
-                step = PlanStep(
-                    id=f"step_{i}",
-                    description=step_data.get("description", ""),
-                    action=step_data.get("action", "execute"),
-                    dependencies=step_data.get("dependencies", []),
-                    confidence=step_data.get("confidence", 0.5),
-                )
-                new_plan.steps.append(step)
-
-            self.plans[new_plan.id] = new_plan
-            return new_plan
-
-        except Exception as e:
-            self.logger.error("replan_failed", error=str(e))
-            plan.status = PlanStatus.FAILED
-            return plan
+        self.plans[new_plan.id] = new_plan
+        return new_plan
 
     async def simulate_plan(self, plan: Plan) -> dict[str, Any]:
         """Simulate plan execution to estimate outcomes."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Simulate executing this plan. For each step, predict:
+        system_prompt = """Simulate executing this plan. For each step, predict:
 1. Likely outcome (success/failure/partial)
 2. Potential issues
 3. Time estimate accuracy
 
-Return JSON with: step_predictions, overall_success_probability, bottlenecks, suggestions""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Plan to simulate:
+Return JSON with: step_predictions, overall_success_probability, bottlenecks, suggestions"""
+
+        user_prompt = f"""Plan to simulate:
 {plan.to_context()}
 
-Simulate execution:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Simulate execution:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=1500,
+            temperature=0.3,
         )
 
-        try:
-            return json.loads(response.choices[0].message.content or "{}")
-        except Exception:
-            return {"error": "Simulation failed"}
+        result = _extract_json(response.content)
+        return result if result else {"error": "Simulation failed"}
 
     async def evaluate_step(
         self,
@@ -286,35 +301,28 @@ Simulate execution:""",
         context: str,
     ) -> dict[str, Any]:
         """Evaluate a step before execution."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Evaluate this step before execution. Consider:
+        system_prompt = """Evaluate this step before execution. Consider:
 1. Is the action appropriate?
 2. What could go wrong?
 3. Are there better alternatives?
 
-Return JSON with: should_proceed, confidence, alternative_actions, risks""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Step: {step.description}
+Return JSON with: should_proceed, confidence, alternative_actions, risks"""
+
+        user_prompt = f"""Step: {step.description}
 Action: {step.action}
 Context: {context}
 
-Evaluate:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Evaluate:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=800,
+            temperature=0.3,
         )
 
-        try:
-            return json.loads(response.choices[0].message.content or "{}")
-        except Exception:
-            return {"should_proceed": True, "confidence": 0.5}
+        result = _extract_json(response.content)
+        return result if result else {"should_proceed": True, "confidence": 0.5}
 
     async def record_outcome(
         self,
@@ -339,7 +347,6 @@ Evaluate:""",
             "timestamp": datetime.utcnow().isoformat(),
         })
 
-        # Update plan status
         if not success:
             plan.status = PlanStatus.NEEDS_REPLAN
         elif all(s.status == StepStatus.COMPLETED for s in plan.steps):

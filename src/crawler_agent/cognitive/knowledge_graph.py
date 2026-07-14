@@ -1,6 +1,5 @@
 """Knowledge Graph for mapping relationships between concepts."""
 
-import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -9,7 +8,8 @@ from collections import defaultdict
 
 import networkx as nx
 import structlog
-from openai import AsyncOpenAI
+
+from .backend import CognitiveBackend
 
 
 class RelationType(str, Enum):
@@ -58,9 +58,8 @@ class Relation:
 class KnowledgeGraph:
     """Graph-based knowledge representation."""
 
-    def __init__(self, api_key: str, model: str = "gpt-4-turbo-preview", api_base: str | None = None):
-        self.client = AsyncOpenAI(api_key=api_key or "ollama", base_url=api_base)
-        self.model = model
+    def __init__(self, backend: CognitiveBackend):
+        self.backend = backend
         self.graph = nx.DiGraph()
         self.concepts: dict[str, Concept] = {}
         self.logger = structlog.get_logger()
@@ -71,30 +70,25 @@ class KnowledgeGraph:
         source: str = "",
     ) -> tuple[list[Concept], list[Relation]]:
         """Extract concepts and relations from text."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Extract knowledge from text. Return JSON with:
+        system_prompt = """Extract knowledge from text. Return JSON with:
 - concepts: list of {name, description, type}
 - relations: list of {source, target, type, evidence}
 
 Relation types: is_a, part_of, causes, enables, inhibits, similar_to, depends_on, produces, transforms, temporal_before, temporal_after
 
-Focus on factual relationships. Be precise.""",
-                },
-                {
-                    "role": "user",
-                    "content": f"Extract knowledge from:\n\n{text[:5000]}",
-                },
-            ],
-            response_format={"type": "json_object"},
+Focus on factual relationships. Be precise."""
+
+        user_prompt = f"Extract knowledge from:\n\n{text[:5000]}"
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=2000,
+            temperature=0.3,
         )
 
         try:
-            data = json.loads(response.choices[0].message.content or "{}")
+            data = response.parsed_json
             concepts = []
             relations = []
 
@@ -108,12 +102,16 @@ Focus on factual relationships. Be precise.""",
                 concepts.append(concept)
 
             for r in data.get("relations", []):
-                source_id = r["source"].lower().replace(" ", "_")
-                target_id = r["target"].lower().replace(" ", "_")
+                source_id = r.get("source", "unknown").lower().replace(" ", "_")
+                target_id = r.get("target", "unknown").lower().replace(" ", "_")
+                try:
+                    rel_type = RelationType(r.get("type", "abstract"))
+                except ValueError:
+                    rel_type = RelationType.ABSTRACT
                 relation = Relation(
                     source_id=source_id,
                     target_id=target_id,
-                    relation_type=RelationType(r.get("type", "abstract")),
+                    relation_type=rel_type,
                     evidence=[r.get("evidence", "")],
                     confidence=0.7,
                 )

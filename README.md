@@ -1,6 +1,6 @@
 # Ontogeny
 
-**Proto-AGI cognitive agent framework with autonomous learning, 27+ web crawlers, and multi-layer persistent memory.**
+**Proto-AGI cognitive agent with recursive self-improvement, 28 web crawlers, and multi-layer persistent memory.**
 
 Runs entirely on Ollama llama3.2 locally. CLI-only. No web UI.
 
@@ -8,32 +8,43 @@ Runs entirely on Ollama llama3.2 locally. CLI-only. No web UI.
 
 ## What It Does
 
-Ontogeny is a self-improving cognitive agent that autonomously explores the internet, learns from what it finds, and builds increasingly complex understanding over time. It operates in continuous autonomous cycles — setting its own goals, planning actions, executing crawls across 27+ data sources, reasoning about results, and reflecting on its own performance.
+Ontogeny is a self-improving cognitive agent that autonomously explores the internet, learns from what it finds, and builds increasingly complex understanding over time. It operates in continuous autonomous cycles — setting its own goals, planning actions, executing crawls across 28 data sources, reasoning about results, reflecting on its own performance, and **modifying its own code and behavior** based on what works.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                  Cognitive Loop                      │
-│                                                      │
-│  Goals → Planning → Execution → Reflection → Memory  │
-│                                                      │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────────┐  │
-│  │ 27+      │  │ Meta-    │  │ 10 Cognitive      │  │
-│  │ Crawlers │  │ Cognition│  │ Learning Modules  │  │
-│  │ +Proxies │  │          │  │                   │  │
-│  └──────────┘  └──────────┘  └──────────────────┘  │
-│                                                      │
-│  ┌──────────────────────────────────────────────┐   │
-│  │          Persistent Memory Layers             │   │
-│  │  Working → Episodic → Semantic → Procedural   │   │
-│  └──────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                    Cognitive Loop                          │
+│                                                           │
+│  Goals → Planning → Execution → Reflection → Memory       │
+│                         ↑                    │            │
+│                         └── Self-Modify ◄────┘            │
+│                              (recursive)                  │
+│                                                           │
+│  ┌───────────┐  ┌───────────┐  ┌────────────────────┐   │
+│  │ 28        │  │ Meta-     │  │ 10 Cognitive        │   │
+│  │ Crawlers  │  │ Cognition │  │ Learning Modules    │   │
+│  │ +Proxies  │  │           │  │                     │   │
+│  └───────────┘  └───────────┘  └────────────────────┘   │
+│                                                           │
+│  ┌───────────────────────────────────────────────────┐   │
+│  │           Persistent Memory Layers                  │   │
+│  │  Working → Episodic → Semantic → Procedural         │   │
+│  └───────────────────────────────────────────────────┘   │
+│                                                           │
+│  ┌───────────────────────────────────────────────────┐   │
+│  │        Recursive Self-Improvement                   │   │
+│  │  Proactive: creates new skills from experience      │   │
+│  │  Reactive: optimizes failing skills                 │   │
+│  │  Recursive: improves the improvement process itself │   │
+│  │  Persistent: survives restarts                      │   │
+│  └───────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ## Features
 
-### 28+ Web Crawlers
+### 28 Web Crawlers
 GitHub, GitLab, PyPI, npm, Crates.io, Maven, NuGet, Go.dev, RubyGems, ArXiv, Semantic Scholar, Stack Overflow, Reddit, Hacker News, Wikipedia, RSS, Discord, Slack, Notion, Jira, Pastebin, HuggingFace, Web Scraper, Internet Archive (books, Wayback Machine, media) — all with automatic proxy rotation across 12 free proxy sources.
 
 ### Cognitive Systems
@@ -44,7 +55,7 @@ GitHub, GitLab, PyPI, npm, Crates.io, Maven, NuGet, Go.dev, RubyGems, ArXiv, Sem
 - **Knowledge Graph** — extracts entities and relations from crawled data
 - **Uncertainty Tracking** — tracks confidence intervals and evidence counts
 - **Emotional Model** — mood state that shifts based on success/failure
-- **Self-modification** — analyzes performance and auto-improves with rollback safety
+- **Recursive Self-Modification** — analyzes performance, creates new skills, optimizes failing ones, and improves its own improvement process. History persists across restarts.
 
 ### 10 Learning Modules
 Pattern learning, reinforcement learning, curiosity-driven exploration, world modeling, knowledge transfer, sleep consolidation, attention management, meta-learning, skill composition, and causal discovery.
@@ -60,6 +71,13 @@ Pattern learning, reinforcement learning, curiosity-driven exploration, world mo
 
 ### Docker Sandbox
 Isolated code execution in Docker containers with resource limits and automatic cleanup.
+
+### Recursive Self-Improvement
+- **Proactive**: creates new skills when capabilities are limited
+- **Reactive**: optimizes existing skills when performance drops
+- **Recursive**: detects when the improvement process itself is failing and flags it
+- **Persistent**: modification history survives restarts via `data/self_modification_history.json`
+- **Integrated**: generated skills are injected into the planning pipeline for future use
 
 ## Quick Start
 
@@ -176,7 +194,7 @@ CRAWLER_MAX_DELAY=3.0
 
 ```
 src/crawler_agent/
-├── main.py                  # CLI entry point
+├── main.py                  # CLI entry point with mode selector
 ├── cli_colors.py            # ANSI color support
 ├── config/
 │   └── settings.py          # All settings (env-loaded)
@@ -190,7 +208,7 @@ src/crawler_agent/
 │   ├── knowledge_graph.py   # Entity-relation extraction
 │   ├── uncertainty.py       # Confidence tracking
 │   ├── emotional.py         # Mood model
-│   ├── self_modify.py       # Auto-improvement
+│   ├── self_modify.py       # Recursive self-improvement engine
 │   ├── skill_composition.py # Skill chaining
 │   ├── simulator.py         # Action simulation
 │   ├── pattern_learner.py   # Pattern recognition
@@ -213,7 +231,7 @@ src/crawler_agent/
 │   ├── hackernews.py
 │   ├── wikipedia.py
 │   ├── internetarchive.py   # Archive.org + Wayback Machine
-│   └── ... (28+ total)
+│   └── ... (28 total)
 ├── multi_agent/
 │   ├── registry.py          # Agent registry
 │   └── collaboration.py     # Inter-agent communication
@@ -241,7 +259,7 @@ Each cycle:
 6. **Memory recording** — episodic + semantic memory updated
 7. **Emotional update** — mood shifts based on outcomes
 8. **Causal extraction** — builds cause-effect relationships
-9. **Self-modification** — checks if agent should improve itself
+9. **Self-modification** — creates new skills, optimizes failing ones, or improves its own improvement process
 10. **Repeat** — until Ctrl+C
 
 ## License

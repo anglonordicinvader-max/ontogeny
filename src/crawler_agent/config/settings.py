@@ -4,10 +4,14 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
+# Find .env relative to project root (parent of src/)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+_ENV_FILE = str(_PROJECT_ROOT / ".env")
+
 
 class ProxyProviderConfig(BaseSettings):
     """Paid proxy provider configuration."""
-    model_config = {"env_prefix": "PROXY_PROVIDER_", "env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+    model_config = {"env_prefix": "PROXY_PROVIDER_", "env_file": _ENV_FILE, "env_file_encoding": "utf-8", "extra": "ignore"}
 
     name: str = ""  # brightdata, smartproxy, oxylabs, proxyrack
     api_key: str = ""
@@ -19,7 +23,7 @@ class ProxyProviderConfig(BaseSettings):
 
 class ProxyConfig(BaseSettings):
     """Proxy configuration."""
-    model_config = {"env_prefix": "PROXY_", "env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+    model_config = {"env_prefix": "PROXY_", "env_file": _ENV_FILE, "env_file_encoding": "utf-8", "extra": "ignore"}
 
     enabled: bool = True
     required: bool = True  # Fail if no proxy available
@@ -58,7 +62,7 @@ class ProxyConfig(BaseSettings):
 
 class CrawlerSettings(BaseSettings):
     """Crawler configuration."""
-    model_config = {"env_prefix": "CRAWLER_", "env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+    model_config = {"env_prefix": "CRAWLER_", "env_file": _ENV_FILE, "env_file_encoding": "utf-8", "extra": "ignore"}
 
     # Rate limiting
     requests_per_second: float = 10.0
@@ -92,7 +96,7 @@ class CrawlerSettings(BaseSettings):
 
 class StorageSettings(BaseSettings):
     """Storage configuration."""
-    model_config = {"env_prefix": "STORAGE_", "env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+    model_config = {"env_prefix": "STORAGE_", "env_file": _ENV_FILE, "env_file_encoding": "utf-8", "extra": "ignore"}
 
     # PostgreSQL
     database_url: str = "postgresql+asyncpg://user:pass@localhost:5432/crawler"
@@ -109,7 +113,7 @@ class StorageSettings(BaseSettings):
 
 class LLMSettings(BaseSettings):
     """LLM configuration."""
-    model_config = {"env_prefix": "LLM_", "env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+    model_config = {"env_prefix": "LLM_", "env_file": _ENV_FILE, "env_file_encoding": "utf-8", "extra": "ignore"}
 
     provider: str = "openai"  # openai, ollama, local
     model: str = "gpt-4-turbo-preview"
@@ -128,7 +132,7 @@ class LLMSettings(BaseSettings):
 
 class PlatformSettings(BaseSettings):
     """Platform-specific API keys and settings."""
-    model_config = {"env_prefix": "PLATFORM_", "env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+    model_config = {"env_prefix": "PLATFORM_", "env_file": _ENV_FILE, "env_file_encoding": "utf-8", "extra": "ignore"}
 
     # GitHub
     github_token: str = ""
@@ -148,7 +152,7 @@ class PlatformSettings(BaseSettings):
 
 class Settings(BaseSettings):
     """Main settings container."""
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": _ENV_FILE, "env_file_encoding": "utf-8"}
 
     crawler: CrawlerSettings = Field(default_factory=CrawlerSettings)
     proxy: ProxyConfig = Field(default_factory=ProxyConfig)

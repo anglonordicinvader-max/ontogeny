@@ -1,18 +1,19 @@
 """Self-modification engine for autonomous capability expansion."""
 
 import ast
-import json
 import hashlib
+import json
 import subprocess
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
 import structlog
-from openai import AsyncOpenAI
+
+from .backend import CognitiveBackend
 
 
 class ModificationType(str, Enum):
@@ -53,9 +54,8 @@ class Modification:
 class CodeGenerator:
     """Generates code modifications safely."""
 
-    def __init__(self, api_key: str, model: str = "gpt-4-turbo-preview", api_base: str | None = None):
-        self.client = AsyncOpenAI(api_key=api_key or "ollama", base_url=api_base)
-        self.model = model
+    def __init__(self, backend: CognitiveBackend):
+        self.backend = backend
         self.logger = structlog.get_logger()
 
     async def generate_skill(
@@ -65,34 +65,29 @@ class CodeGenerator:
         context: str = "",
     ) -> tuple[str, str]:
         """Generate a new skill function."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Generate Python code for a skill function. The function should:
+        system_prompt = """Generate Python code for a skill function. The function should:
 1. Be self-contained with clear inputs/outputs
 2. Include error handling
 3. Be safe (no destructive operations)
 4. Include docstring
 
-Return JSON with: code, explanation""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Create a skill named '{name}'.
+Return JSON with: code, explanation"""
+
+        user_prompt = f"""Create a skill named '{name}'.
 Description: {description}
 Context: {context}
 
-Generate the skill code:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Generate the skill code:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=2000,
+            temperature=0.3,
         )
 
         try:
-            result = json.loads(response.choices[0].message.content or "{}")
+            result = response.parsed_json
             return result.get("code", ""), result.get("explanation", "")
         except Exception as e:
             self.logger.error("code_generation_failed", error=str(e))
@@ -104,37 +99,32 @@ Generate the skill code:""",
         performance_issue: str,
     ) -> tuple[str, str]:
         """Generate optimized version of existing code."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Optimize the given code. Focus on:
+        system_prompt = """Optimize the given code. Focus on:
 1. Performance improvements
 2. Better algorithms
 3. Reduced complexity
 4. Maintain safety
 
-Return JSON with: optimized_code, improvements_made""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Current code:
+Return JSON with: optimized_code, improvements_made"""
+
+        user_prompt = f"""Current code:
 ```python
 {current_code}
 ```
 
 Performance issue: {performance_issue}
 
-Optimize:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Optimize:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=2000,
+            temperature=0.3,
         )
 
         try:
-            result = json.loads(response.choices[0].message.content or "{}")
+            result = response.parsed_json
             return result.get("optimized_code", current_code), result.get("improvements_made", "")
         except Exception:
             return current_code, "Optimization failed"
@@ -145,31 +135,26 @@ Optimize:""",
         error_message: str,
     ) -> tuple[str, str]:
         """Generate fix for broken code."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "Fix the broken code. Return JSON with: fixed_code, explanation",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Broken code:
+        system_prompt = "Fix the broken code. Return JSON with: fixed_code, explanation"
+
+        user_prompt = f"""Broken code:
 ```python
 {broken_code}
 ```
 
 Error: {error_message}
 
-Fix:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Fix:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=2000,
+            temperature=0.3,
         )
 
         try:
-            result = json.loads(response.choices[0].message.content or "{}")
+            result = response.parsed_json
             return result.get("fixed_code", broken_code), result.get("explanation", "")
         except Exception:
             return broken_code, "Fix generation failed"
@@ -293,19 +278,77 @@ class SelfModifier:
 
     def __init__(
         self,
-        api_key: str,
+        backend: CognitiveBackend,
         skills_dir: str = "./skills",
-        model: str = "gpt-4-turbo-preview",
-        api_base: str | None = None,
     ):
-        self.generator = CodeGenerator(api_key, model, api_base=api_base)
+        self.generator = CodeGenerator(backend)
         self.validator = CodeValidator()
         self.sandbox = Sandbox()
         self.skills_dir = Path(skills_dir)
         self.skills_dir.mkdir(exist_ok=True)
         self.modifications: list[Modification] = []
         self.skills: dict[str, str] = {}
+        self.history_file = Path("./data/self_modification_history.json")
+        self.history_file.parent.mkdir(parents=True, exist_ok=True)
         self.logger = structlog.get_logger()
+        self._load_history()
+
+    def _load_history(self) -> None:
+        """Load modification history from disk."""
+        if self.history_file.exists():
+            try:
+                data = json.loads(self.history_file.read_text())
+                for entry in data.get("modifications", []):
+                    mod = Modification(
+                        id=entry["id"],
+                        mod_type=ModificationType(entry["mod_type"]),
+                        description=entry.get("description", ""),
+                        code=entry.get("code", ""),
+                        config=entry.get("config", {}),
+                        safety_level=SafetyLevel(entry.get("safety_level", "low_risk")),
+                        reasoning=entry.get("reasoning", ""),
+                        expected_benefit=entry.get("expected_benefit", ""),
+                        risks=entry.get("risks", []),
+                        approved=entry.get("approved", False),
+                        applied=entry.get("applied", False),
+                        rolled_back=entry.get("rolled_back", False),
+                        performance_delta=entry.get("performance_delta", 0.0),
+                    )
+                    self.modifications.append(mod)
+                # Reload saved skills
+                for entry in data.get("modifications", []):
+                    if entry.get("applied") and not entry.get("rolled_back") and entry.get("code"):
+                        name = entry.get("config", {}).get("name", entry["id"])
+                        self.skills[name] = entry["code"]
+                        skill_path = self.skills_dir / f"{name}.py"
+                        skill_path.write_text(entry["code"])
+                self.logger.info("history_loaded", count=len(self.modifications))
+            except Exception as e:
+                self.logger.warning("history_load_failed", error=str(e))
+
+    def _save_history(self) -> None:
+        """Persist modification history to disk."""
+        data = {
+            "modifications": [
+                {
+                    "id": m.id,
+                    "mod_type": m.mod_type.value,
+                    "description": m.description,
+                    "code": m.code,
+                    "config": m.config,
+                    "safety_level": m.safety_level.value,
+                    "reasoning": m.reasoning,
+                    "expected_benefit": m.expected_benefit,
+                    "risks": m.risks,
+                    "approved": m.approved,
+                    "applied": m.applied,
+                    "rolled_back": m.rolled_back,
+                    "performance_delta": m.performance_delta,
+                }
+                for m in self.modifications
+            ]
+        }
+        self.history_file.write_text(json.dumps(data, indent=2))
 
     async def propose_skill(
         self,
@@ -397,7 +440,50 @@ class SelfModifier:
         mod.applied = True
         mod.approved = True
         self.logger.info("modification_applied", mod_id=mod_id, type=mod.mod_type.value)
+        self._save_history()
         return True
+
+    async def test_modification(self, mod_id: str) -> dict[str, Any]:
+        """Test a modification by executing it in sandbox and measuring results."""
+        mod = next((m for m in self.modifications if m.id == mod_id), None)
+        if not mod or not mod.code:
+            return {"success": False, "error": "Modification not found or no code"}
+
+        # Run the code in sandbox
+        result = await self.sandbox.execute(mod.code, timeout=30)
+
+        if not result["success"]:
+            return {
+                "success": False,
+                "error": result.get("stderr", "Execution failed"),
+                "output": result.get("stdout", ""),
+            }
+
+        # Parse output for performance metrics
+        output = result.get("stdout", "")
+        metrics = {
+            "success": True,
+            "output": output[:500],
+            "returncode": result.get("returncode", 0),
+        }
+
+        # Try to extract numeric metrics from output
+        try:
+            import ast
+            # Look for common metric patterns
+            if "success_rate" in output:
+                for line in output.split("\n"):
+                    if "success_rate" in line and ":" in line:
+                        val = float(line.split(":")[-1].strip().rstrip("%")) / 100
+                        metrics["success_rate"] = val
+            if "items_per_minute" in output:
+                for line in output.split("\n"):
+                    if "items_per_minute" in line and ":" in line:
+                        metrics["items_per_minute"] = float(line.split(":")[-1].strip())
+        except (ValueError, IndexError):
+            pass
+
+        return metrics
 
     async def rollback(self, mod_id: str) -> bool:
         """Rollback a modification."""
@@ -415,6 +501,7 @@ class SelfModifier:
         mod.rolled_back = True
         mod.applied = False
         self.logger.info("modification_rolled_back", mod_id=mod_id)
+        self._save_history()
         return True
 
     async def learn_from_outcome(
@@ -429,6 +516,7 @@ class SelfModifier:
             mod.performance_delta = performance_delta
             if not success:
                 await self.rollback(mod_id)
+            self._save_history()
 
     def get_skills(self) -> dict[str, str]:
         """Get all learned skills."""

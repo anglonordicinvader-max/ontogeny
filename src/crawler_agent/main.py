@@ -513,8 +513,9 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
                     print(f"{red('Invalid pipeline format. Use: agent1:task1;agent2:task2')}")
 
             elif command == "autonomous":
-                cycles = int(parts[1]) if len(parts) > 1 else 10
-                print(f"{cyan(f'Running {cycles} autonomous cycles...')}")
+                cycles = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else None
+                label = f"{cycles} cycles" if cycles else "infinite"
+                print(f"{cyan(f'Running {label} autonomous cycles (Ctrl+C to stop)...')}")
                 await agent.autonomous_loop(max_cycles=cycles)
 
             elif command == "save":
@@ -622,12 +623,26 @@ def main() -> None:
                 if sys.argv[1] == "--demo":
                     await demo_mode(agent)
                 elif sys.argv[1] == "--autonomous":
-                    cycles = int(sys.argv[2]) if len(sys.argv) > 2 else 100
+                    cycles = int(sys.argv[2]) if len(sys.argv) > 2 else None
                     await agent.autonomous_loop(max_cycles=cycles)
                 else:
                     print(f"{red(f'Unknown argument: {sys.argv[1]}')}")
             else:
-                await interactive_mode(agent, persistence)
+                print(f"\n{ONTOGENY_LOGO}")
+                print(f"{bold(cyan('Select mode:'))}\n")
+                print(f"  {yellow('1')} - Interactive mode (type commands)")
+                print(f"  {yellow('2')} - Autonomous mode (continuous cycles)")
+                print(f"  {yellow('3')} - Demo mode (quick showcase)")
+                print(f"  {red('q')} - Quit\n")
+                choice = input("mode> ").strip().lower()
+                if choice == "1":
+                    await interactive_mode(agent, persistence)
+                elif choice == "2":
+                    raw = input("cycles (leave empty for infinite): ").strip()
+                    cycles = int(raw) if raw.isdigit() else None
+                    await agent.autonomous_loop(max_cycles=cycles)
+                elif choice == "3":
+                    await demo_mode(agent)
         finally:
             await agent.close()
 

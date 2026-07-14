@@ -142,7 +142,7 @@ class EmotionalProcessor:
 
         self.logger.debug(
             "emotional_update",
-            event=event_type,
+            event_type=event_type,
             mood=self.state.mood,
             valence=self.state.valence,
         )

@@ -1,13 +1,13 @@
 """Uncertainty Tracker for confidence calibration and uncertainty quantification."""
 
-import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any
 
 import structlog
-from openai import AsyncOpenAI
+
+from .backend import CognitiveBackend
 
 
 class UncertaintyType(str, Enum):
@@ -53,9 +53,8 @@ class CalibrationRecord:
 class UncertaintyTracker:
     """Tracks and quantifies uncertainty in reasoning."""
 
-    def __init__(self, api_key: str, model: str = "gpt-4-turbo-preview", api_base: str | None = None):
-        self.client = AsyncOpenAI(api_key=api_key or "ollama", base_url=api_base)
-        self.model = model
+    def __init__(self, backend: CognitiveBackend):
+        self.backend = backend
         self.estimates: dict[str, UncertaintyEstimate] = {}
         self.calibration_records: list[CalibrationRecord] = []
         self.logger = structlog.get_logger()
@@ -67,12 +66,7 @@ class UncertaintyTracker:
         context: str = "",
     ) -> UncertaintyEstimate:
         """Estimate uncertainty for a claim."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Estimate uncertainty for a claim. Consider:
+        system_prompt = """Estimate uncertainty for a claim. Consider:
 1. Evidence quality and quantity
 2. Contradicting information
 3. Source reliability
@@ -84,23 +78,23 @@ Return JSON with:
 - confidence_interval [low, high]
 - evidence_quality (0-1)
 - contradicting_count
-- reasoning""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Claim: {claim}
+- reasoning"""
+
+        user_prompt = f"""Claim: {claim}
 Evidence: {evidence or []}
 Context: {context}
 
-Estimate uncertainty:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Estimate uncertainty:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=800,
+            temperature=0.3,
         )
 
         try:
-            data = json.loads(response.choices[0].message.content or "{}")
+            data = response.parsed_json
             estimate = UncertaintyEstimate(
                 id=f"unc_{len(self.estimates)}",
                 claim=claim,
@@ -132,33 +126,28 @@ Estimate uncertainty:""",
         evidence: list[str] | None = None,
     ) -> dict[str, Any]:
         """Calibrate confidence estimate with additional checks."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Calibrate confidence for a claim. Check:
+        system_prompt = """Calibrate confidence for a claim. Check:
 1. Is the confidence well-calibrated given the evidence?
 2. Are there blind spots?
 3. What would increase/decrease confidence?
 
-Return JSON with: calibrated_confidence, adjustment_reasoning, blind_spots, confidence_bounds""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Claim: {claim}
+Return JSON with: calibrated_confidence, adjustment_reasoning, blind_spots, confidence_bounds"""
+
+        user_prompt = f"""Claim: {claim}
 Initial confidence: {predicted_confidence}
 Evidence: {evidence or []}
 
-Calibrate:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Calibrate:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=600,
+            temperature=0.3,
         )
 
         try:
-            data = json.loads(response.choices[0].message.content or "{}")
+            data = response.parsed_json
             return data
         except Exception:
             return {"calibrated_confidence": predicted_confidence}
@@ -169,33 +158,28 @@ Calibrate:""",
         known: list[str] | None = None,
     ) -> dict[str, Any]:
         """Quantify what is NOT known about a topic."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Identify knowledge gaps. Given what is known, what is NOT known?
+        system_prompt = """Identify knowledge gaps. Given what is known, what is NOT known?
 Categorize gaps by:
 1. Critical gaps (important for reasoning)
 2. Useful gaps (would improve decisions)
 3. Nice-to-know (low priority)
 
-Return JSON with: knowledge_gaps (list of {gap, importance, difficulty_to_obtain}), overall_coverage""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Topic: {topic}
+Return JSON with: knowledge_gaps (list of {gap, importance, difficulty_to_obtain}), overall_coverage"""
+
+        user_prompt = f"""Topic: {topic}
 Known: {known or []}
 
-What is NOT known?""",
-                },
-            ],
-            response_format={"type": "json_object"},
+What is NOT known?"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=800,
+            temperature=0.3,
         )
 
         try:
-            return json.loads(response.choices[0].message.content or "{}")
+            return response.parsed_json
         except Exception:
             return {"knowledge_gaps": [], "overall_coverage": 0.5}
 
@@ -205,12 +189,7 @@ What is NOT known?""",
         evidence: list[str],
     ) -> dict[str, Any]:
         """Decompose uncertainty into epistemic vs aleatoric components."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Decompose uncertainty into:
+        system_prompt = """Decompose uncertainty into:
 - Epistemic: reducible with more data/knowledge
 - Aleatoric: irreducible inherent randomness
 
@@ -219,22 +198,22 @@ Return JSON with:
 - aleatoric_component (0-1)
 - total_uncertainty (0-1)
 - reducibility (how much uncertainty can be reduced)
-- recommendations (what data/knowledge would help)""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Prediction: {prediction}
+- recommendations (what data/knowledge would help)"""
+
+        user_prompt = f"""Prediction: {prediction}
 Evidence: {evidence}
 
-Decompose uncertainty:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Decompose uncertainty:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=600,
+            temperature=0.3,
         )
 
         try:
-            return json.loads(response.choices[0].message.content or "{}")
+            return response.parsed_json
         except Exception:
             return {"epistemic_component": 0.5, "aleatoric_component": 0.5}
 

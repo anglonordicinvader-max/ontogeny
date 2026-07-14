@@ -1,6 +1,5 @@
 """Causal Reasoning Engine for intervention-based reasoning."""
 
-import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -8,7 +7,8 @@ from typing import Any
 
 import networkx as nx
 import structlog
-from openai import AsyncOpenAI
+
+from .backend import CognitiveBackend
 
 
 class CausalRelation(str, Enum):
@@ -69,9 +69,8 @@ class Counterfactual:
 class CausalReasoner:
     """Engine for causal and counterfactual reasoning."""
 
-    def __init__(self, api_key: str, model: str = "gpt-4-turbo-preview", api_base: str | None = None):
-        self.client = AsyncOpenAI(api_key=api_key or "ollama", base_url=api_base)
-        self.model = model
+    def __init__(self, backend: CognitiveBackend):
+        self.backend = backend
         self.dag = nx.DiGraph()  # Directed Acyclic Graph
         self.variables: dict[str, CausalVariable] = {}
         self.edges: list[CausalEdge] = []
@@ -85,31 +84,26 @@ class CausalReasoner:
         context: str = "",
     ) -> tuple[list[CausalVariable], list[CausalEdge]]:
         """Extract causal structure from text."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Extract causal relationships from text. Return JSON with:
+        system_prompt = """Extract causal relationships from text. Return JSON with:
 - variables: list of {name, type, description}
 - edges: list of {cause, effect, relation_type, strength, mechanisms}
 
 Relation types: direct_cause, indirect_cause, contributing_factor, 
 necessary_condition, sufficient_condition, correlation, confounding
 
-Be precise about causal vs correlational claims.""",
-                },
-                {
-                    "role": "user",
-                    "content": f"Context: {context}\n\nExtract causal structure from:\n{text[:4000]}",
-                },
-            ],
-            response_format={"type": "json_object"},
+Be precise about causal vs correlational claims."""
+
+        user_prompt = f"Context: {context}\n\nExtract causal structure from:\n{text[:4000]}"
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=2000,
+            temperature=0.3,
         )
 
         try:
-            data = json.loads(response.choices[0].message.content or "{}")
+            data = response.parsed_json
             variables = []
             edges = []
 
@@ -123,10 +117,14 @@ Be precise about causal vs correlational claims.""",
                 variables.append(var)
 
             for e in data.get("edges", []):
+                try:
+                    rel = CausalRelation(e.get("relation_type", "correlation"))
+                except ValueError:
+                    rel = CausalRelation.CORRELATION
                 edge = CausalEdge(
-                    source=e["cause"].lower().replace(" ", "_"),
-                    target=e["effect"].lower().replace(" ", "_"),
-                    relation=CausalRelation(e.get("relation_type", "correlation")),
+                    source=e.get("cause", "unknown").lower().replace(" ", "_"),
+                    target=e.get("effect", "unknown").lower().replace(" ", "_"),
+                    relation=rel,
                     strength=e.get("strength", 0.5),
                     mechanisms=e.get("mechanisms", []),
                 )
@@ -194,7 +192,6 @@ Be precise about causal vs correlational claims.""",
         """Find mediating paths from X to Y."""
         try:
             all_paths = list(nx.all_simple_paths(self.dag, x, y, cutoff=5))
-            # Mediators are intermediate nodes
             mediators = [
                 path[1:-1] for path in all_paths if len(path) > 2
             ]
@@ -209,12 +206,7 @@ Be precise about causal vs correlational claims.""",
         context: str = "",
     ) -> dict[str, Any]:
         """Perform do-calculus intervention reasoning."""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Perform causal intervention reasoning using do-calculus.
+        system_prompt = """Perform causal intervention reasoning using do-calculus.
 
 Given:
 - A causal model (DAG)
@@ -226,11 +218,9 @@ Reason about:
 2. Which paths are blocked/active
 3. The causal effect estimate
 
-Return JSON with: effect_estimate, reasoning, active_paths, blocked_paths, confidence""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Causal Model:
+Return JSON with: effect_estimate, reasoning, active_paths, blocked_paths, confidence"""
+
+        user_prompt = f"""Causal Model:
 Variables: {list(self.variables.keys())}
 Edges: {[(e.source, e.target, e.relation.value) for e in self.edges[:20]]}
 
@@ -238,15 +228,17 @@ Intervention: do({intervention.variable} = {intervention.value})
 Query: {query}
 Context: {context}
 
-Reason about the causal effect:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Reason about the causal effect:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=1500,
+            temperature=0.3,
         )
 
         try:
-            return json.loads(response.choices[0].message.content or "{}")
+            return response.parsed_json
         except Exception:
             return {"error": "Do-calculus reasoning failed"}
 
@@ -257,30 +249,25 @@ Reason about the causal effect:""",
         context: str = "",
     ) -> Counterfactual:
         """Reason about counterfactuals: what if X had been different?"""
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Perform counterfactual reasoning. Given an actual outcome and a hypothetical intervention, predict what would have happened.
+        system_prompt = """Perform counterfactual reasoning. Given an actual outcome and a hypothetical intervention, predict what would have happened.
 
-Return JSON with: predicted_outcome, confidence, reasoning, differences""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Actual outcome: {actual_outcome}
+Return JSON with: predicted_outcome, confidence, reasoning, differences"""
+
+        user_prompt = f"""Actual outcome: {actual_outcome}
 Hypothetical: do({intervention.variable} = {intervention.value})
 Context: {context}
 
-What would have happened?""",
-                },
-            ],
-            response_format={"type": "json_object"},
+What would have happened?"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=1000,
+            temperature=0.3,
         )
 
         try:
-            data = json.loads(response.choices[0].message.content or "{}")
+            data = response.parsed_json
             cf = Counterfactual(
                 description=data.get("reasoning", ""),
                 interventions=[intervention],
@@ -307,33 +294,28 @@ What would have happened?""",
         confounders = self.find_confounders(cause, effect)
         mediators = self.find_mediators(cause, effect)
 
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """Estimate the causal effect between variables.
+        system_prompt = """Estimate the causal effect between variables.
 Consider: direct effects, indirect effects, confounders, mediators.
-Return JSON with: effect_size, direction, confidence, decomposition""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Cause: {cause}
+Return JSON with: effect_size, direction, confidence, decomposition"""
+
+        user_prompt = f"""Cause: {cause}
 Effect: {effect}
 Known causes of {effect}: {causes}
 Confounders: {confounders}
 Mediators: {mediators}
 Evidence: {evidence or []}
 
-Estimate causal effect:""",
-                },
-            ],
-            response_format={"type": "json_object"},
+Estimate causal effect:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
             max_tokens=800,
+            temperature=0.3,
         )
 
         try:
-            return json.loads(response.choices[0].message.content or "{}")
+            return response.parsed_json
         except Exception:
             return {"effect_size": 0, "confidence": 0}
 

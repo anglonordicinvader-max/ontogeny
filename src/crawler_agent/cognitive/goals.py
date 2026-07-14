@@ -174,11 +174,13 @@ class GoalManager:
         return goal
 
     async def generate_intrinsic_goals(self) -> list[Goal]:
-        """Generate goals based on unsatisfied drives."""
+        """Generate goals based on unsatisfied drives, skipping if one already exists."""
         new_goals = []
+        active = await self.get_active_goals()
+        active_drives = {g.metadata.get("drive") for g in active if g.metadata.get("drive")}
 
         # Curiosity drive - learn something new
-        if self.drives["curiosity"].satisfaction < 0.5:
+        if self.drives["curiosity"].satisfaction < 0.5 and "curiosity" not in active_drives:
             goal = await self.create_goal(
                 description="Explore and learn about a new topic or domain",
                 source=GoalSource.INTRINSIC,
@@ -188,7 +190,7 @@ class GoalManager:
             new_goals.append(goal)
 
         # Mastery drive - improve a skill
-        if self.drives["mastery"].satisfaction < 0.5:
+        if self.drives["mastery"].satisfaction < 0.5 and "mastery" not in active_drives:
             goal = await self.create_goal(
                 description="Practice and improve an existing skill",
                 source=GoalSource.INTRINSIC,
@@ -198,9 +200,9 @@ class GoalManager:
             new_goals.append(goal)
 
         # Novelty drive - try something new
-        if self.drives["novelty"].satisfaction < 0.4:
+        if self.drives["novelty"].satisfaction < 0.4 and "novelty" not in active_drives:
             goal = await self.create_goal(
-                description="尝试一个新的方法或工具",
+                description="Try a new method or tool",
                 source=GoalSource.INTRINSIC,
                 priority=GoalPriority.LOW,
                 metadata={"drive": "novelty", "target_satisfaction": 0.6},

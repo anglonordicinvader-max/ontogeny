@@ -4,10 +4,12 @@ Tracks learning strategies and their effectiveness to
 optimize future learning sessions.
 """
 
+import json
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -60,13 +62,16 @@ class MetaLearner:
     types of content and optimizes future learning.
     """
 
-    def __init__(self):
+    def __init__(self, persistence_dir: str = "./meta_learner_data"):
         self.strategies: dict[str, LearningStrategy] = {}
         self.sessions: list[LearningSession] = []
         self.strategy_performance: dict[str, list[float]] = defaultdict(list)
+        self.persistence_dir = Path(persistence_dir)
+        self.persistence_dir.mkdir(exist_ok=True)
         self.logger = structlog.get_logger()
 
         self._init_default_strategies()
+        self._load()
 
     def _init_default_strategies(self):
         """Initialize default learning strategies."""
@@ -267,3 +272,86 @@ class MetaLearner:
                 default=(None, None),
             )[0] if analysis else None,
         }
+
+    def save(self) -> None:
+        """Save meta-learner state to disk."""
+        state = {
+            "strategies": {},
+            "sessions": [],
+            "strategy_performance": dict(self.strategy_performance),
+        }
+
+        for sid, strategy in self.strategies.items():
+            state["strategies"][sid] = {
+                "id": strategy.id,
+                "name": strategy.name,
+                "description": strategy.description,
+                "parameters": strategy.parameters,
+                "success_rate": strategy.success_rate,
+                "total_attempts": strategy.total_attempts,
+                "successes": strategy.successes,
+                "avg_quality": strategy.avg_quality,
+                "avg_speed": strategy.avg_speed,
+                "created_at": strategy.created_at.isoformat(),
+                "last_used": strategy.last_used.isoformat(),
+            }
+
+        for session in self.sessions:
+            state["sessions"].append({
+                "id": session.id,
+                "topic": session.topic,
+                "strategy_id": session.strategy_id,
+                "start_time": session.start_time.isoformat(),
+                "end_time": session.end_time.isoformat() if session.end_time else None,
+                "items_learned": session.items_learned,
+                "quality_score": session.quality_score,
+                "duration_seconds": session.duration_seconds,
+                "insights": session.insights,
+            })
+
+        path = self.persistence_dir / "meta_learner.json"
+        path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        self.logger.info("meta_learner_saved", path=str(path))
+
+    def _load(self) -> None:
+        """Load meta-learner state from disk."""
+        path = self.persistence_dir / "meta_learner.json"
+        if not path.exists():
+            return
+
+        try:
+            state = json.loads(path.read_text(encoding="utf-8"))
+
+            for sid, data in state.get("strategies", {}).items():
+                if sid in self.strategies:
+                    s = self.strategies[sid]
+                    s.success_rate = data.get("success_rate", 0.5)
+                    s.total_attempts = data.get("total_attempts", 0)
+                    s.successes = data.get("successes", 0)
+                    s.avg_quality = data.get("avg_quality", 0.5)
+                    s.avg_speed = data.get("avg_speed", 0.5)
+                    if data.get("last_used"):
+                        s.last_used = datetime.fromisoformat(data["last_used"])
+
+            for session_data in state.get("sessions", []):
+                session = LearningSession(
+                    id=session_data["id"],
+                    topic=session_data["topic"],
+                    strategy_id=session_data["strategy_id"],
+                    items_learned=session_data.get("items_learned", 0),
+                    quality_score=session_data.get("quality_score", 0.0),
+                    duration_seconds=session_data.get("duration_seconds", 0.0),
+                    insights=session_data.get("insights", []),
+                )
+                if session_data.get("start_time"):
+                    session.start_time = datetime.fromisoformat(session_data["start_time"])
+                if session_data.get("end_time"):
+                    session.end_time = datetime.fromisoformat(session_data["end_time"])
+                self.sessions.append(session)
+
+            for name, scores in state.get("strategy_performance", {}).items():
+                self.strategy_performance[name] = scores
+
+            self.logger.info("meta_learner_loaded", path=str(path))
+        except Exception as e:
+            self.logger.error("meta_learner_load_failed", error=str(e))

@@ -9,6 +9,7 @@ build/
 .env.*
 !.env.example
 data/
+skills/
 *.db
 *.sqlite
 *.sqlite3
