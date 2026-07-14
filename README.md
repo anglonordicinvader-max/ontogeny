@@ -94,6 +94,22 @@ python -m crawler_agent.main --autonomous 50
 python -m crawler_agent.main --demo
 ```
 
+### macOS Setup
+
+```bash
+# Clone and run automated installer
+git clone https://github.com/anglonordicinvader-max/ontogeny.git
+cd ontogeny
+chmod +x setup_macos.sh
+./setup_macos.sh
+
+# Launch
+chmod +x run_macos.sh
+./run_macos.sh
+```
+
+The installer handles Homebrew, Python, Ollama, and dependencies automatically. Requires macOS 11+ for full functionality (Ollama + Docker). macOS 10.15 Catalina runs with limited features — no local LLM or sandbox.
+
 ### Interactive Commands
 
 | Command | Description |
