@@ -135,7 +135,7 @@ class HeavyLLMSettings(BaseSettings):
     model_config = {"env_prefix": "HEAVY_LLM_", "env_file": _ENV_FILE, "env_file_encoding": "utf-8", "extra": "ignore"}
 
     enabled: bool = True
-    model: str = "anthropic/claude-3.5-sonnet"
+    model: str = "deepseek-v2:236b"
     api_key: str = ""
     api_base: str = "https://openrouter.ai/api/v1"
 
