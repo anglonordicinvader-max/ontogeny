@@ -264,3 +264,14 @@ class PatternLearner:
         for p in strong[:10]:
             lines.append(f"  [{p.pattern_type}] {p.description} (conf: {p.confidence:.2f})")
         return "\n".join(lines)
+
+    def get_stats(self) -> dict[str, Any]:
+        """Return stats about learned patterns."""
+        strong = self.get_strong_patterns(0.6)
+        return {
+            "total_patterns": len(self.patterns),
+            "strong_patterns": len(strong),
+            "frequency_groups": len(self.frequency_counts),
+            "sequence_groups": len(self.sequence_counts),
+            "association_groups": len(self.association_counts),
+        }
