@@ -33,8 +33,8 @@ Ontogeny is a self-improving cognitive agent that autonomously explores the inte
 
 ## Features
 
-### 27+ Web Crawlers
-GitHub, GitLab, PyPI, npm, Crates.io, Maven, NuGet, Go.dev, RubyGems, NuGet, ArXiv, Semantic Scholar, Stack Overflow, Reddit, Hacker News, Wikipedia, RSS, Discord, Slack, Notion, Jira, Pastebin, HuggingFace, Crawlera, Web Scraper — all with automatic proxy rotation across 12 free proxy sources.
+### 28+ Web Crawlers
+GitHub, GitLab, PyPI, npm, Crates.io, Maven, NuGet, Go.dev, RubyGems, ArXiv, Semantic Scholar, Stack Overflow, Reddit, Hacker News, Wikipedia, RSS, Discord, Slack, Notion, Jira, Pastebin, HuggingFace, Web Scraper, Internet Archive (books, Wayback Machine, media) — all with automatic proxy rotation across 12 free proxy sources.
 
 ### Cognitive Systems
 - **Goal Management** — intrinsic drives (curiosity, mastery, novelty) with automatic goal generation and decay
@@ -180,7 +180,8 @@ src/crawler_agent/
 │   ├── reddit.py
 │   ├── hackernews.py
 │   ├── wikipedia.py
-│   └── ... (27+ total)
+│   ├── internetarchive.py   # Archive.org + Wayback Machine
+│   └── ... (28+ total)
 ├── multi_agent/
 │   ├── registry.py          # Agent registry
 │   └── collaboration.py     # Inter-agent communication
