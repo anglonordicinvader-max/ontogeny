@@ -2,7 +2,7 @@
 
 **Proto-AGI cognitive agent with recursive self-improvement, 33 web crawlers, and multi-layer persistent memory.**
 
-Runs entirely on Ollama llama3.2 locally. CLI-only. No web UI.
+Runs on Ollama llama3.2 locally by default, with optional hybrid LLM support (codellama:13b or Claude/GPT for complex reasoning). CLI-only. No web UI.
 
 ---
 
@@ -45,7 +45,7 @@ Ontogeny is a self-improving cognitive agent that autonomously explores the inte
 ## Features
 
 ### 33 Web Crawlers
-GitHub, GitLab, PyPI, npm, Crates.io, Maven, NuGet, Go.dev, RubyGems, ArXiv, Semantic Scholar, Stack Overflow, Reddit, Hacker News, Wikipedia, RSS, Discord, Slack, Notion, Jira, Pastebin, HuggingFace, Web Scraper, Internet Archive (books, Wayback Machine, media) — all with automatic proxy rotation across 12 free proxy sources.
+GitHub, GitLab, Bitbucket, Codeberg/Gitea, SourceForge, Launchpad, Savannah, Apache, Pagure, PyPI, npm, Crates.io, Maven, NuGet, Go.dev, RubyGems, ArXiv, Semantic Scholar, Stack Overflow, Reddit, Hacker News, Wikipedia, RSS, Discord, Slack, Notion, Jira, Pastebin, HuggingFace, Web Scraper, Internet Archive (books, Wayback Machine, media) — all with automatic proxy rotation across 12 free proxy sources.
 
 ### Cognitive Systems
 - **Goal Management** — intrinsic drives (curiosity, mastery, novelty) with automatic goal generation and decay
@@ -86,11 +86,12 @@ Isolated code execution in Docker containers with resource limits and automatic 
 ### Prerequisites
 - Python 3.11+
 - Docker Desktop (for code execution sandbox)
-- Ollama with llama3.2
+- Ollama with llama3.2 (and optionally codellama:13b for hybrid mode)
 
 ```bash
-# Install Ollama and pull model
+# Install Ollama and pull models
 ollama pull llama3.2
+ollama pull codellama:13b  # optional, for hybrid mode
 
 # Clone and install
 git clone https://github.com/anglonordicinvader-max/ontogeny.git
@@ -172,10 +173,16 @@ The installer detects your distro (Ubuntu, Fedora, Arch, CentOS) and installs Py
 Edit `.env`:
 
 ```env
-# LLM (Ollama)
+# LLM (Ollama - routine tasks)
 LLM_API_KEY=ollama
 LLM_MODEL=llama3.2
 LLM_API_BASE=http://localhost:11434/v1
+
+# Heavy LLM (optional - for planning, code gen, self-modification)
+HEAVY_LLM_ENABLED=true
+HEAVY_LLM_MODEL=codellama:13b
+HEAVY_LLM_API_KEY=ollama
+HEAVY_LLM_API_BASE=http://localhost:11434/v1
 
 # Proxy (auto-fetches free proxies)
 PROXY_ENABLED=true
@@ -198,11 +205,12 @@ CRAWLER_MAX_DELAY=3.0
 src/crawler_agent/
 ├── main.py                  # CLI entry point with mode selector
 ├── cli_colors.py            # ANSI color support
+├── persistence.py           # Agent state persistence
 ├── config/
 │   └── settings.py          # All settings (env-loaded)
 ├── cognitive/
 │   ├── orchestrator.py      # Main cognitive loop
-│   ├── backend.py           # LLM backend (Ollama)
+│   ├── backend.py           # Cognitive backend abstraction (hybrid LLM)
 │   ├── planning.py          # Plan creation & execution
 │   ├── goals.py             # Goal & drive management
 │   ├── metacognition.py     # Self-evaluation
@@ -210,9 +218,13 @@ src/crawler_agent/
 │   ├── knowledge_graph.py   # Entity-relation extraction
 │   ├── uncertainty.py       # Confidence tracking
 │   ├── emotional.py         # Mood model
-│   ├── self_modify.py       # Recursive self-improvement engine
+│   ├── self_modify.py       # Skill creation & optimization
+│   ├── recursive_modify.py  # Source-level code rewriting
 │   ├── skill_composition.py # Skill chaining
 │   ├── simulator.py         # Action simulation
+│   ├── memory.py            # Multi-layer persistent memory
+│   ├── learning.py          # Focused learning mode
+│   ├── scheduler.py         # Intelligent crawl scheduling
 │   ├── pattern_learner.py   # Pattern recognition
 │   ├── rl_agent.py          # Reinforcement learning
 │   ├── curiosity.py         # Curiosity-driven exploration
@@ -223,30 +235,53 @@ src/crawler_agent/
 │   └── meta_learner.py      # Learning-to-learn
 ├── crawlers/
 │   ├── base.py              # Base crawler (proxy-aware)
-│   ├── github.py
-│   ├── gitlab.py
-│   ├── pypi.py
-│   ├── npm.py
-│   ├── arxiv.py
-│   ├── stackoverflow.py
-│   ├── reddit.py
-│   ├── hackernews.py
-│   ├── wikipedia.py
-│   ├── internetarchive.py   # Archive.org + Wayback Machine
-│   └── ... (33 total)
-├── multi_agent/
+│   ├── github.py            # GitHub
+│   ├── gitlab.py            # GitLab
+│   ├── bitbucket.py         # Bitbucket
+│   ├── codeberg.py          # Codeberg (Gitea)
+│   ├── sourceforge.py       # SourceForge
+│   ├── launchpad.py         # Launchpad
+│   ├── savannah.py          # GNU Savannah
+│   ├── apache.py            # Apache
+│   ├── pagure.py            # Pagure
+│   ├── pypi.py              # PyPI
+│   ├── npm_registry.py      # npm
+│   ├── crates.py            # Crates.io
+│   ├── go_dev.py            # Go.dev
+│   ├── maven.py             # Maven Central
+│   ├── nuget.py             # NuGet
+│   ├── rubygems.py          # RubyGems
+│   ├── arxiv.py             # ArXiv
+│   ├── academic.py          # Semantic Scholar
+│   ├── stackoverflow.py     # Stack Overflow
+│   ├── reddit.py            # Reddit
+│   ├── hackernews.py        # Hacker News
+│   ├── rss.py               # RSS/Atom feeds
+│   ├── wikipedia.py         # Wikipedia
+│   ├── discord.py           # Discord
+│   ├── slack.py             # Slack
+│   ├── notion.py            # Notion
+│   ├── jira.py              # Jira
+│   ├── pastebin.py          # Pastebin
+│   ├── huggingface.py       # HuggingFace
+│   ├── webscraper.py        # Generic web scraper
+│   └── internetarchive.py   # Archive.org + Wayback Machine
+├── agents/
+│   ├── base.py              # Base agent class & protocol
+│   ├── orchestrator.py      # Multi-agent coordination
 │   ├── registry.py          # Agent registry
-│   └── collaboration.py     # Inter-agent communication
+│   └── specialized.py       # 10 specialized agent implementations
 ├── processing/
-│   ├── llm.py               # Raw LLM interface
+│   ├── llm.py               # LLM processing pipeline
 │   └── embeddings.py        # Embedding generation
-├── persistence/
-│   ├── database.py          # SQLite storage
-│   └── state.py             # State persistence
-├── docker_manager.py        # Docker sandbox
+├── storage/
+│   ├── database.py          # SQL storage (SQLite/PostgreSQL)
+│   ├── docker_manager.py    # Docker sandbox
+│   └── vector.py            # ChromaDB vector store
 └── utils/
     ├── proxy.py             # Proxy pool & rotation
-    └── proxy_fetcher.py     # 12 free proxy sources
+    ├── proxy_fetcher.py     # 12 free proxy sources
+    └── rate_limiter.py      # Request rate limiting
 ```
 
 ## How Autonomous Mode Works
