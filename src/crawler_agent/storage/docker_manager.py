@@ -700,7 +700,15 @@ class CodeSandbox:
 
     async def list_sandboxes(self) -> list[str]:
         """List active sandboxes."""
-        return list(self._active_sandboxes.keys())
+        tracked = list(self._active_sandboxes.keys())
+        try:
+            containers = await self.docker.list_containers(all=False)
+            for c in containers:
+                if c.name.startswith(self.CONTAINER_PREFIX) and c.name not in tracked:
+                    tracked.append(c.name)
+        except Exception:
+            pass
+        return tracked
 
     async def cleanup_all(self) -> None:
         """Destroy all sandboxes."""
