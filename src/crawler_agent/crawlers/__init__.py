@@ -48,6 +48,9 @@ from .maven import MavenCrawler
 from .nuget import NugetCrawler
 from .rubygems import RubyGemsCrawler
 
+# Archives
+from .internetarchive import InternetArchiveCrawler
+
 __all__ = [
     # Base
     "BaseCrawler", "CrawlResult", "ContentType", "CrawlerConfig",
@@ -82,4 +85,7 @@ __all__ = [
     # Package Registries
     "PyPICrawler", "NpmCrawler", "CratesCrawler",
     "GoDevCrawler", "MavenCrawler", "NugetCrawler", "RubyGemsCrawler",
+    
+    # Archives
+    "InternetArchiveCrawler",
 ]

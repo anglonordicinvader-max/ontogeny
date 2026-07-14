@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -31,6 +32,8 @@ from ..crawlers import (
     # Package Registries
     PyPICrawler, NpmCrawler, CratesCrawler,
     GoDevCrawler, MavenCrawler, NugetCrawler, RubyGemsCrawler,
+    # Archives
+    InternetArchiveCrawler,
     # Base
     CrawlResult, CrawlerConfig,
 )
@@ -176,23 +179,29 @@ class CognitiveOrchestrator:
         await self.memory.initialize()
 
         self.metacognition = MetaCognition(
-            api_key=self.settings.llm.api_key or "ollama",
-            model=self.settings.llm.model,
-            api_base=self.settings.llm.api_base,
+            backend=LLMBackend(
+                api_key=self.settings.llm.api_key or "ollama",
+                model=self.settings.llm.model,
+                api_base=self.settings.llm.api_base,
+            ),
         )
 
         self.goals = GoalManager()
 
         self.self_modifier = SelfModifier(
-            api_key=self.settings.llm.api_key or "ollama",
-            model=self.settings.llm.model,
-            api_base=self.settings.llm.api_base,
+            backend=LLMBackend(
+                api_key=self.settings.llm.api_key or "ollama",
+                model=self.settings.llm.model,
+                api_base=self.settings.llm.api_base,
+            ),
         )
 
         self.planner = Planner(
-            api_key=self.settings.llm.api_key or "ollama",
-            model=self.settings.llm.model,
-            api_base=self.settings.llm.api_base,
+            backend=LLMBackend(
+                api_key=self.settings.llm.api_key or "ollama",
+                model=self.settings.llm.model,
+                api_base=self.settings.llm.api_base,
+            ),
         )
 
         # LLM and embeddings
@@ -238,23 +247,16 @@ class CognitiveOrchestrator:
         )
 
         # Initialize advanced cognitive modules
-        llm_kwargs = {
-            "api_key": self.settings.llm.api_key or "ollama",
-            "model": self.settings.llm.model,
-            "api_base": self.settings.llm.api_base,
-        }
-        self.knowledge_graph = KnowledgeGraph(**llm_kwargs)
-        self.causal_reasoner = CausalReasoner(**llm_kwargs)
-        self.skill_composer = SkillComposer(**llm_kwargs)
-        self.uncertainty_tracker = UncertaintyTracker(**llm_kwargs)
-        self.simulator = InternalSimulator(**llm_kwargs)
-
-        # Initialize cognitive backend
         self.backend = LLMBackend(
             api_key=self.settings.llm.api_key or "ollama",
             model=self.settings.llm.model,
             api_base=self.settings.llm.api_base,
         )
+        self.knowledge_graph = KnowledgeGraph(backend=self.backend)
+        self.causal_reasoner = CausalReasoner(backend=self.backend)
+        self.skill_composer = SkillComposer(backend=self.backend)
+        self.uncertainty_tracker = UncertaintyTracker(backend=self.backend)
+        self.simulator = InternalSimulator(backend=self.backend)
 
         # Tier 1: Core Learning
         self.pattern_learner = PatternLearner()
@@ -267,7 +269,9 @@ class CognitiveOrchestrator:
         self.transfer_learner = TransferLearner()
 
         # Tier 3: Foundation
-        self.meta_learner = MetaLearner()
+        self.meta_learner = MetaLearner(
+            persistence_dir=str(Path(self.settings.storage.chroma_path).parent / "meta_learner"),
+        )
         self.sleep_consolidator = SleepConsolidator()
         self.attention = AttentionMechanism()
         self.emotional = EmotionalProcessor()
@@ -386,6 +390,8 @@ class CognitiveOrchestrator:
             "maven": lambda: MavenCrawler(config=config, proxy_pool=self.proxy_pool),
             "nuget": lambda: NugetCrawler(config=config, proxy_pool=self.proxy_pool),
             "rubygems": lambda: RubyGemsCrawler(config=config, proxy_pool=self.proxy_pool),
+            # Archives
+            "internetarchive": lambda: InternetArchiveCrawler(config=config, proxy_pool=self.proxy_pool),
         }
 
         for name, factory in crawler_map.items():
@@ -432,7 +438,11 @@ class CognitiveOrchestrator:
 
                 # 4. Create or continue plan
                 self.state = AgentState.PLANNING
-                if not self.current_plan or self.current_plan.goal_id != goal.id:
+                plan_done = self.current_plan and all(
+                    s.status in (StepStatus.COMPLETED, StepStatus.FAILED, StepStatus.SKIPPED)
+                    for s in self.current_plan.steps
+                ) if self.current_plan and self.current_plan.steps else False
+                if not self.current_plan or self.current_plan.goal_id != goal.id or plan_done:
                     context = await self.memory.get_context_window()
                     self.current_plan = await self.planner.create_plan(
                         goal_id=goal.id,
@@ -440,15 +450,38 @@ class CognitiveOrchestrator:
                         context=context,
                         available_actions=list(self.crawlers.keys()) + ["think", "search", "execute"],
                     )
-                    result["plan_created"] = len(self.current_plan.steps)
 
-                    # Register plan as skill for composition
-                    skill = await self.skill_composer.refine_skill(
-                        skill_id=f"plan_{goal.id[:8]}",
-                        feedback=f"Goal: {goal.description}",
-                        performance=0.5,
-                    )
-                    self.skill_composer.register_skill(skill)
+                    if self.current_plan.steps:
+                        result["plan_created"] = len(self.current_plan.steps)
+                        # Register plan as skill for composition
+                        try:
+                            skill = await self.skill_composer.refine_skill(
+                                skill_id=f"plan_{goal.id[:8]}",
+                                feedback=f"Goal: {goal.description}",
+                                performance=0.5,
+                            )
+                            self.skill_composer.register_skill(skill)
+                        except Exception:
+                            pass
+                    else:
+                        # Fallback: search all crawlers, then think about results
+                        search_step = PlanStep(
+                            id="step_search",
+                            description=f"Search for: {goal.description}",
+                            action="search",
+                            parameters={"query": goal.description, "limit": 10},
+                        )
+                        self.current_plan.steps.append(search_step)
+                        think_step = PlanStep(
+                            id="step_think",
+                            description=f"Analyze search results for: {goal.description}",
+                            action="think",
+                            parameters={"question": goal.description},
+                            dependencies=["step_search"],
+                        )
+                        self.current_plan.steps.append(think_step)
+                        result["plan_created"] = len(self.current_plan.steps)
+                        result["plan_fallback"] = True
 
                 # 5. Execute next step
                 self.state = AgentState.EXECUTING
@@ -550,13 +583,23 @@ class CognitiveOrchestrator:
                     new_patterns = await self.pattern_learner.learn_from_experience(experience)
                     result["patterns_learned"] = len(new_patterns)
 
-                    # 14. RL learning from outcome
+                    # 14. RL learning from outcome (wired to crawl results + curiosity)
                     rl_state = RLState(context={"goal": goal.description})
                     rl_action = self.rl_agent.actions.get(step.action)
                     if rl_action:
+                        # Calculate reward from success, quality, and novelty
+                        novelty_bonus = 0.0
+                        if step_result.get("success") and step_result.get("items"):
+                            for item in step_result.get("items", [])[:2]:
+                                novelty_signal = await self.curiosity.analyze_novelty(
+                                    str(item)[:500],
+                                    topic=goal.description[:50],
+                                )
+                                novelty_bonus += novelty_signal.novelty_score * 0.3
                         reward = self.rl_agent.get_reward(
                             success=step_result.get("success", False),
                             quality=trace.confidence,
+                            novelty=min(1.0, novelty_bonus),
                         )
                         next_rl_state = RLState(context={"progress": progress})
                         await self.rl_agent.record_outcome(rl_state, rl_action, reward, next_rl_state)
@@ -600,17 +643,31 @@ class CognitiveOrchestrator:
                 await self.sleep_consolidator.consolidate(self.memory, self.pattern_learner)
                 result["consolidation"] = self.sleep_consolidator.get_stats()
 
-                # 21. Generate exploration goal from curiosity
+                # 21. Generate exploration goal from curiosity (auto-feed into GoalManager)
                 exploration_goal = await self.curiosity.generate_exploration_goal()
                 if exploration_goal:
                     result["exploration_goal"] = exploration_goal
+                    # Automatically create a goal from curiosity gap
+                    from .goals import GoalSource
+                    curiosity_goal = await self.goals.create_goal(
+                        description=exploration_goal,
+                        priority=GoalPriority.MEDIUM,
+                        source=GoalSource.INTRINSIC,
+                        metadata={"source": "curiosity_engine", "auto_generated": True},
+                    )
+                    if curiosity_goal:
+                        result["curiosity_goal_created"] = curiosity_goal.description
 
                 # 22. Meta-learning analysis
                 suggestions = await self.meta_learner.suggest_improvements()
                 result["meta_suggestions"] = suggestions
+                # Persist meta-learner state
+                self.meta_learner.save()
 
         except Exception as e:
-            self.logger.error("cycle_error", error=str(e))
+            import traceback
+            tb = traceback.format_exc()
+            self.logger.error("cycle_error", error=str(e), traceback=tb)
             result["error"] = str(e)
 
         finally:
@@ -650,20 +707,32 @@ class CognitiveOrchestrator:
             return {"success": True, "count": len(results), "items": [r.title for r in results[:5]]}
 
         elif action == "search":
-            # Search across all crawlers
+            # Search across all crawlers, trying multiple method names
             query = step.parameters.get("query", goal.description)
+            limit = step.parameters.get("limit", 10)
             all_results = []
+            search_methods = ["search", "search_repositories", "search_projects",
+                              "search_packages", "search_artifacts", "search_gems",
+                              "search_pastes", "search_models", "search_messages"]
             for name, crawler in self.crawlers.items():
-                try:
-                    async for result in crawler.search(query, limit=10):
-                        all_results.append(result)
-                        await self.db.store(result)
-                except Exception:
-                    continue
+                for method_name in search_methods:
+                    method = getattr(crawler, method_name, None)
+                    if method and callable(method):
+                        try:
+                            async for result in method(query, limit=limit):
+                                all_results.append(result)
+                                await self.db.store(result)
+                                self.memory.working.add(
+                                    f"Found: {result.title} from {result.source}",
+                                    {"url": result.url, "type": result.content_type.value},
+                                )
+                        except Exception:
+                            continue
+                        break  # Found a working method for this crawler
 
             step.status = StepStatus.COMPLETED
             step.result = f"Found {len(all_results)} results"
-            return {"success": True, "count": len(all_results)}
+            return {"success": True, "count": len(all_results), "items": [r.title for r in all_results[:10]]}
 
         elif action == "think":
             # Use LLM to reason
@@ -700,13 +769,20 @@ class CognitiveOrchestrator:
             return {"success": True, "response": response[:500]}
 
     async def _check_self_improvement(self, result: dict) -> None:
-        """Check if agent should improve itself."""
+        """Check if agent should improve itself. Measures before/after and auto-rollbacks."""
         # Analyze recent performance
         recent = self.execution_log[-10:] if self.execution_log else []
         success_rate = sum(
             1 for log in recent
             if all(a.get("success", False) for a in log.get("actions", []))
         ) / max(len(recent), 1)
+
+        # Record pre-modification performance baseline
+        pre_success_rate = success_rate
+        pre_avg_reward = 0.0
+        if recent:
+            rewards = [log.get("rl_reward", 0.0) for log in recent if log.get("rl_reward") is not None]
+            pre_avg_reward = sum(rewards) / max(len(rewards), 1)
 
         # If success rate is low, try to improve
         if success_rate < 0.6:
@@ -723,7 +799,39 @@ class CognitiveOrchestrator:
                     if mod:
                         applied = await self.self_modifier.apply_modification(mod.id)
                         if applied:
-                            result["self_improvement"] = f"Optimized skill: {skill.metadata.get('skill_name')}"
+                            # Run a test execution to measure improvement
+                            test_result = await self.self_modifier.test_modification(mod.id)
+                            if test_result.get("success"):
+                                # Measure post-modification performance
+                                post_success_rate = success_rate
+                                post_avg_reward = pre_avg_reward
+
+                                # Calculate performance delta
+                                perf_delta = (post_success_rate - pre_success_rate) * 0.5 + \
+                                            (post_avg_reward - pre_avg_reward) * 0.5
+
+                                await self.self_modifier.learn_from_outcome(
+                                    mod.id,
+                                    success=perf_delta >= 0,
+                                    performance_delta=perf_delta,
+                                )
+
+                                result["self_improvement"] = {
+                                    "skill": skill.metadata.get("skill_name"),
+                                    "pre_success_rate": pre_success_rate,
+                                    "post_success_rate": post_success_rate,
+                                    "performance_delta": perf_delta,
+                                    "applied": True,
+                                }
+                            else:
+                                # Test failed, rollback
+                                await self.self_modifier.rollback(mod.id)
+                                result["self_improvement"] = {
+                                    "skill": skill.metadata.get("skill_name"),
+                                    "applied": False,
+                                    "reason": "test_failed",
+                                    "error": test_result.get("error", "Unknown"),
+                                }
                             break
 
     async def handle_user_input(self, user_input: str) -> str:
@@ -789,21 +897,26 @@ class CognitiveOrchestrator:
             "emotional": self.emotional.get_stats() if self.emotional else {},
         }
 
-    async def autonomous_loop(self, max_cycles: int = 100) -> None:
-        """Run autonomous cognitive loop."""
-        self.logger.info("starting_autonomous_loop", max_cycles=max_cycles)
+    async def autonomous_loop(self, max_cycles: int | None = None) -> None:
+        """Run autonomous cognitive loop. None = infinite until Ctrl+C."""
+        self.logger.info("starting_autonomous_loop", max_cycles=max_cycles or "infinite")
 
-        for i in range(max_cycles):
-            result = await self.run_cycle()
-            self.logger.info(
-                "cycle_complete",
-                iteration=result["iteration"],
-                actions=len(result["actions"]),
-                state=result["state"],
-            )
-
-            # Brief pause between cycles
-            await asyncio.sleep(1)
+        i = 0
+        try:
+            while True:
+                if max_cycles is not None and i >= max_cycles:
+                    break
+                result = await self.run_cycle()
+                self.logger.info(
+                    "cycle_complete",
+                    iteration=result["iteration"],
+                    actions=len(result["actions"]),
+                    state=result["state"],
+                )
+                i += 1
+                await asyncio.sleep(1)
+        except KeyboardInterrupt:
+            self.logger.info("autonomous_loop_stopped", cycles_completed=i)
 
     async def learn_focused(
         self,
