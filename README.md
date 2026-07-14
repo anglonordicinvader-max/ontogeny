@@ -1,6 +1,6 @@
 # Ontogeny
 
-**Proto-AGI cognitive agent with recursive self-improvement, 28 web crawlers, and multi-layer persistent memory.**
+**Proto-AGI cognitive agent with recursive self-improvement, 33 web crawlers, and multi-layer persistent memory.**
 
 Runs entirely on Ollama llama3.2 locally. CLI-only. No web UI.
 
@@ -8,7 +8,7 @@ Runs entirely on Ollama llama3.2 locally. CLI-only. No web UI.
 
 ## What It Does
 
-Ontogeny is a self-improving cognitive agent that autonomously explores the internet, learns from what it finds, and builds increasingly complex understanding over time. It operates in continuous autonomous cycles — setting its own goals, planning actions, executing crawls across 28 data sources, reasoning about results, reflecting on its own performance, and **modifying its own code and behavior** based on what works.
+Ontogeny is a self-improving cognitive agent that autonomously explores the internet, learns from what it finds, and builds increasingly complex understanding over time. It operates in continuous autonomous cycles — setting its own goals, planning actions, executing crawls across 33 data sources, reasoning about results, reflecting on its own performance, and **modifying its own code and behavior** based on what works.
 
 ## Architecture
 
@@ -22,7 +22,7 @@ Ontogeny is a self-improving cognitive agent that autonomously explores the inte
 │                              (recursive)                  │
 │                                                           │
 │  ┌───────────┐  ┌───────────┐  ┌────────────────────┐   │
-│  │ 28        │  │ Meta-     │  │ 10 Cognitive        │   │
+│  │ 33        │  │ Meta-     │  │ 10 Cognitive        │   │
 │  │ Crawlers  │  │ Cognition │  │ Learning Modules    │   │
 │  │ +Proxies  │  │           │  │                     │   │
 │  └───────────┘  └───────────┘  └────────────────────┘   │
@@ -44,7 +44,7 @@ Ontogeny is a self-improving cognitive agent that autonomously explores the inte
 
 ## Features
 
-### 28 Web Crawlers
+### 33 Web Crawlers
 GitHub, GitLab, PyPI, npm, Crates.io, Maven, NuGet, Go.dev, RubyGems, ArXiv, Semantic Scholar, Stack Overflow, Reddit, Hacker News, Wikipedia, RSS, Discord, Slack, Notion, Jira, Pastebin, HuggingFace, Web Scraper, Internet Archive (books, Wayback Machine, media) — all with automatic proxy rotation across 12 free proxy sources.
 
 ### Cognitive Systems
@@ -233,7 +233,7 @@ src/crawler_agent/
 │   ├── hackernews.py
 │   ├── wikipedia.py
 │   ├── internetarchive.py   # Archive.org + Wayback Machine
-│   └── ... (28 total)
+│   └── ... (33 total)
 ├── multi_agent/
 │   ├── registry.py          # Agent registry
 │   └── collaboration.py     # Inter-agent communication
