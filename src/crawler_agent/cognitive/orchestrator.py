@@ -49,6 +49,16 @@ from .causal_reasoning import CausalReasoner
 from .skill_composition import SkillComposer
 from .uncertainty import UncertaintyTracker
 from .simulator import InternalSimulator, SimulationType
+from .backend import CognitiveBackend, LLMBackend, PatternBackend
+from .pattern_learner import PatternLearner
+from .rl_agent import RLAgent, State as RLState
+from .curiosity import CuriosityEngine
+from .world_model import BayesianWorldModel
+from .meta_learner import MetaLearner
+from .sleep import SleepConsolidator
+from .attention import AttentionMechanism
+from .emotional import EmotionalProcessor
+from .transfer import TransferLearner
 from ..agents import MultiAgentOrchestrator
 
 
@@ -92,6 +102,22 @@ class CognitiveOrchestrator:
 
         # Multi-agent system
         self.multi_agent: MultiAgentOrchestrator | None = None
+
+        # Tier 1: Core Learning
+        self.backend: CognitiveBackend | None = None
+        self.pattern_learner: PatternLearner | None = None
+        self.rl_agent: RLAgent | None = None
+
+        # Tier 2: Advanced Cognition
+        self.curiosity: CuriosityEngine | None = None
+        self.world_model: BayesianWorldModel | None = None
+        self.transfer_learner: TransferLearner | None = None
+
+        # Tier 3: Foundation
+        self.meta_learner: MetaLearner | None = None
+        self.sleep_consolidator: SleepConsolidator | None = None
+        self.attention: AttentionMechanism | None = None
+        self.emotional: EmotionalProcessor | None = None
 
         # Crawlers
         self.crawlers: dict[str, Any] = {}
@@ -222,6 +248,29 @@ class CognitiveOrchestrator:
         self.skill_composer = SkillComposer(**llm_kwargs)
         self.uncertainty_tracker = UncertaintyTracker(**llm_kwargs)
         self.simulator = InternalSimulator(**llm_kwargs)
+
+        # Initialize cognitive backend
+        self.backend = LLMBackend(
+            api_key=self.settings.llm.api_key or "ollama",
+            model=self.settings.llm.model,
+            api_base=self.settings.llm.api_base,
+        )
+
+        # Tier 1: Core Learning
+        self.pattern_learner = PatternLearner()
+        self.rl_agent = RLAgent()
+        self.rl_agent.register_default_actions()
+
+        # Tier 2: Advanced Cognition
+        self.curiosity = CuriosityEngine()
+        self.world_model = BayesianWorldModel()
+        self.transfer_learner = TransferLearner()
+
+        # Tier 3: Foundation
+        self.meta_learner = MetaLearner()
+        self.sleep_consolidator = SleepConsolidator()
+        self.attention = AttentionMechanism()
+        self.emotional = EmotionalProcessor()
 
         # Initialize crawl orchestrator with light intensity by default
         self.crawl_orchestrator = CrawlOrchestrator(
@@ -491,10 +540,74 @@ class CognitiveOrchestrator:
                         )
                         result["replanned"] = True
 
-            # 10. Check for self-improvement opportunities
+                    # 13. Pattern learning from experience
+                    experience = {
+                        "action": step.action,
+                        "success": step_result.get("success", False),
+                        "quality": trace.confidence,
+                        "events": [step.description],
+                    }
+                    new_patterns = await self.pattern_learner.learn_from_experience(experience)
+                    result["patterns_learned"] = len(new_patterns)
+
+                    # 14. RL learning from outcome
+                    rl_state = RLState(context={"goal": goal.description})
+                    rl_action = self.rl_agent.actions.get(step.action)
+                    if rl_action:
+                        reward = self.rl_agent.get_reward(
+                            success=step_result.get("success", False),
+                            quality=trace.confidence,
+                        )
+                        next_rl_state = RLState(context={"progress": progress})
+                        await self.rl_agent.record_outcome(rl_state, rl_action, reward, next_rl_state)
+                        result["rl_reward"] = reward
+
+                    # 15. Curiosity and novelty detection
+                    if step_result.get("success") and step_result.get("items"):
+                        for item in step_result.get("items", [])[:2]:
+                            novelty = await self.curiosity.analyze_novelty(
+                                str(item)[:500],
+                                topic=goal.description[:50],
+                            )
+                            result["novelty_detected"] = novelty.novelty_score
+
+                    # 16. Update world model
+                    observation = {
+                        "action": step.action,
+                        "success": step_result.get("success", False),
+                        "context": goal.description[:100],
+                    }
+                    await self.world_model.observe(observation)
+
+                    # 17. Emotional processing
+                    event_type = "success" if step_result.get("success") else "failure"
+                    await self.emotional.process_event(event_type, step.description)
+                    result["emotional_state"] = self.emotional.state.mood
+
+                    # 18. Attention update
+                    target = await self.attention.evaluate_attention(
+                        step.description,
+                        context={"goals": [goal.description]},
+                    )
+                    await self.attention.decide_focus([target])
+
+            # 19. Check for self-improvement opportunities
             if self.iteration % 10 == 0:
                 self.state = AgentState.SELF_MODIFYING
                 await self._check_self_improvement(result)
+
+                # 20. Sleep consolidation every 10 cycles
+                await self.sleep_consolidator.consolidate(self.memory, self.pattern_learner)
+                result["consolidation"] = self.sleep_consolidator.get_stats()
+
+                # 21. Generate exploration goal from curiosity
+                exploration_goal = await self.curiosity.generate_exploration_goal()
+                if exploration_goal:
+                    result["exploration_goal"] = exploration_goal
+
+                # 22. Meta-learning analysis
+                suggestions = await self.meta_learner.suggest_improvements()
+                result["meta_suggestions"] = suggestions
 
         except Exception as e:
             self.logger.error("cycle_error", error=str(e))
@@ -662,6 +775,18 @@ class CognitiveOrchestrator:
             "skill_composition": self.skill_composer.get_stats() if self.skill_composer else {},
             "uncertainty": self.uncertainty_tracker.get_stats() if self.uncertainty_tracker else {},
             "simulator": self.simulator.get_stats() if self.simulator else {},
+            # Tier 1: Core Learning
+            "pattern_learner": self.pattern_learner.get_stats() if self.pattern_learner else {},
+            "rl_agent": self.rl_agent.get_stats() if self.rl_agent else {},
+            # Tier 2: Advanced Cognition
+            "curiosity": self.curiosity.get_stats() if self.curiosity else {},
+            "world_model": self.world_model.get_stats() if self.world_model else {},
+            "transfer_learner": self.transfer_learner.get_stats() if self.transfer_learner else {},
+            # Tier 3: Foundation
+            "meta_learner": self.meta_learner.get_stats() if self.meta_learner else {},
+            "sleep_consolidator": self.sleep_consolidator.get_stats() if self.sleep_consolidator else {},
+            "attention": self.attention.get_focus_stats() if self.attention else {},
+            "emotional": self.emotional.get_stats() if self.emotional else {},
         }
 
     async def autonomous_loop(self, max_cycles: int = 100) -> None:
@@ -878,7 +1003,25 @@ class CognitiveOrchestrator:
         if self.skill_composer:
             parts.append(f"Skills:\n{self.skill_composer.to_context()}")
         if self.simulator:
-            parts.append(f"World Model:\n{self.simulator.to_context()}")
+            parts.append(f"Simulator:\n{self.simulator.to_context()}")
+        if self.pattern_learner:
+            parts.append(f"Patterns:\n{self.pattern_learner.to_context()}")
+        if self.rl_agent:
+            parts.append(f"RL Agent:\n{self.rl_agent.to_context()}")
+        if self.curiosity:
+            parts.append(f"Curiosity:\n{self.curiosity.to_context()}")
+        if self.world_model:
+            parts.append(f"World Model:\n{self.world_model.to_context()}")
+        if self.transfer_learner:
+            parts.append(f"Transfer Learning:\n{self.transfer_learner.to_context()}")
+        if self.meta_learner:
+            parts.append(f"Meta-Learning:\n{self.meta_learner.to_context()}")
+        if self.sleep_consolidator:
+            parts.append(f"Sleep/Consolidation:\n{self.sleep_consolidator.to_context()}")
+        if self.attention:
+            parts.append(f"Attention:\n{self.attention.to_context()}")
+        if self.emotional:
+            parts.append(f"Emotional State:\n{self.emotional.to_context()}")
         return "\n\n".join(parts)
 
     async def execute_code(
