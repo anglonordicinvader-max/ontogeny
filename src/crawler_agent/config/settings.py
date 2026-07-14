@@ -130,14 +130,24 @@ class LLMSettings(BaseSettings):
     tokens_per_minute: int = 150000
 
 
+class CodeLLMSettings(BaseSettings):
+    """Code LLM configuration (deepseek-coder-v2:16b for code generation)."""
+    model_config = {"env_prefix": "CODE_LLM_", "env_file": _ENV_FILE, "env_file_encoding": "utf-8", "extra": "ignore"}
+
+    enabled: bool = True
+    model: str = "deepseek-coder-v2:16b"
+    api_key: str = "ollama"
+    api_base: str = "http://localhost:11434/v1"
+
+
 class HeavyLLMSettings(BaseSettings):
-    """Heavy LLM configuration (Claude/GPT for complex reasoning)."""
+    """Heavy LLM configuration (qwen2.5:72b for complex reasoning)."""
     model_config = {"env_prefix": "HEAVY_LLM_", "env_file": _ENV_FILE, "env_file_encoding": "utf-8", "extra": "ignore"}
 
     enabled: bool = True
-    model: str = "deepseek-v2:236b"
-    api_key: str = ""
-    api_base: str = "https://openrouter.ai/api/v1"
+    model: str = "qwen2.5:72b"
+    api_key: str = "ollama"
+    api_base: str = "http://localhost:11434/v1"
 
 
 class PlatformSettings(BaseSettings):
@@ -168,6 +178,7 @@ class Settings(BaseSettings):
     proxy: ProxyConfig = Field(default_factory=ProxyConfig)
     storage: StorageSettings = Field(default_factory=StorageSettings)
     llm: LLMSettings = Field(default_factory=LLMSettings)
+    code_llm: CodeLLMSettings = Field(default_factory=CodeLLMSettings)
     heavy_llm: HeavyLLMSettings = Field(default_factory=HeavyLLMSettings)
     platform: PlatformSettings = Field(default_factory=PlatformSettings)
 

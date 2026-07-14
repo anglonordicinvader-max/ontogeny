@@ -179,24 +179,38 @@ class CognitiveOrchestrator:
         self.memory = MemorySystem(self.settings.storage.database_url)
         await self.memory.initialize()
 
-        # Build hybrid backend: llama for routine, Claude/GPT for heavy reasoning
+        # Build three-tier hybrid backend: routine + code + reasoning
         routine_backend = LLMBackend(
             api_key=self.settings.llm.api_key or "ollama",
             model=self.settings.llm.model,
             api_base=self.settings.llm.api_base,
         )
-        heavy_backend = None
-        if self.settings.heavy_llm.enabled and self.settings.heavy_llm.api_key:
-            heavy_backend = LLMBackend(
-                api_key=self.settings.heavy_llm.api_key,
+        code_backend = None
+        if self.settings.code_llm.enabled:
+            code_backend = LLMBackend(
+                api_key=self.settings.code_llm.api_key or "ollama",
+                model=self.settings.code_llm.model,
+                api_base=self.settings.code_llm.api_base,
+            )
+        reasoning_backend = None
+        if self.settings.heavy_llm.enabled:
+            reasoning_backend = LLMBackend(
+                api_key=self.settings.heavy_llm.api_key or "ollama",
                 model=self.settings.heavy_llm.model,
                 api_base=self.settings.heavy_llm.api_base,
             )
-            self.logger.info("hybrid_llm", routine=self.settings.llm.model, heavy=self.settings.heavy_llm.model)
-        else:
-            self.logger.info("llm_single", model=self.settings.llm.model)
+        self.logger.info(
+            "three_tier_llm",
+            routine=self.settings.llm.model,
+            code=self.settings.code_llm.model if code_backend else "disabled",
+            reasoning=self.settings.heavy_llm.model if reasoning_backend else "disabled",
+        )
 
-        self.backend = HybridBackend(routine=routine_backend, heavy=heavy_backend)
+        self.backend = HybridBackend(
+            routine=routine_backend,
+            code=code_backend,
+            reasoning=reasoning_backend,
+        )
 
         self.metacognition = MetaCognition(backend=self.backend)
 

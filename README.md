@@ -2,7 +2,7 @@
 
 **Proto-AGI cognitive agent with recursive self-improvement, 33 web crawlers, and multi-layer persistent memory.**
 
-Runs on Ollama llama3.2 locally by default, with hybrid LLM support (DeepSeek-V2 236B for complex reasoning). CLI-only. No web UI.
+Runs on Ollama with three-tier hybrid LLM routing: llama3.2 (routine), deepseek-coder-v2:16b (code), qwen2.5:72b (reasoning). CLI-only. No web UI.
 
 ---
 
@@ -86,12 +86,13 @@ Isolated code execution in Docker containers with resource limits and automatic 
 ### Prerequisites
 - Python 3.11+
 - Docker Desktop (for code execution sandbox)
-- Ollama with llama3.2 and deepseek-v2:236b
+- Ollama with llama3.2, deepseek-coder-v2:16b, and qwen2.5:72b
 
 ```bash
 # Install Ollama and pull models
 ollama pull llama3.2
-ollama pull deepseek-v2:236b
+ollama pull deepseek-coder-v2:16b
+ollama pull qwen2.5:72b
 
 # Clone and install
 git clone https://github.com/anglonordicinvader-max/ontogeny.git
@@ -178,9 +179,15 @@ LLM_API_KEY=ollama
 LLM_MODEL=llama3.2
 LLM_API_BASE=http://localhost:11434/v1
 
-# Heavy LLM (optional - for planning, code gen, self-modification)
+# Code LLM (deepseek-coder-v2:16b - code generation & self-modification)
+CODE_LLM_ENABLED=true
+CODE_LLM_MODEL=deepseek-coder-v2:16b
+CODE_LLM_API_KEY=ollama
+CODE_LLM_API_BASE=http://localhost:11434/v1
+
+# Reasoning LLM (qwen2.5:72b - complex reasoning & planning)
 HEAVY_LLM_ENABLED=true
-HEAVY_LLM_MODEL=deepseek-v2:236b
+HEAVY_LLM_MODEL=qwen2.5:72b
 HEAVY_LLM_API_KEY=ollama
 HEAVY_LLM_API_BASE=http://localhost:11434/v1
 
