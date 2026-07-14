@@ -348,7 +348,7 @@ class DockerManager:
         """Execute command using Docker CLI."""
         proc = await asyncio.create_subprocess_exec(
             "docker", "exec", container_id,
-            *command.split(),
+            "sh", "-c", command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -372,7 +372,7 @@ class DockerManager:
         if self._use_cli:
             proc = await asyncio.create_subprocess_exec(
                 "docker", "exec", container_id,
-                *command.split(),
+                "sh", "-c", command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -642,27 +642,40 @@ class CodeSandbox:
             sandbox_name = await self.create_sandbox()
             container = self._active_sandboxes[sandbox_name]
 
-        # Write code to file
         if language == "python":
-            filename = "/workspace/script.py"
-            write_cmd = f'bash -c "cat > {filename} << \'PYEOF\'\\n{code}\\nPYEOF"'
-            await self.docker.exec_in_container(container.id, write_cmd)
+            # Write code via stdin, then run it
+            write_cmd = "cat > /workspace/script.py"
+            await self.docker._exec_cli(container.id, f"mkdir -p /workspace")
+            proc = await asyncio.create_subprocess_exec(
+                "docker", "exec", "-i", container.id,
+                "sh", "-c", write_cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await proc.communicate(input=code.encode())
 
-            # Execute
             result = await self.docker.exec_with_result(
                 container.id,
-                f"python {filename}",
+                "python3 /workspace/script.py",
                 timeout=timeout,
             )
         elif language == "bash":
-            filename = "/workspace/script.sh"
-            write_cmd = f'bash -c "cat > {filename} << \'SHEOF\'\\n{code}\\nSHEOF"'
-            await self.docker.exec_in_container(container.id, write_cmd)
-            await self.docker.exec_in_container(container.id, f"chmod +x {filename}")
+            write_cmd = "cat > /workspace/script.sh"
+            await self.docker._exec_cli(container.id, "mkdir -p /workspace")
+            proc = await asyncio.create_subprocess_exec(
+                "docker", "exec", "-i", container.id,
+                "sh", "-c", write_cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await proc.communicate(input=code.encode())
+            await self.docker._exec_cli(container.id, "chmod +x /workspace/script.sh")
 
             result = await self.docker.exec_with_result(
                 container.id,
-                f"bash {filename}",
+                "bash /workspace/script.sh",
                 timeout=timeout,
             )
         else:
@@ -686,7 +699,7 @@ class CodeSandbox:
 
         return await self.docker.exec_with_result(
             container.id,
-            f"pip install {package}",
+            f"pip3 install {package}",
             timeout=60.0,
         )
 
