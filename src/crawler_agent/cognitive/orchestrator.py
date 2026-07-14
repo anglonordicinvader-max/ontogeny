@@ -44,6 +44,7 @@ from .memory import MemorySystem
 from .metacognition import MetaCognition, ReasoningTrace
 from .goals import GoalManager, Goal, GoalSource, GoalPriority
 from .self_modify import SelfModifier, Modification
+from .recursive_modify import RecursiveSelfModifier, RecursiveModification
 from .planning import Planner, Plan, PlanStep, PlanStatus, StepStatus
 from .learning import FocusedLearner, LearningMode
 from .scheduler import AdaptiveScheduler, CrawlOrchestrator, CrawlIntensity
@@ -194,6 +195,15 @@ class CognitiveOrchestrator:
                 model=self.settings.llm.model,
                 api_base=self.settings.llm.api_base,
             ),
+        )
+
+        self.recursive_modifier = RecursiveSelfModifier(
+            backend=LLMBackend(
+                api_key=self.settings.llm.api_key or "ollama",
+                model=self.settings.llm.model,
+                api_base=self.settings.llm.api_base,
+            ),
+            base_path=Path("."),
         )
 
         self.planner = Planner(
@@ -639,6 +649,31 @@ class CognitiveOrchestrator:
                 self.state = AgentState.SELF_MODIFYING
                 await self._check_self_improvement(result)
 
+                # 19b. Recursive self-modification — reads and rewrites own source
+                try:
+                    recent_errors = [
+                        {"module": e.get("module", "unknown"), "error": e.get("error", "")}
+                        for e in self.execution_log[-20:] if not e.get("actions", [{}])[0].get("success", True)
+                    ]
+                    perf_metrics = {
+                        "module_success_rates": {
+                            "orchestrator": sum(1 for e in self.execution_log[-20:] if e.get("actions", [{}])[0].get("success", True)) / max(len(self.execution_log[-20:]), 1),
+                        }
+                    }
+                    recursive_mod = await self.recursive_modifier.analyze_and_improve(
+                        error_logs=recent_errors,
+                        performance_metrics=perf_metrics,
+                    )
+                    if recursive_mod and recursive_mod.applied:
+                        result["recursive_modification"] = {
+                            "target": recursive_mod.target.value,
+                            "file": recursive_mod.file_path,
+                            "description": recursive_mod.description,
+                            "applied": True,
+                        }
+                except Exception as e:
+                    self.logger.warning("recursive_modification_error", error=str(e))
+
                 # 20. Sleep consolidation every 10 cycles
                 await self.sleep_consolidator.consolidate(self.memory, self.pattern_learner)
                 result["consolidation"] = self.sleep_consolidator.get_stats()
@@ -901,6 +936,7 @@ class CognitiveOrchestrator:
             "goals": self.goals.get_stats() if self.goals else {},
             "plans": self.planner.get_stats() if self.planner else {},
             "self_modification": self.self_modifier.get_stats() if self.self_modifier else {},
+            "recursive_modification": self.recursive_modifier.get_stats() if self.recursive_modifier else {},
             "crawlers": list(self.crawlers.keys()),
             "drives": await self.goals.get_drive_status() if self.goals else {},
             "working_memory_size": len(self.memory.working.items) if self.memory else 0,

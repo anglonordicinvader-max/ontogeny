@@ -4,6 +4,7 @@ from .memory import MemorySystem, Memory, MemoryType
 from .metacognition import MetaCognition, ReasoningTrace, ConfidenceLevel
 from .goals import GoalManager, Goal, GoalSource, GoalPriority, GoalStatus
 from .self_modify import SelfModifier, Modification, ModificationType, SafetyLevel
+from .recursive_modify import RecursiveSelfModifier, RecursiveModification, ModificationTarget
 from .planning import Planner, Plan, PlanStep, PlanStatus
 from .learning import FocusedLearner, LearningMode
 from .scheduler import AdaptiveScheduler, CrawlOrchestrator, CrawlIntensity

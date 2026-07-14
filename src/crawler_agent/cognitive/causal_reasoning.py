@@ -108,9 +108,12 @@ Be precise about causal vs correlational claims."""
             edges = []
 
             for v in data.get("variables", []):
+                name = v.get("name", "unknown")
+                if isinstance(name, list):
+                    name = str(name[0]) if name else "unknown"
                 var = CausalVariable(
-                    id=v["name"].lower().replace(" ", "_"),
-                    name=v["name"],
+                    id=str(name).lower().replace(" ", "_"),
+                    name=str(name),
                     description=v.get("description", ""),
                     variable_type=v.get("type", "continuous"),
                 )
@@ -121,9 +124,15 @@ Be precise about causal vs correlational claims."""
                     rel = CausalRelation(e.get("relation_type", "correlation"))
                 except ValueError:
                     rel = CausalRelation.CORRELATION
+                cause = e.get("cause", "unknown")
+                effect = e.get("effect", "unknown")
+                if isinstance(cause, list):
+                    cause = str(cause[0]) if cause else "unknown"
+                if isinstance(effect, list):
+                    effect = str(effect[0]) if effect else "unknown"
                 edge = CausalEdge(
-                    source=e.get("cause", "unknown").lower().replace(" ", "_"),
-                    target=e.get("effect", "unknown").lower().replace(" ", "_"),
+                    source=str(cause).lower().replace(" ", "_"),
+                    target=str(effect).lower().replace(" ", "_"),
                     relation=rel,
                     strength=e.get("strength", 0.5),
                     mechanisms=e.get("mechanisms", []),

@@ -75,8 +75,10 @@ Isolated code execution in Docker containers with resource limits and automatic 
 ### Recursive Self-Improvement
 - **Proactive**: creates new skills when capabilities are limited
 - **Reactive**: optimizes existing skills when performance drops
+- **Source-level**: reads its own Python source files, identifies bottlenecks, rewrites code
 - **Recursive**: detects when the improvement process itself is failing and flags it
-- **Persistent**: modification history survives restarts via `data/self_modification_history.json`
+- **Persistent**: modification history survives restarts via `data/recursive_modifications.json`
+- **Safe**: syntax validation → import safety check → sandbox test → backup → apply (auto-rollback on failure)
 - **Integrated**: generated skills are injected into the planning pipeline for future use
 
 ## Quick Start
