@@ -112,13 +112,13 @@ class StorageSettings(BaseSettings):
 
 
 class LLMSettings(BaseSettings):
-    """LLM configuration."""
+    """LLM configuration (routine — llama3.2)."""
     model_config = {"env_prefix": "LLM_", "env_file": _ENV_FILE, "env_file_encoding": "utf-8", "extra": "ignore"}
 
     provider: str = "openai"  # openai, ollama, local
-    model: str = "gpt-4-turbo-preview"
-    api_key: str = ""
-    api_base: str | None = None
+    model: str = "llama3.2"
+    api_key: str = "ollama"
+    api_base: str = "http://localhost:11434/v1"
     
     # Processing
     chunk_size: int = 4000
@@ -128,6 +128,16 @@ class LLMSettings(BaseSettings):
     # Rate limits
     requests_per_minute: int = 60
     tokens_per_minute: int = 150000
+
+
+class HeavyLLMSettings(BaseSettings):
+    """Heavy LLM configuration (Claude/GPT for complex reasoning)."""
+    model_config = {"env_prefix": "HEAVY_LLM_", "env_file": _ENV_FILE, "env_file_encoding": "utf-8", "extra": "ignore"}
+
+    enabled: bool = False
+    model: str = "anthropic/claude-3.5-sonnet"
+    api_key: str = ""
+    api_base: str = "https://openrouter.ai/api/v1"
 
 
 class PlatformSettings(BaseSettings):
@@ -158,6 +168,7 @@ class Settings(BaseSettings):
     proxy: ProxyConfig = Field(default_factory=ProxyConfig)
     storage: StorageSettings = Field(default_factory=StorageSettings)
     llm: LLMSettings = Field(default_factory=LLMSettings)
+    heavy_llm: HeavyLLMSettings = Field(default_factory=HeavyLLMSettings)
     platform: PlatformSettings = Field(default_factory=PlatformSettings)
 
     # Logging

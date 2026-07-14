@@ -296,3 +296,82 @@ class PatternBackend(CognitiveBackend):
 
     def get_name(self) -> str:
         return "pattern"
+
+
+class HybridBackend(CognitiveBackend):
+    """Dual-backend: llama3.2 for routine tasks, Claude/GPT for heavy reasoning.
+
+    Routes based on task complexity:
+    - llama (cheap/free): memory queries, goal generation, simple reasoning, classification
+    - Claude/GPT (expensive): planning, code generation, self-modification, causal reasoning
+    """
+
+    # Tasks that need heavy reasoning
+    HEAVY_TASKS = {
+        "planning", "plan", "code_generation", "code_gen", "optimize",
+        "self_modify", "recursive", "causal_reasoning", "counterfactual",
+        "simulation", "skill_composition", "analyze_source",
+    }
+
+    def __init__(
+        self,
+        routine: CognitiveBackend,
+        heavy: CognitiveBackend | None = None,
+    ):
+        self.routine = routine
+        self.heavy = heavy or routine  # Fall back to routine if no heavy backend
+        self.logger = structlog.get_logger()
+        self._heavy_calls = 0
+        self._routine_calls = 0
+        self._use_heavy = heavy is not None
+
+    def _should_use_heavy(self, prompt: str, system: str = "") -> bool:
+        """Determine if task needs heavy reasoning."""
+        if not self._use_heavy:
+            return False
+        combined = (prompt + system).lower()
+        return any(task in combined for task in self.HEAVY_TASKS)
+
+    async def complete(
+        self,
+        prompt: str,
+        system: str = "",
+        max_tokens: int = 1000,
+        temperature: float = 0.7,
+    ) -> CognitiveResponse:
+        if self._should_use_heavy(prompt, system):
+            self._heavy_calls += 1
+            self.logger.debug("routing_heavy", calls=self._heavy_calls)
+            return await self.heavy.complete(prompt, system, max_tokens, temperature)
+        else:
+            self._routine_calls += 1
+            return await self.routine.complete(prompt, system, max_tokens, temperature)
+
+    async def embed(self, text: str) -> list[float]:
+        return await self.routine.embed(text)
+
+    async def classify(
+        self,
+        text: str,
+        categories: list[str],
+    ) -> dict[str, float]:
+        return await self.routine.classify(text, categories)
+
+    async def extract_patterns(
+        self,
+        data: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        return await self.routine.extract_patterns(data)
+
+    def get_stats(self) -> dict[str, Any]:
+        total = self._heavy_calls + self._routine_calls
+        return {
+            "heavy_calls": self._heavy_calls,
+            "routine_calls": self._routine_calls,
+            "heavy_ratio": self._heavy_calls / max(total, 1),
+            "routine_backend": self.routine.get_name(),
+            "heavy_backend": self.heavy.get_name(),
+        }
+
+    def get_name(self) -> str:
+        return f"hybrid({self.routine.get_name()}+{self.heavy.get_name()})"

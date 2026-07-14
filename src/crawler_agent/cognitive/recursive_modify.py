@@ -259,20 +259,24 @@ class RecursiveSelfModifier:
         if not files:
             return None
 
-        # 2. Find bottlenecks
+        # 2. Find bottlenecks (errors, low success, high complexity)
         bottlenecks = self.analyzer.find_bottlenecks(error_logs, performance_metrics)
+
+        # 3. If no bottlenecks, proactively look for ANY improvement opportunity
         if not bottlenecks:
-            # No bottlenecks — try to improve complexity
+            # Pick the most complex file — always room to simplify
             most_complex = max(files.values(), key=lambda f: f.complexity)
-            if most_complex.complexity > 0.5:
-                bottlenecks = [{
-                    "module": most_complex.module,
-                    "issue": "high_complexity",
-                    "severity": most_complex.complexity,
-                    "details": f"Complexity: {most_complex.complexity:.0%}",
-                }]
-            else:
-                return None  # Code is clean and simple — no improvement needed
+            # Pick the largest file — always room to optimize
+            largest = max(files.values(), key=lambda f: f.line_count)
+
+            # Target whichever has more room for improvement
+            target = most_complex if most_complex.complexity > largest.line_count / 500 else largest
+            bottlenecks = [{
+                "module": target.module,
+                "issue": "proactive_optimization",
+                "severity": 0.3,  # Low severity — this is maintenance, not emergency
+                "details": f"Complexity: {target.complexity:.0%}, Lines: {target.line_count}",
+            }]
 
         # 3. Pick highest severity bottleneck
         target_bottleneck = bottlenecks[0]

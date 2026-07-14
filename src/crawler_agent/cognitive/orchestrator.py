@@ -53,7 +53,7 @@ from .causal_reasoning import CausalReasoner
 from .skill_composition import SkillComposer
 from .uncertainty import UncertaintyTracker
 from .simulator import InternalSimulator, SimulationType
-from .backend import CognitiveBackend, LLMBackend, PatternBackend
+from .backend import CognitiveBackend, LLMBackend, HybridBackend, PatternBackend
 from .pattern_learner import PatternLearner
 from .rl_agent import RLAgent, State as RLState
 from .curiosity import CuriosityEngine
@@ -179,40 +179,37 @@ class CognitiveOrchestrator:
         self.memory = MemorySystem(self.settings.storage.database_url)
         await self.memory.initialize()
 
-        self.metacognition = MetaCognition(
-            backend=LLMBackend(
-                api_key=self.settings.llm.api_key or "ollama",
-                model=self.settings.llm.model,
-                api_base=self.settings.llm.api_base,
-            ),
+        # Build hybrid backend: llama for routine, Claude/GPT for heavy reasoning
+        routine_backend = LLMBackend(
+            api_key=self.settings.llm.api_key or "ollama",
+            model=self.settings.llm.model,
+            api_base=self.settings.llm.api_base,
         )
+        heavy_backend = None
+        if self.settings.heavy_llm.enabled and self.settings.heavy_llm.api_key:
+            heavy_backend = LLMBackend(
+                api_key=self.settings.heavy_llm.api_key,
+                model=self.settings.heavy_llm.model,
+                api_base=self.settings.heavy_llm.api_base,
+            )
+            self.logger.info("hybrid_llm", routine=self.settings.llm.model, heavy=self.settings.heavy_llm.model)
+        else:
+            self.logger.info("llm_single", model=self.settings.llm.model)
+
+        self.backend = HybridBackend(routine=routine_backend, heavy=heavy_backend)
+
+        self.metacognition = MetaCognition(backend=self.backend)
 
         self.goals = GoalManager()
 
-        self.self_modifier = SelfModifier(
-            backend=LLMBackend(
-                api_key=self.settings.llm.api_key or "ollama",
-                model=self.settings.llm.model,
-                api_base=self.settings.llm.api_base,
-            ),
-        )
+        self.self_modifier = SelfModifier(backend=self.backend)
 
         self.recursive_modifier = RecursiveSelfModifier(
-            backend=LLMBackend(
-                api_key=self.settings.llm.api_key or "ollama",
-                model=self.settings.llm.model,
-                api_base=self.settings.llm.api_base,
-            ),
+            backend=self.backend,
             base_path=Path("."),
         )
 
-        self.planner = Planner(
-            backend=LLMBackend(
-                api_key=self.settings.llm.api_key or "ollama",
-                model=self.settings.llm.model,
-                api_base=self.settings.llm.api_base,
-            ),
-        )
+        self.planner = Planner(backend=self.backend)
 
         # LLM and embeddings
         self.llm = LLMProcessor(
@@ -257,11 +254,6 @@ class CognitiveOrchestrator:
         )
 
         # Initialize advanced cognitive modules
-        self.backend = LLMBackend(
-            api_key=self.settings.llm.api_key or "ollama",
-            model=self.settings.llm.model,
-            api_base=self.settings.llm.api_base,
-        )
         self.knowledge_graph = KnowledgeGraph(backend=self.backend)
         self.causal_reasoner = CausalReasoner(backend=self.backend)
         self.skill_composer = SkillComposer(backend=self.backend)
@@ -645,7 +637,7 @@ class CognitiveOrchestrator:
                     await self.attention.decide_focus([target])
 
             # 19. Check for self-improvement opportunities
-            if self.iteration % 10 == 0:
+            if self.iteration % 5 == 0:
                 self.state = AgentState.SELF_MODIFYING
                 await self._check_self_improvement(result)
 
@@ -973,11 +965,13 @@ class CognitiveOrchestrator:
                 if max_cycles is not None and i >= max_cycles:
                     break
                 result = await self.run_cycle()
+                stats = self.backend.get_stats() if hasattr(self.backend, "get_stats") else {}
                 self.logger.info(
                     "cycle_complete",
                     iteration=result["iteration"],
                     actions=len(result["actions"]),
                     state=result["state"],
+                    **stats,
                 )
                 i += 1
                 await asyncio.sleep(1)
