@@ -22,6 +22,14 @@ class FreeProxyFetcher:
             self._fetch_proxy_scrape,
             self._fetch_geonode,
             self._fetch_spys,
+            self._fetch_openproxy,
+            self._fetch_proxyscrape_raw,
+            self._fetch_pubproxy,
+            self._fetch_speedx,
+            self._fetch_monosans,
+            self._fetch_roosterkid,
+            self._fetch_proxylistplus,
+            self._fetch_freshproxylist,
         ]
 
     async def fetch_all(self, limit: int = 100) -> list[str]:
@@ -161,6 +169,171 @@ class FreeProxyFetcher:
                                     proxies.append(f"http://{text}")
             except Exception as e:
                 self.logger.warning("spys_failed", error=str(e))
+        return proxies
+
+    async def _fetch_openproxy(self, limit: int = 50) -> list[str]:
+        """Fetch from openproxy.space"""
+        proxies = []
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(
+                    "https://openproxy.space/list.txt",
+                    headers={"User-Agent": "Mozilla/5.0"},
+                    timeout=15,
+                )
+                if response.status_code == 200:
+                    for line in response.text.strip().split("\n")[:limit]:
+                        line = line.strip()
+                        if line and ":" in line and not line.startswith("#"):
+                            proxies.append(f"http://{line}")
+            except Exception as e:
+                self.logger.warning("openproxy_failed", error=str(e))
+        return proxies
+
+    async def _fetch_proxyscrape_raw(self, limit: int = 50) -> list[str]:
+        """Fetch raw proxy list from proxyscrape.com"""
+        proxies = []
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(
+                    "https://api.proxyscrape.com/v2/",
+                    params={
+                        "request": "getproxies",
+                        "protocol": "http",
+                        "timeout": "10000",
+                        "ssl": "yes",
+                        "anonymity": "elite",
+                    },
+                    timeout=15,
+                )
+                if response.status_code == 200:
+                    for line in response.text.strip().split("\n")[:limit]:
+                        line = line.strip()
+                        if line and ":" in line:
+                            proxies.append(f"http://{line}")
+            except Exception as e:
+                self.logger.warning("proxyscrape_raw_failed", error=str(e))
+        return proxies
+
+    async def _fetch_pubproxy(self, limit: int = 50) -> list[str]:
+        """Fetch from pubproxy.com"""
+        proxies = []
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(
+                    "http://pubproxy.com/api/proxy",
+                    params={
+                        "limit": limit,
+                        "type": "http",
+                        "level": "elite",
+                        "https": "true",
+                    },
+                    timeout=15,
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    for p in data.get("data", []):
+                        ip = p.get("ip")
+                        port = p.get("port")
+                        if ip and port:
+                            proxies.append(f"http://{ip}:{port}")
+            except Exception as e:
+                self.logger.warning("pubproxy_failed", error=str(e))
+        return proxies
+
+    async def _fetch_speedx(self, limit: int = 50) -> list[str]:
+        """Fetch from thespeedx.com proxy list"""
+        proxies = []
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(
+                    "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt",
+                    headers={"User-Agent": "Mozilla/5.0"},
+                    timeout=15,
+                )
+                if response.status_code == 200:
+                    for line in response.text.strip().split("\n")[:limit]:
+                        line = line.strip()
+                        if line and ":" in line:
+                            proxies.append(f"http://{line}")
+            except Exception as e:
+                self.logger.warning("speedx_failed", error=str(e))
+        return proxies
+
+    async def _fetch_monosans(self, limit: int = 50) -> list[str]:
+        """Fetch from monosans proxy list"""
+        proxies = []
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(
+                    "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt",
+                    headers={"User-Agent": "Mozilla/5.0"},
+                    timeout=15,
+                )
+                if response.status_code == 200:
+                    for line in response.text.strip().split("\n")[:limit]:
+                        line = line.strip()
+                        if line and ":" in line:
+                            proxies.append(f"http://{line}")
+            except Exception as e:
+                self.logger.warning("monosans_failed", error=str(e))
+        return proxies
+
+    async def _fetch_roosterkid(self, limit: int = 50) -> list[str]:
+        """Fetch from roosterkid proxy list"""
+        proxies = []
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(
+                    "https://raw.githubusercontent.com/roosterkid/openproxylist/main/HTTPS_RAW.txt",
+                    headers={"User-Agent": "Mozilla/5.0"},
+                    timeout=15,
+                )
+                if response.status_code == 200:
+                    for line in response.text.strip().split("\n")[:limit]:
+                        line = line.strip()
+                        if line and ":" in line and not line.startswith("#"):
+                            proxies.append(f"http://{line}")
+            except Exception as e:
+                self.logger.warning("roosterkid_failed", error=str(e))
+        return proxies
+
+    async def _fetch_proxylistplus(self, limit: int = 50) -> list[str]:
+        """Fetch from proxylistplus.com"""
+        proxies = []
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(
+                    "https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt",
+                    headers={"User-Agent": "Mozilla/5.0"},
+                    timeout=15,
+                )
+                if response.status_code == 200:
+                    for line in response.text.strip().split("\n")[:limit]:
+                        line = line.strip()
+                        if line and ":" in line:
+                            proxies.append(f"http://{line}")
+            except Exception as e:
+                self.logger.warning("proxylistplus_failed", error=str(e))
+        return proxies
+
+    async def _fetch_freshproxylist(self, limit: int = 50) -> list[str]:
+        """Fetch from freshproxylist.com"""
+        proxies = []
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(
+                    "https://www.freshproxylist.com/out.php?q=",
+                    headers={"User-Agent": "Mozilla/5.0"},
+                    timeout=15,
+                )
+                if response.status_code == 200:
+                    for line in response.text.strip().split("\n")[:limit]:
+                        line = line.strip()
+                        if line and ":" in line:
+                            proxies.append(f"http://{line}")
+            except Exception as e:
+                self.logger.warning("freshproxylist_failed", error=str(e))
         return proxies
 
 
