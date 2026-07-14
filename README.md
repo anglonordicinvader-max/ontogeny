@@ -110,6 +110,22 @@ chmod +x run_macos.sh
 
 The installer handles Homebrew, Python, Ollama, and dependencies automatically. Requires macOS 11+ for full functionality (Ollama + Docker). macOS 10.15 Catalina runs with limited features — no local LLM or sandbox.
 
+### Linux Setup
+
+```bash
+# Clone and run automated installer
+git clone https://github.com/anglonordicinvader-max/ontogeny.git
+cd ontogeny
+chmod +x setup_linux.sh
+./setup_linux.sh
+
+# Launch
+chmod +x run_linux.sh
+./run_linux.sh
+```
+
+The installer detects your distro (Ubuntu, Fedora, Arch, CentOS) and installs Python, Ollama, and Docker automatically. Full support on all three platforms — Linux is the recommended environment.
+
 ### Interactive Commands
 
 | Command | Description |
