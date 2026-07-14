@@ -134,7 +134,7 @@ class HeavyLLMSettings(BaseSettings):
     """Heavy LLM configuration (Claude/GPT for complex reasoning)."""
     model_config = {"env_prefix": "HEAVY_LLM_", "env_file": _ENV_FILE, "env_file_encoding": "utf-8", "extra": "ignore"}
 
-    enabled: bool = False
+    enabled: bool = True
     model: str = "anthropic/claude-3.5-sonnet"
     api_key: str = ""
     api_base: str = "https://openrouter.ai/api/v1"
