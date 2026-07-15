@@ -71,6 +71,9 @@ from .patch_verifier import PatchVerifier, TestGenerator
 from .skill_library import SkillLibrary, create_skill_library
 from .distillation import KnowledgeDistiller, create_knowledge_distiller
 from .ci_validator import GitHubActionsValidator, LocalCIValidator, CompositeValidator
+from .outcome_verifier import CompositeOutcomeVerifier, create_outcome_verifier, VerificationSpec, VerificationStatus
+from .blender_sandbox import BlenderSandbox, create_blender_sandbox, SimulationSpec, SimulationType
+from .mcts_planner import MCTSPlanner, create_mcts_planner, MCTSConfig
 from ..agents import MultiAgentOrchestrator
 
 
@@ -168,6 +171,11 @@ class CognitiveOrchestrator:
         self.skill_composer: SkillComposer | None = None
         self.uncertainty_tracker: UncertaintyTracker | None = None
         self.simulator: InternalSimulator | None = None
+
+        # New: Verification, Grounding & Planning
+        self.outcome_verifier: CompositeOutcomeVerifier | None = None
+        self.blender_sandbox: BlenderSandbox | None = None
+        self.mcts_planner: MCTSPlanner | None = None
 
         # Current plan
         self.current_plan: Plan | None = None
@@ -316,6 +324,30 @@ class CognitiveOrchestrator:
                 token=os.environ.get("GITHUB_TOKEN"),
             ) if os.environ.get("GITHUB_TOKEN") else None,
         ])
+
+# New: Verification, Grounding & Planning
+        self.outcome_verifier = await create_outcome_verifier(
+            code_sandbox=self.code_sandbox,
+            blender_sandbox=None,  # Will initialize after blender_sandbox
+            backend=self.backend
+        )
+        try:
+            self.blender_sandbox = await create_blender_sandbox()
+            # Recreate outcome_verifier with blender_sandbox
+            self.outcome_verifier = await create_outcome_verifier(
+                code_sandbox=self.code_sandbox,
+                blender_sandbox=self.blender_sandbox,
+                backend=self.backend
+            )
+            self.logger.info("blender_sandbox_initialized")
+        except Exception as e:
+            self.logger.warning("blender_sandbox_unavailable", error=str(e))
+            self.blender_sandbox = None
+        self.mcts_planner = await create_mcts_planner(
+            backend=self.backend,
+            bayesian_model=self.world_model,
+            available_actions=list(self.crawlers.keys()) + ["think", "search", "execute", "blender_simulate", "blender_render"],
+        )
 
         # Initialize crawl orchestrator with light intensity by default
         self.crawl_orchestrator = CrawlOrchestrator(
@@ -835,15 +867,82 @@ class CognitiveOrchestrator:
             step.status = StepStatus.FAILED
             return {"success": False, "error": "No execution environment"}
 
-        else:
-            # Unknown action - try to learn or use LLM
-            response = await self.llm.answer_query(
-                f"How to execute: {action}",
-                f"Goal: {goal.description}\nStep: {step.description}",
+        elif action == "blender_simulate":
+            # Run physics simulation in Blender
+            if not self.blender_sandbox:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Blender sandbox not available"}
+
+            spec = SimulationSpec(
+                type=SimulationType(step.parameters.get("type", "rigid_body")),
+                objects=step.parameters.get("objects", []),
+                duration=step.parameters.get("duration", 5.0),
+                fps=step.parameters.get("fps", 60),
+                gravity=tuple(step.parameters.get("gravity", [0, 0, -9.81])),
+                ground=step.parameters.get("ground", True),
+                render=step.parameters.get("render", False),
+                render_resolution=tuple(step.parameters.get("render_resolution", [1920, 1080])),
+                render_engine=step.parameters.get("render_engine", "CYCLES"),
+                render_samples=step.parameters.get("render_samples", 128),
             )
+            result = await self.blender_sandbox.run_simulation(spec)
+            step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
+            step.result = f"Simulation {'succeeded' if result.success else 'failed'}: {result.output or result.error}"
+            return {"success": result.success, "output": result.output, "frames": result.frames, "blend_path": result.blend_path, "error": result.error}
+
+        elif action == "blender_render":
+            # Render a scene in Blender
+            if not self.blender_sandbox:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Blender sandbox not available"}
+
+            spec = SimulationSpec(
+                type=SimulationType.RENDER,
+                objects=step.parameters.get("objects", []),
+                render=True,
+                render_resolution=tuple(step.parameters.get("render_resolution", [1920, 1080])),
+                render_engine=step.parameters.get("render_engine", "CYCLES"),
+                render_samples=step.parameters.get("render_samples", 128),
+            )
+            result = await self.blender_sandbox.run_render(spec)
+            step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
+            step.result = f"Render {'succeeded' if result.success else 'failed'}: {result.output or result.error}"
+            return {"success": result.success, "render_path": result.render_path, "blend_path": result.blend_path, "error": result.error}
+
+        elif action == "verify_outcome":
+            # Verify the outcome of a previous action
+            if not self.outcome_verifier:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Outcome verifier not available"}
+
+            spec = VerificationSpec(
+                task_type=step.parameters.get("task_type", "code"),
+                success_criteria=step.parameters.get("success_criteria", {}),
+                test_cases=step.parameters.get("test_cases", []),
+                expected_output=step.parameters.get("expected_output"),
+                timeout_seconds=step.parameters.get("timeout_seconds", 60.0),
+            )
+            actual_output = step.parameters.get("actual_output", step.result)
+            context = step.parameters.get("context", {})
+            result = await self.outcome_verifier.verify(step.parameters.get("task_type", "code"), spec, actual_output, context)
+            step.status = StepStatus.COMPLETED if result.status == VerificationStatus.PASSED else StepStatus.FAILED
+            step.result = f"Verification {'passed' if result.status == VerificationStatus.PASSED else 'failed'}: score={result.score:.2f}"
+            return {"success": result.status == VerificationStatus.PASSED, "score": result.score, "details": result.details, "errors": result.errors, "evidence": result.evidence}
+
+        elif action == "mcts_plan":
+            # Run MCTS planning
+            if not self.mcts_planner:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "MCTS planner not available"}
+
+            initial_state = step.parameters.get("initial_state", {})
+            goal = step.parameters.get("goal", goal.description)
+            max_time_ms = step.parameters.get("max_time_ms", 30000)
+
+            plan = await self.mcts_planner.plan(initial_state, goal, max_time_ms)
             step.status = StepStatus.COMPLETED
-            step.result = response
-            return {"success": True, "response": response[:500]}
+            step.result = f"MCTS plan created with {len(plan.steps)} steps"
+            return {"success": True, "plan_id": plan.id, "steps": len(plan.steps), "plan": plan}
 
     async def _check_self_improvement(self, result: dict) -> None:
         """Check if agent should improve itself. Measures before/after and auto-rollbacks."""
