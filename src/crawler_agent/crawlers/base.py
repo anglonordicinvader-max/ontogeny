@@ -15,6 +15,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from ..utils.rate_limiter import TokenBucket, SlidingWindowRateLimiter
 from ..utils.proxy import ProxyPool, ProxyAwareClient, Proxy
+from ..cognitive.reliability import get_reliability_manager, RetryConfig
 
 
 class ContentType(str, Enum):
@@ -129,7 +130,25 @@ class BaseCrawler(ABC):
         if not self._client:
             raise RuntimeError("Crawler not initialized")
 
-        response = await self._client.request("GET", url, **kwargs)
+        # Use reliability manager for structured retry with circuit breaker
+        reliability = get_reliability_manager()
+        retry_config = RetryConfig(
+            max_retries=self.config.max_retries,
+            base_delay=1.0,
+            max_delay=30.0,
+            jitter=True,
+            retryable_exceptions=(httpx.HTTPStatusError, httpx.ConnectError, httpx.TimeoutException),
+        )
+
+        async def _do_fetch():
+            return await self._client.request("GET", url, **kwargs)
+
+        response = await reliability.execute_with_retry(
+            _do_fetch,
+            config=retry_config,
+            circuit_breaker_name=f"crawler_{self.name}",
+            operation_name=f"fetch_{self.name}",
+        )
         return response
 
     async def _fetch_with_proxy(self, url: str, proxy: Proxy | None = None, **kwargs) -> httpx.Response:
