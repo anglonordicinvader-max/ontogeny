@@ -1172,23 +1172,86 @@ class CognitiveOrchestrator:
         return response
 
     async def get_status(self) -> dict[str, Any]:
-        """Get comprehensive agent status."""
+        """Get comprehensive agent status with memory, mood, health, and recent activity."""
         uptime = (datetime.utcnow() - self.start_time).total_seconds()
+
+        # Memory usage
+        memory_stats = {}
+        if self.memory:
+            memory_stats = {
+                "working_memory_size": len(self.memory.working.items) if hasattr(self.memory.working, 'items') else 0,
+                "episodic_count": await self.memory.episodic.count() if hasattr(self.memory.episodic, 'count') else 0,
+                "semantic_count": await self.memory.semantic.count() if hasattr(self.memory.semantic, 'count') else 0,
+                "procedural_count": len(await self.memory.procedural.list_skills()) if hasattr(self.memory.procedural, 'list_skills') else 0,
+            }
+
+        # Current goals
+        goals_stats = {}
+        if self.goals:
+            active_goals = [g for g in self.goals.goals if g.status.value in ("active", "pending")]
+            goals_stats = {
+                "active": len(active_goals),
+                "completed": sum(1 for g in self.goals.goals if g.status.value == "completed"),
+                "total": len(self.goals.goals),
+                "drives": await self.goals.get_drive_status(),
+            }
+
+        # Recent modifications
+        recent_mods = []
+        if self.self_modifier:
+            history = self.self_modifier.modification_history if hasattr(self.self_modifier, 'modification_history') else []
+            recent_mods = [
+                {"id": m.id, "description": m.description[:100], "applied": m.applied}
+                for m in history[-5:]
+            ]
+
+        # Mood/state
+        mood = {}
+        if self.emotional:
+            mood = self.emotional.get_stats()
+
+        # System health
+        health = {}
+        try:
+            from .reliability import get_reliability_manager
+            reliability = get_reliability_manager()
+            health = {
+                "circuit_breakers": reliability.get_circuit_breaker_report(),
+                "component_health": reliability.get_health_report(),
+            }
+        except Exception:
+            pass
+
+        # Simulation library
+        sim_status = {}
+        if self.sim_library:
+            sim_status = self.sim_library.get_backend_status()
 
         return {
             "state": self.state.value,
             "iteration": self.iteration,
             "uptime_seconds": uptime,
-            "goals": self.goals.get_stats() if self.goals else {},
+            # Memory
+            "memory": memory_stats,
+            # Goals & Tasks
+            "goals": goals_stats,
             "plans": self.planner.get_stats() if self.planner else {},
+            "current_plan": self.current_plan.to_context() if self.current_plan else None,
+            # Mood & Attention
+            "mood": mood,
+            "attention": self.attention.get_focus_stats() if self.attention else {},
+            # Recent modifications
+            "recent_modifications": recent_mods,
             "self_modification": self.self_modifier.get_stats() if self.self_modifier else {},
             "recursive_modification": self.recursive_modifier.get_stats() if self.recursive_modifier else {},
+            # Crawlers & Infrastructure
             "crawlers": list(self.crawlers.keys()),
-            "drives": await self.goals.get_drive_status() if self.goals else {},
-            "working_memory_size": len(self.memory.working.items) if self.memory else 0,
-            "current_plan": self.current_plan.to_context() if self.current_plan else None,
             "proxy_pool": self.proxy_pool.get_stats(),
             "scheduler": self.crawl_orchestrator.scheduler.get_stats() if self.crawl_orchestrator else {},
+            # Tools & Simulation
+            "tools": list(self.tool_manager.tools.keys()) if self.tool_manager else [],
+            "simulation": sim_status,
+            # Learning
             "learning": self.learner.get_stats() if self.learner else {},
             "knowledge_graph": self.knowledge_graph.get_stats() if self.knowledge_graph else {},
             "causal_reasoning": self.causal_reasoner.get_stats() if self.causal_reasoner else {},
@@ -1205,8 +1268,8 @@ class CognitiveOrchestrator:
             # Tier 3: Foundation
             "meta_learner": self.meta_learner.get_stats() if self.meta_learner else {},
             "sleep_consolidator": self.sleep_consolidator.get_stats() if self.sleep_consolidator else {},
-            "attention": self.attention.get_focus_stats() if self.attention else {},
-            "emotional": self.emotional.get_stats() if self.emotional else {},
+            # System Health
+            "health": health,
         }
 
     async def autonomous_loop(self, max_cycles: int | None = None) -> None:
