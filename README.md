@@ -1,6 +1,6 @@
 # Ontogeny
 
-**Proto-AGI cognitive agent with recursive self-improvement, 33 web crawlers, and multi-layer persistent memory.**
+**Proto-AGI cognitive agent with recursive self-improvement, 30 web crawlers, multi-layer persistent memory, grounded physics simulation, and Monte Carlo Tree Search planning.**
 
 Runs on Ollama with three-tier hybrid LLM routing: llama3.2 (routine), deepseek-coder-v2:16b (code), qwen2.5:72b (reasoning). CLI-only. No web UI.
 
@@ -8,7 +8,7 @@ Runs on Ollama with three-tier hybrid LLM routing: llama3.2 (routine), deepseek-
 
 ## What It Does
 
-Ontogeny is a self-improving cognitive agent that autonomously explores the internet, learns from what it finds, and builds increasingly complex understanding over time. It operates in continuous autonomous cycles — setting its own goals, planning actions, executing crawls across 33 data sources, reasoning about results, reflecting on its own performance, and **modifying its own code and behavior** based on what works.
+Ontogeny is a self-improving cognitive agent that autonomously explores the internet, learns from what it finds, and builds increasingly complex understanding over time. It operates in continuous autonomous cycles — setting its own goals, planning actions, executing crawls across 30 data sources, reasoning about results, reflecting on its own performance, and **modifying its own code and behavior** based on what works.
 
 ## Architecture
 
@@ -44,8 +44,12 @@ Ontogeny is a self-improving cognitive agent that autonomously explores the inte
 
 ## Features
 
-### 33 Web Crawlers
+### 30 Web Crawlers
 GitHub, GitLab, Bitbucket, Codeberg/Gitea, SourceForge, Launchpad, Savannah, Apache, Pagure, PyPI, npm, Crates.io, Maven, NuGet, Go.dev, RubyGems, ArXiv, Semantic Scholar, Stack Overflow, Reddit, Hacker News, Wikipedia, RSS, Discord, Slack, Notion, Jira, Pastebin, HuggingFace, Web Scraper, Internet Archive (books, Wayback Machine, media) — all with automatic proxy rotation across 12 free proxy sources.
+
+**New Specialized Crawlers:**
+- **Papers With Code** — ML papers with linked implementations and repositories
+- **GitHub Trending** — Trending repositories by language and time period
 
 ### Cognitive Systems
 - **Goal Management** — intrinsic drives (curiosity, mastery, novelty) with automatic goal generation and decay
@@ -55,7 +59,12 @@ GitHub, GitLab, Bitbucket, Codeberg/Gitea, SourceForge, Launchpad, Savannah, Apa
 - **Knowledge Graph** — extracts entities and relations from crawled data
 - **Uncertainty Tracking** — tracks confidence intervals and evidence counts
 - **Emotional Model** — mood state that shifts based on success/failure
+- **Outcome Verification** — executable verification of code, planning, reasoning, and simulation outcomes (replaces LLM-as-judge with sandbox execution)
+- **Blender Physics Grounding** — rigid/soft body, fluid, cloth simulation and rendering via Dockerized Blender for grounded reasoning
+- **MCTS Planning** — Monte Carlo Tree Search with learned world model for long-horizon planning
 - **Recursive Self-Modification** — analyzes performance, creates new skills, optimizes failing ones, and improves its own improvement process. History persists across restarts.
+
+### 10 Learning Modules
 
 ### 10 Learning Modules
 Pattern learning, reinforcement learning, curiosity-driven exploration, world modeling, knowledge transfer, sleep consolidation, attention management, meta-learning, skill composition, and causal discovery.
@@ -85,7 +94,7 @@ Isolated code execution in Docker containers with resource limits and automatic 
 
 ### Prerequisites
 - Python 3.11+
-- Docker Desktop (for code execution sandbox)
+- Docker Desktop (for code execution sandbox + Blender sandbox)
 - Ollama with llama3.2, deepseek-coder-v2:16b, and qwen2.5:72b
 
 ```bash
@@ -93,6 +102,9 @@ Isolated code execution in Docker containers with resource limits and automatic 
 ollama pull llama3.2
 ollama pull deepseek-coder-v2:16b
 ollama pull qwen2.5:72b
+
+# Build Blender sandbox image (one-time)
+docker build -f Dockerfile.blender -t ontogeny-blender .
 
 # Clone and install
 git clone https://github.com/anglonordicinvader-max/ontogeny.git
@@ -115,6 +127,15 @@ python -m crawler_agent.main --autonomous 50
 # Demo mode
 python -m crawler_agent.main --demo
 ```
+
+### Blender Physics Sandbox (Optional)
+
+```bash
+# Build Blender Docker image (one-time)
+docker build -f Dockerfile.blender -t ontogeny-blender .
+```
+
+The agent auto-detects the image and enables physics simulation + rendering actions.
 
 ### macOS Setup
 
@@ -167,6 +188,9 @@ The installer detects your distro (Ubuntu, Fedora, Arch, CentOS) and installs Py
 | `task <description>` | Run a task |
 | `status` | Agent status |
 | `drives` | View intrinsic drives |
+| `verify <task> <output>` | Verify task outcome (executable) |
+| `blender <sim|render> <spec>` | Physics sim / render in Blender |
+| `mcts <goal>` | Run MCTS planning |
 | `quit` | Exit |
 
 ## Configuration
@@ -239,7 +263,11 @@ src/crawler_agent/
 │   ├── transfer.py          # Knowledge transfer
 │   ├── sleep.py             # Memory consolidation
 │   ├── attention.py         # Attention management
-│   └── meta_learner.py      # Learning-to-learn
+│   ├── meta_learner.py      # Learning-to-learn
+│   ├── outcome_verifier.py  # Executable outcome verification (code/planning/reasoning/simulation)
+│   ├── blender_sandbox.py   # Physics simulation & rendering via Dockerized Blender
+│   ├── mcts_planner.py      # Monte Carlo Tree Search planning with learned world model
+│   └── patch_verifier.py    # Test-driven patch verification
 ├── crawlers/
 │   ├── base.py              # Base crawler (proxy-aware)
 │   ├── github.py            # GitHub
@@ -272,7 +300,11 @@ src/crawler_agent/
 │   ├── pastebin.py          # Pastebin
 │   ├── huggingface.py       # HuggingFace
 │   ├── webscraper.py        # Generic web scraper
-│   └── internetarchive.py   # Archive.org + Wayback Machine
+│   ├── internetarchive.py   # Archive.org + Wayback Machine
+│   ├── github_code.py       # GitHub code & repo search
+│   ├── papers_with_code.py  # ML papers with implementations
+│   ├── huggingface_hub.py   # HF models, datasets, spaces
+│   └── github_trending.py   # GitHub trending repos
 ├── agents/
 │   ├── base.py              # Base agent class & protocol
 │   ├── orchestrator.py      # Multi-agent coordination
