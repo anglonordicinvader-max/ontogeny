@@ -51,6 +51,14 @@ from .rubygems import RubyGemsCrawler
 # Archives
 from .internetarchive import InternetArchiveCrawler
 
+# Additional
+from .additional import (
+    GitHubCodeSearchCrawler,
+    PapersWithCodeCrawler,
+    HuggingFaceHubCrawler,
+    GitHubTrendingCrawler,
+)
+
 __all__ = [
     # Base
     "BaseCrawler", "CrawlResult", "ContentType", "CrawlerConfig",
@@ -88,4 +96,10 @@ __all__ = [
     
     # Archives
     "InternetArchiveCrawler",
+    
+    # Additional
+    "GitHubCodeSearchCrawler",
+    "PapersWithCodeCrawler",
+    "HuggingFaceHubCrawler",
+    "GitHubTrendingCrawler",
 ]

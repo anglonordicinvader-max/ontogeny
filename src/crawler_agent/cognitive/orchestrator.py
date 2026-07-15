@@ -1,6 +1,7 @@
 """Cognitive orchestrator - the core agent loop with full cognitive architecture."""
 
 import asyncio
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -15,6 +16,8 @@ from ..crawlers import (
     GitHubCrawler, GitLabCrawler, BitbucketCrawler,
     CodebergCrawler, GiteaDotComCrawler, SourceForgeCrawler,
     LaunchpadCrawler, SavannahCrawler, ApacheCrawler, PagureCrawler,
+    # Additional
+    GitHubCodeSearchCrawler, PapersWithCodeCrawler, HuggingFaceHubCrawler, GitHubTrendingCrawler,
     # AI/ML
     HuggingFaceCrawler, PastebinCrawler,
     # Academic
@@ -63,6 +66,11 @@ from .sleep import SleepConsolidator
 from .attention import AttentionMechanism
 from .emotional import EmotionalProcessor
 from .transfer import TransferLearner
+from .benchmark import BenchmarkHarness, create_benchmark_harness
+from .patch_verifier import PatchVerifier, TestGenerator
+from .skill_library import SkillLibrary, create_skill_library
+from .distillation import KnowledgeDistiller, create_knowledge_distiller
+from .ci_validator import GitHubActionsValidator, LocalCIValidator, CompositeValidator
 from ..agents import MultiAgentOrchestrator
 
 
@@ -292,6 +300,23 @@ class CognitiveOrchestrator:
         self.attention = AttentionMechanism()
         self.emotional = EmotionalProcessor()
 
+        # New: Verification & Learning Infrastructure
+        self.benchmark_harness = await create_benchmark_harness(self.backend, self.code_sandbox)
+        self.patch_verifier = PatchVerifier(
+            backend=self.backend,
+            sandbox=self.code_sandbox,
+        )
+        self.skill_library = await create_skill_library(self.backend)
+        self.knowledge_distiller = KnowledgeDistiller(self.backend)
+        self.ci_validator = CompositeValidator([
+            LocalCIValidator(self.code_sandbox) if self.code_sandbox else None,
+            GitHubActionsValidator(
+                repo_owner=os.environ.get("GITHUB_OWNER", ""),
+                repo_name=os.environ.get("GITHUB_REPO", ""),
+                token=os.environ.get("GITHUB_TOKEN"),
+            ) if os.environ.get("GITHUB_TOKEN") else None,
+        ])
+
         # Initialize crawl orchestrator with light intensity by default
         self.crawl_orchestrator = CrawlOrchestrator(
             proxy_manager=self.proxy_manager,
@@ -408,6 +433,17 @@ class CognitiveOrchestrator:
             "rubygems": lambda: RubyGemsCrawler(config=config, proxy_pool=self.proxy_pool),
             # Archives
             "internetarchive": lambda: InternetArchiveCrawler(config=config, proxy_pool=self.proxy_pool),
+            # Additional
+            "github_code": lambda: GitHubCodeSearchCrawler(
+                token=self.settings.platform.github_token,
+                config=config, proxy_pool=self.proxy_pool,
+            ) if self.settings.platform.github_token else None,
+            "papers_with_code": lambda: PapersWithCodeCrawler(config=config, proxy_pool=self.proxy_pool),
+            "hf_hub": lambda: HuggingFaceHubCrawler(
+                token=self.settings.platform.huggingface_token,
+                config=config, proxy_pool=self.proxy_pool,
+            ) if self.settings.platform.huggingface_token else None,
+            "github_trending": lambda: GitHubTrendingCrawler(config=config, proxy_pool=self.proxy_pool),
         }
 
         for name, factory in crawler_map.items():
