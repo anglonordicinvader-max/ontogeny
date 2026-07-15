@@ -80,6 +80,7 @@ from .self_audit import SelfAuditor
 from .multimodal import MultimodalProcessor
 from .agent_variety import AgentPopulation
 from .skill_export import SkillExporter
+from .world_selector import WorldSelector, SelectionCriteria
 from ..agents import MultiAgentOrchestrator
 
 
@@ -200,6 +201,9 @@ class CognitiveOrchestrator:
 
         # Skill export system
         self.skill_exporter: SkillExporter | None = None
+
+        # World selector for practical worlds
+        self.world_selector: WorldSelector | None = None
 
         # Current plan
         self.current_plan: Plan | None = None
@@ -395,6 +399,9 @@ class CognitiveOrchestrator:
 
         # Initialize skill exporter
         self.skill_exporter = SkillExporter()
+
+        # Initialize world selector
+        self.world_selector = WorldSelector()
 
         # Initialize crawl orchestrator with light intensity by default
         self.crawl_orchestrator = CrawlOrchestrator(
@@ -1165,6 +1172,31 @@ class CognitiveOrchestrator:
             step.result = f"Custom simulation {'succeeded' if result.success else 'failed'}"
             return {"success": result.success, "frames": len(result.frames), "stats": result.stats, "error": result.error}
 
+        elif action == "select_world":
+            # Select practical world based on skill needs
+            if not self.world_selector:
+                self.world_selector = WorldSelector()
+            goal = step.parameters.get("goal", "")
+            max_difficulty = step.parameters.get("max_difficulty", 1.0)
+            weak_skills = step.parameters.get("weak_skills", [])
+            criteria = SelectionCriteria(
+                weak_skills=weak_skills or self.world_selector.get_weak_skills(),
+                goal_description=goal,
+                max_difficulty=max_difficulty,
+            )
+            result = self.world_selector.select(criteria)
+            step.status = StepStatus.COMPLETED
+            step.result = f"Selected world: {result.world.name} - {result.reason}"
+            return {
+                "success": True,
+                "world": result.world.name,
+                "description": result.world.description,
+                "difficulty": result.world.difficulty,
+                "tags": result.world.tags,
+                "matched_skills": result.matched_skills,
+                "reason": result.reason,
+            }
+
         elif action == "vision_analyze":
             # Analyze an image
             if not self.multimodal:
@@ -1599,6 +1631,8 @@ class CognitiveOrchestrator:
             "sleep_consolidator": self.sleep_consolidator.get_stats() if self.sleep_consolidator else {},
             # System Health
             "health": health,
+            # World Selector
+            "world_selector": self.world_selector.to_context() if self.world_selector else {},
         }
 
     async def autonomous_loop(self, max_cycles: int | None = None) -> None:
