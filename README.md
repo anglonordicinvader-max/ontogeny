@@ -62,7 +62,7 @@ GitHub, GitLab, Bitbucket, Codeberg/Gitea, SourceForge, Launchpad, Savannah, Apa
 - **Outcome Verification** — executable verification of code, planning, reasoning, and simulation outcomes (replaces LLM-as-judge with sandbox execution)
 - **Blender Physics Grounding** — rigid/soft body, fluid, cloth simulation and rendering via Dockerized Blender for grounded reasoning
 - **MCTS Planning** — Monte Carlo Tree Search with learned world model for long-horizon planning
-- **Recursive Self-Modification** — analyzes performance, creates new skills, optimizes failing ones, and improves its own improvement process. History persists across restarts.
+- **Recursive Self-Modification** — analyzes performance, creates new skills, optimizes failing ones, and improves its own improvement process. **Reads and rewrites its own Python source code** (syntax validation → import safety → sandbox test → backup → apply with auto-rollback). History persists across restarts.
 
 ### 10 Learning Modules
 
