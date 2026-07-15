@@ -61,6 +61,7 @@ class TaskType(Enum):
     RESCUE = "rescue"
     SURVIVAL = "survival"
     ADAPTATION = "adaptation"
+    BALANCE = "balance"
 
 
 @dataclass

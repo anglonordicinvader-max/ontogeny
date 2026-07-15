@@ -110,7 +110,6 @@ class ProceduralConfig:
 
 
 @dataclass
-@dataclass
 class RobotConfig:
     """URDF robot configuration."""
     urdf_path: str = ""
