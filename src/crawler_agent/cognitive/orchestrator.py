@@ -78,6 +78,7 @@ from .tools import ToolManager, ToolResult
 from .sim_library import SimulationLibrary, SimBackend
 from .self_audit import SelfAuditor
 from .multimodal import MultimodalProcessor
+from .agent_variety import AgentPopulation
 from ..agents import MultiAgentOrchestrator
 
 
@@ -192,6 +193,9 @@ class CognitiveOrchestrator:
 
         # Multimodal processing
         self.multimodal: MultimodalProcessor | None = None
+
+        # Agent population with behavioral variation
+        self.agent_population: AgentPopulation | None = None
 
         # Current plan
         self.current_plan: Plan | None = None
@@ -381,6 +385,9 @@ class CognitiveOrchestrator:
         # Initialize multimodal processor
         self.multimodal = MultimodalProcessor(settings=self.settings)
         await self.multimodal.initialize()
+
+        # Initialize agent population
+        self.agent_population = AgentPopulation()
 
         # Initialize crawl orchestrator with light intensity by default
         self.crawl_orchestrator = CrawlOrchestrator(
@@ -1085,6 +1092,68 @@ class CognitiveOrchestrator:
             step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
             step.result = f"Audio analysis {'succeeded' if result.success else 'failed'}"
             return {"success": result.success, "transcript": result.transcript, "metadata": result.metadata, "error": result.error}
+
+        elif action == "agent_create":
+            # Create a new agent instance with behavioral variation
+            if not self.agent_population:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Agent population not available"}
+            name = step.parameters.get("name", "")
+            parent_id = step.parameters.get("parent_id")
+            agent = self.agent_population.create_agent(name=name, parent_id=parent_id)
+            step.status = StepStatus.COMPLETED
+            step.result = f"Created agent '{agent.name}' (gen {agent.generation})"
+            return {"success": True, "agent_id": agent.id, "name": agent.name, "generation": agent.generation}
+
+        elif action == "agent_reproduce":
+            # Create offspring from best performers
+            if not self.agent_population:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Agent population not available"}
+            num_offspring = step.parameters.get("num_offspring", 2)
+            offspring = []
+            for _ in range(num_offspring):
+                child = self.agent_population.reproduce()
+                offspring.append(child)
+            step.status = StepStatus.COMPLETED
+            step.result = f"Created {len(offspring)} offspring"
+            return {"success": True, "offspring": [{"id": a.id, "name": a.name} for a in offspring]}
+
+        elif action == "agent_propagate":
+            # Propagate strategies from a successful agent
+            if not self.agent_population:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Agent population not available"}
+            agent_id = step.parameters.get("agent_id")
+            num_offspring = step.parameters.get("num_offspring", 2)
+            propagated = self.agent_population.propagate_successful_strategies(
+                agent_id, num_offspring=num_offspring
+            )
+            step.status = StepStatus.COMPLETED
+            step.result = f"Propagated {len(propagated)} agents from {agent_id}"
+            return {"success": True, "propagated": [{"id": a.id, "name": a.name} for a in propagated]}
+
+        elif action == "agent_best":
+            # Get best agents
+            if not self.agent_population:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Agent population not available"}
+            n = step.parameters.get("n", 5)
+            best = self.agent_population.get_best(n)
+            step.status = StepStatus.COMPLETED
+            step.result = f"Top {len(best)} agents"
+            return {"success": True, "agents": [a.to_dict() for a in best]}
+
+        elif action == "agent_diverse":
+            # Get diverse sample of agents
+            if not self.agent_population:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Agent population not available"}
+            n = step.parameters.get("n", 5)
+            diverse = self.agent_population.get_diverse_sample(n)
+            step.status = StepStatus.COMPLETED
+            step.result = f"Diverse sample of {len(diverse)} agents"
+            return {"success": True, "agents": [a.to_dict() for a in diverse]}
 
         elif action == "verify_outcome":
             # Verify the outcome of a previous action
