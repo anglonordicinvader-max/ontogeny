@@ -274,7 +274,6 @@ PROXY_FETCH_FREE_PROXIES=true
 # Storage
 STORAGE_DATABASE_URL=sqlite+aiosqlite:///./crawler.db
 
-```
 # Crawler rates
 CRAWLER_REQUESTS_PER_SECOND=5.0
 CRAWLER_MIN_DELAY=1.0
@@ -288,14 +287,14 @@ EMOTION_VISUALIZER=anatomy
 
 ```
 src/crawler_agent/
-├── main.py                  # CLI entry point with mode selector
+├── main.py                  # CLI entry point
 ├── cli_colors.py            # ANSI color support
 ├── persistence.py           # Agent state persistence
 ├── config/
 │   └── settings.py          # All settings (env-loaded)
 ├── cognitive/
 │   ├── orchestrator.py      # Main cognitive loop
-│   ├── backend.py           # Cognitive backend abstraction (hybrid LLM)
+│   ├── backend.py           # Hybrid LLM backend
 │   ├── planning.py          # Plan creation & execution
 │   ├── goals.py             # Goal & drive management
 │   ├── metacognition.py     # Self-evaluation
@@ -309,7 +308,7 @@ src/crawler_agent/
 │   ├── simulator.py         # Action simulation
 │   ├── memory.py            # Multi-layer persistent memory
 │   ├── learning.py          # Focused learning mode
-│   ├── scheduler.py         # Intelligent crawl scheduling
+│   ├── scheduler.py         # Crawl scheduling
 │   ├── pattern_learner.py   # Pattern recognition
 │   ├── rl_agent.py          # Reinforcement learning
 │   ├── curiosity.py         # Curiosity-driven exploration
@@ -318,57 +317,17 @@ src/crawler_agent/
 │   ├── sleep.py             # Memory consolidation
 │   ├── attention.py         # Attention management
 │   ├── meta_learner.py      # Learning-to-learn
-│   ├── outcome_verifier.py  # Executable outcome verification (code/planning/reasoning/simulation)
-│   ├── blender_sandbox.py   # Physics simulation & rendering via Dockerized Blender
-│   ├── mcts_planner.py      # Monte Carlo Tree Search planning with learned world model
-│   └── patch_verifier.py    # Test-driven patch verification
-├── crawlers/
-│   ├── base.py              # Base crawler (proxy-aware)
-│   ├── github.py            # GitHub
-│   ├── gitlab.py            # GitLab
-│   ├── bitbucket.py         # Bitbucket
-│   ├── codeberg.py          # Codeberg (Gitea)
-│   ├── sourceforge.py       # SourceForge
-│   ├── launchpad.py         # Launchpad
-│   ├── savannah.py          # GNU Savannah
-│   ├── apache.py            # Apache
-│   ├── pagure.py            # Pagure
-│   ├── pypi.py              # PyPI
-│   ├── npm_registry.py      # npm
-│   ├── crates.py            # Crates.io
-│   ├── go_dev.py            # Go.dev
-│   ├── maven.py             # Maven Central
-│   ├── nuget.py             # NuGet
-│   ├── rubygems.py          # RubyGems
-│   ├── arxiv.py             # ArXiv
-│   ├── academic.py          # Semantic Scholar
-│   ├── stackoverflow.py     # Stack Overflow
-│   ├── reddit.py            # Reddit
-│   ├── hackernews.py        # Hacker News
-│   ├── rss.py               # RSS/Atom feeds
-│   ├── wikipedia.py         # Wikipedia
-│   ├── discord.py           # Discord
-│   ├── slack.py             # Slack
-│   ├── notion.py            # Notion
-│   ├── jira.py              # Jira
-│   ├── pastebin.py          # Pastebin
-│   ├── huggingface.py       # HuggingFace
-│   ├── webscraper.py        # Generic web scraper
-│   ├── internetarchive.py   # Archive.org + Wayback Machine
-│   ├── github_code.py       # GitHub code & repo search
-│   ├── papers_with_code.py  # ML papers with implementations
-│   ├── huggingface_hub.py   # HF models, datasets, spaces
-│   └── github_trending.py   # GitHub trending repos
-├── agents/
-│   ├── base.py              # Base agent class & protocol
-│   ├── orchestrator.py      # Multi-agent coordination
-│   ├── registry.py          # Agent registry
-│   └── specialized.py       # 10 specialized agent implementations
+│   ├── outcome_verifier.py  # Outcome verification
+│   ├── blender_sandbox.py   # Blender physics sandbox
+│   ├── mcts_planner.py      # MCTS planning
+│   └── patch_verifier.py    # Patch verification
+├── crawlers/                # 30+ data source crawlers
+├── agents/                  # Multi-agent collaboration
 ├── processing/
-│   ├── llm.py               # LLM processing pipeline
+│   ├── llm.py               # LLM pipeline
 │   └── embeddings.py        # Embedding generation
 ├── storage/
-│   ├── database.py          # SQL storage (SQLite/PostgreSQL)
+│   ├── database.py          # SQL storage
 │   ├── docker_manager.py    # Docker sandbox
 │   └── vector.py            # ChromaDB vector store
 └── utils/
