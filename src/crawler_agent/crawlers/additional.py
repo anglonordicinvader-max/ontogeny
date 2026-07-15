@@ -131,6 +131,19 @@ class PapersWithCodeCrawler(BaseCrawler):
 
     BASE_URL = "https://paperswithcode.com/api/v1"
 
+    async def _setup(self) -> None:
+        """Initialize the crawler."""
+        pass
+
+    async def _cleanup(self) -> None:
+        """Clean up resources."""
+        pass
+
+    async def discover_urls(self, seed_url: str) -> AsyncIterator[str]:
+        """Discover URLs from a seed URL."""
+        return
+        yield  # Make it an async generator
+
     async def search_papers(
         self,
         query: str,
@@ -337,6 +350,19 @@ class GitHubTrendingCrawler(BaseCrawler):
     """Crawl GitHub Trending repositories."""
 
     BASE_URL = "https://github.com/trending"
+
+    async def _setup(self) -> None:
+        """Initialize the crawler."""
+        pass
+
+    async def _cleanup(self) -> None:
+        """Clean up resources."""
+        pass
+
+    async def discover_urls(self, seed_url: str) -> AsyncIterator[str]:
+        """Discover URLs from a seed URL."""
+        return
+        yield  # Make it an async generator
 
     async def get_trending(
         self,

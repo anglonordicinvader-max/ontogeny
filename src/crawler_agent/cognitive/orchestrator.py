@@ -467,15 +467,23 @@ class CognitiveOrchestrator:
             "internetarchive": lambda: InternetArchiveCrawler(config=config, proxy_pool=self.proxy_pool),
             # Additional
             "github_code": lambda: GitHubCodeSearchCrawler(
+                name="github_code",
                 token=self.settings.platform.github_token,
                 config=config, proxy_pool=self.proxy_pool,
             ) if self.settings.platform.github_token else None,
-            "papers_with_code": lambda: PapersWithCodeCrawler(config=config, proxy_pool=self.proxy_pool),
+            "papers_with_code": lambda: PapersWithCodeCrawler(
+                name="papers_with_code",
+                config=config, proxy_pool=self.proxy_pool,
+            ),
             "hf_hub": lambda: HuggingFaceHubCrawler(
+                name="hf_hub",
                 token=self.settings.platform.huggingface_token,
                 config=config, proxy_pool=self.proxy_pool,
             ) if self.settings.platform.huggingface_token else None,
-            "github_trending": lambda: GitHubTrendingCrawler(config=config, proxy_pool=self.proxy_pool),
+            "github_trending": lambda: GitHubTrendingCrawler(
+                name="github_trending",
+                config=config, proxy_pool=self.proxy_pool,
+            ),
         }
 
         for name, factory in crawler_map.items():

@@ -1,0 +1,13 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    blender \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install --no-cache-dir numpy requests aiohttp
+
+WORKDIR /workspace
+
+ENTRYPOINT ["blender", "--background", "--python"]
