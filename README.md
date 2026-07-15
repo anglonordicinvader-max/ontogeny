@@ -64,7 +64,6 @@ GitHub, GitLab, Bitbucket, Codeberg/Gitea, SourceForge, Launchpad, Savannah, Apa
 - **MCTS Planning** — Monte Carlo Tree Search with learned world model for long-horizon planning
 - **Recursive Self-Modification** — analyzes performance, creates new skills, optimizes failing ones, and improves its own improvement process. **Reads and rewrites its own Python source code** (syntax validation → import safety → sandbox test → backup → apply with auto-rollback). History persists across restarts.
 
-### 10 Learning Modules
 
 ### 10 Learning Modules
 Pattern learning, reinforcement learning, curiosity-driven exploration, world modeling, knowledge transfer, sleep consolidation, attention management, meta-learning, skill composition, and causal discovery.
@@ -141,7 +140,7 @@ The agent auto-detects the image and enables physics simulation + rendering acti
 - **Rigid/Soft Body** — cubes, spheres, soft bodies with goal strength
 - **Fluid/Cloth** — SPH fluid, cloth with bending stiffness/damping
 - **Particles** — particle systems with forces
-- **URDF Robots** — import URDF, joint position/velocity/torque control
+- **URDF Robotics** — import URDF, joint position/velocity/torque control
 - **Sensors** — camera (RGB/depth), lidar (360° raycast), contact, IMU
 - **Domain Randomization** — lighting, textures, physics params, object poses, camera
 - **Procedural Generation** — terrain (displacement), buildings, clutter
