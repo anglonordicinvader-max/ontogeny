@@ -101,11 +101,120 @@ class KnowledgeDistiller:
         task_type: str,
         base_model: str | None = None,
     ) -> Path | None:
-        """Train LoRA adapter (requires GPU with CUDA)."""
-        # This would use llama.cpp or similar for LoRA training
-        # For now, return placeholder
-        adapter_path = self.storage_path / f"lora_{task_type}.gguf"
-        return adapter_path if adapter_path.exists() else None
+        """Train LoRA adapter using GPU Docker container."""
+        import asyncio
+        import subprocess
+        import tempfile
+
+        if not self.ready_for_training(task_type):
+            return None
+
+        adapter_path = self.storage_path / f"lora_{task_type}"
+        adapter_path.mkdir(parents=True, exist_ok=True)
+
+        base_model = base_model or self.config.model_name
+        dataset = self.prepare_lora_dataset(task_type)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dataset_path = Path(tmpdir) / "train.jsonl"
+            for ex in dataset:
+                with open(dataset_path, "a") as f:
+                    f.write(json.dumps(ex) + "\n")
+
+            script = '''import json
+from pathlib import Path
+
+try:
+    from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
+    from peft import LoraConfig, get_peft_model, TaskType
+    from trl import SFTTrainer
+except ImportError:
+    import subprocess, sys
+    subprocess.check_call([sys.executable, "-m", "pip", "install",
+        "transformers", "peft", "trl", "accelerate", "bitsandbytes"])
+    from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
+    from peft import LoraConfig, get_peft_model, TaskType
+    from trl import SFTTrainer
+
+import torch
+
+model_name = "''' + base_model + '''"
+output_dir = "''' + str(adapter_path) + '''"
+dataset_path = "''' + str(dataset_path) + '''"
+
+examples = [json.loads(l) for l in Path(dataset_path).read_text().splitlines() if l]
+dataset = [{"text": "### Instruction:\\n" + ex["instruction"] + "\\n\\n### Response:\\n" + ex["output"]} for ex in examples]
+
+lora_config = LoraConfig(
+    task_type=TaskType.CAUSAL_LM,
+    r=''' + str(self.config.lora_rank) + ''',
+    lora_alpha=''' + str(self.config.lora_alpha) + ''',
+    lora_dropout=''' + str(self.config.lora_dropout) + ''',
+    target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
+)
+
+model = AutoModelForCausalLM.from_pretrained(
+    model_name, device_map="auto", torch_dtype=torch.float16, load_in_4bit=True
+)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+tokenizer.pad_token = tokenizer.eos_token
+
+model = get_peft_model(model, lora_config)
+model.print_trainable_parameters()
+
+training_args = TrainingArguments(
+    output_dir=output_dir,
+    num_train_epochs=3,
+    per_device_train_batch_size=''' + str(self.config.batch_size) + ''',
+    learning_rate=''' + str(self.config.learning_rate) + ''',
+    fp16=True,
+    logging_steps=10,
+    save_strategy="epoch",
+    report_to="none",
+)
+
+trainer = SFTTrainer(
+    model=model,
+    train_dataset=dataset,
+    args=training_args,
+    dataset_text_field="text",
+    max_seq_length=2048,
+)
+
+trainer.train()
+model.save_pretrained(output_dir)
+tokenizer.save_pretrained(output_dir)
+print("LoRA adapter saved to " + output_dir)
+'''
+
+            script_path = Path(tmpdir) / "train_lora.py"
+            script_path.write_text(script)
+
+            cmd = [
+                "docker", "run", "--rm",
+                "--runtime=nvidia",
+                "-v", f"{tmpdir}:/workspace",
+                "-v", f"{self.storage_path}:/output",
+                "ontogeny-blender",
+                "python", "/workspace/train_lora.py",
+            ]
+
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=3600)
+                if proc.returncode != 0:
+                    return None
+            except (asyncio.TimeoutError, FileNotFoundError):
+                return None
+
+        if adapter_path.exists() and any(adapter_path.iterdir()):
+            self.lora_adapters[task_type] = adapter_path
+            return adapter_path
+        return None
 
     def export_training_data(self, output_path: str) -> None:
         """Export training data for external training."""
