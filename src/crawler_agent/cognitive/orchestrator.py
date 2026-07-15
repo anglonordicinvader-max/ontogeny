@@ -74,6 +74,7 @@ from .ci_validator import GitHubActionsValidator, LocalCIValidator, CompositeVal
 from .outcome_verifier import CompositeOutcomeVerifier, create_outcome_verifier, VerificationSpec, VerificationStatus
 from .blender_sandbox import BlenderSandbox, create_blender_sandbox, SimulationSpec, SimulationType
 from .mcts_planner import MCTSPlanner, create_mcts_planner, MCTSConfig
+from .tools import ToolManager, ToolResult
 from ..agents import MultiAgentOrchestrator
 
 
@@ -176,6 +177,9 @@ class CognitiveOrchestrator:
         self.outcome_verifier: CompositeOutcomeVerifier | None = None
         self.blender_sandbox: BlenderSandbox | None = None
         self.mcts_planner: MCTSPlanner | None = None
+
+        # Tool integrations
+        self.tool_manager: ToolManager | None = None
 
         # Current plan
         self.current_plan: Plan | None = None
@@ -346,8 +350,15 @@ class CognitiveOrchestrator:
         self.mcts_planner = await create_mcts_planner(
             backend=self.backend,
             bayesian_model=self.world_model,
-            available_actions=list(self.crawlers.keys()) + ["think", "search", "execute", "blender_simulate", "blender_render"],
+            available_actions=list(self.crawlers.keys()) + [
+                "think", "search", "execute", "blender_simulate", "blender_render",
+                "github_api", "arxiv_api", "ros2_publish", "ros2_subscribe",
+            ],
         )
+
+        # Initialize tool integrations
+        self.tool_manager = ToolManager(settings=self.settings, proxy_pool=self.proxy_pool)
+        await self.tool_manager.initialize()
 
         # Initialize crawl orchestrator with light intensity by default
         self.crawl_orchestrator = CrawlOrchestrator(
@@ -918,6 +929,56 @@ class CognitiveOrchestrator:
             step.result = f"Render {'succeeded' if result.success else 'failed'}: {result.output or result.error}"
             return {"success": result.success, "render_path": result.render_path, "blend_path": result.blend_path, "error": result.error}
 
+        elif action == "github_api":
+            # GitHub API operations
+            if not self.tool_manager:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Tool manager not available"}
+            operation = step.parameters.get("operation", "get_repo")
+            params = {k: v for k, v in step.parameters.items() if k != "operation"}
+            result = await self.tool_manager.invoke("github", operation, **params)
+            step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
+            step.result = f"GitHub {operation} {'succeeded' if result.success else 'failed'}"
+            return {"success": result.success, "data": result.data, "error": result.error, "metadata": result.metadata}
+
+        elif action == "arxiv_api":
+            # arXiv API operations
+            if not self.tool_manager:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Tool manager not available"}
+            operation = step.parameters.get("operation", "search")
+            params = {k: v for k, v in step.parameters.items() if k != "operation"}
+            result = await self.tool_manager.invoke("arxiv", operation, **params)
+            step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
+            step.result = f"arXiv {operation} {'succeeded' if result.success else 'failed'}"
+            return {"success": result.success, "data": result.data, "error": result.error, "metadata": result.metadata}
+
+        elif action == "ros2_publish":
+            # ROS2 publish
+            if not self.tool_manager:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Tool manager not available"}
+            topic = step.parameters.get("topic", "/ontogeny/default")
+            message_type = step.parameters.get("message_type", "std_msgs/msg/String")
+            data = step.parameters.get("data", {})
+            result = await self.tool_manager.invoke("ros2", "publish", topic=topic, message_type=message_type, data=data)
+            step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
+            step.result = f"ROS2 publish {'succeeded' if result.success else 'failed'}"
+            return {"success": result.success, "data": result.data, "error": result.error}
+
+        elif action == "ros2_subscribe":
+            # ROS2 subscribe
+            if not self.tool_manager:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Tool manager not available"}
+            topic = step.parameters.get("topic", "/ontogeny/default")
+            message_type = step.parameters.get("message_type", "std_msgs/msg/String")
+            timeout = step.parameters.get("timeout", 5.0)
+            result = await self.tool_manager.invoke("ros2", "subscribe", topic=topic, message_type=message_type, callback=lambda x: x, timeout=timeout)
+            step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
+            step.result = f"ROS2 subscribe {'succeeded' if result.success else 'failed'}"
+            return {"success": result.success, "data": result.data, "error": result.error}
+
         elif action == "verify_outcome":
             # Verify the outcome of a previous action
             if not self.outcome_verifier:
@@ -1421,6 +1482,9 @@ class CognitiveOrchestrator:
 
         if self.memory:
             await self.memory.close()
+
+        if self.tool_manager:
+            await self.tool_manager.close()
 
         if self.workspace:
             await self.workspace.cleanup()
