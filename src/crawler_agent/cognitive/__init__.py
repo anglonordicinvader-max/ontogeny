@@ -34,6 +34,9 @@ from .ci_validator import GitHubActionsValidator, LocalCIValidator, CompositeVal
 from .reward_model import RewardModel, PatchFeatures, RewardPrediction, PatchRanker
 from .memory_compression import MemoryCompressor, ContextWindowManager, MemoryConsolidator
 from .backend import CognitiveBackend, LLMBackend, HybridBackend, PatternBackend, CognitiveResponse
+from .blender_sandbox import BlenderSandbox, SimulationType, ExportFormat, PhysicsConfig, SensorConfig, DomainRandomizationConfig, ProceduralConfig, RobotConfig, SimulationSpec, SimulationResult
+from .outcome_verifier import CompositeOutcomeVerifier, create_outcome_verifier, VerificationSpec, VerificationStatus
+from .mcts_planner import MCTSPlanner, create_mcts_planner, MCTSConfig
 
 __all__ = [
     # Core
@@ -70,4 +73,10 @@ __all__ = [
     "RewardModel", "PatchFeatures", "RewardPrediction", "PatchRanker",
     "MemoryCompressor", "ContextWindowManager", "MemoryConsolidator",
     "CognitiveBackend", "LLMBackend", "HybridBackend", "PatternBackend", "CognitiveResponse",
+    
+    # Grounding & Verification
+    "BlenderSandbox", "SimulationType", "ExportFormat", "PhysicsConfig", "SensorConfig",
+    "DomainRandomizationConfig", "ProceduralConfig", "RobotConfig", "SimulationSpec", "SimulationResult",
+    "CompositeOutcomeVerifier", "create_outcome_verifier", "VerificationSpec", "VerificationStatus",
+    "MCTSPlanner", "create_mcts_planner", "MCTSConfig",
 ]

@@ -137,6 +137,23 @@ docker build -f Dockerfile.blender -t ontogeny-blender .
 
 The agent auto-detects the image and enables physics simulation + rendering actions.
 
+**New Physics Capabilities:**
+- **Rigid/Soft Body** — cubes, spheres, soft bodies with goal strength
+- **Fluid/Cloth** — SPH fluid, cloth with bending stiffness/damping
+- **Particles** — particle systems with forces
+- **URDF Robots** — import URDF, joint position/velocity/torque control
+- **Sensors** — camera (RGB/depth), lidar (360° raycast), contact, IMU
+- **Domain Randomization** — lighting, textures, physics params, object poses, camera
+- **Procedural Generation** — terrain (displacement), buildings, clutter
+- **Domain Randomization** — lighting, textures, physics params, poses
+- **Scene Persistence** — load/modify existing `.blend` files
+- **Real-time Stepping** — step physics with async callbacks
+- **Multi-format Export** — USD, glTF, glb, OBJ, STL, PLY, Alembic
+- **Procedural Generation** — terrain (displacement), buildings, clutter
+- **Multi-format Export** — USD, glTF, OBJ, STL, PLY, Alembic
+
+The agent auto-detects the image and enables `blender_simulate`, `blender_render`, `blender_step` actions.
+
 ### macOS Setup
 
 ```bash
@@ -188,10 +205,13 @@ The installer detects your distro (Ubuntu, Fedora, Arch, CentOS) and installs Py
 | `task <description>` | Run a task |
 | `status` | Agent status |
 | `drives` | View intrinsic drives |
-| `verify <task> <output>` | Verify task outcome (executable) |
-| `blender <sim|render> <spec>` | Physics sim / render in Blender |
-| `mcts <goal>` | Run MCTS planning |
-| `quit` | Exit |
+| `blender_sim <spec>` | Run physics simulation |
+| `blender_render <spec>` | Render scene |
+| `blender_step <blend> <steps>` | Step physics in existing .blend |
+| `verify <task_type> <output>` | Verify outcome (code/plan/reason/sim) |
+| `mcts_plan <goal> <state>` | MCTS planning |
+| `skill_create <name> <code>` | Create new skill |
+| `skill_list` | List available skills |
 
 ## Configuration
 
