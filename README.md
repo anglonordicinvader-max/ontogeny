@@ -152,6 +152,18 @@ The agent auto-detects the image and enables physics simulation + rendering acti
 
 The agent auto-detects the image and enables `blender_simulate`, `blender_render`, `blender_step` actions.
 
+**Emotion Visualization Modes:**
+- **Sphere (default)** — Abstract proto-AGI internal state visualization (glowing sphere with pulse animation)
+- **Anatomy** — Humanoid robot body with face (eyes, pupils, eyebrows, mouth, torso, arms, legs) for real robot training
+- **Both** — Both visualizations simultaneously
+
+Configure via `.env`:
+```env
+EMOTION_VISUALIZER=anatomy  # or "sphere" (default) | "both"
+```
+
+The agent auto-detects the image and enables `blender_simulate`, `blender_render`, `blender_step` actions.
+
 ### macOS Setup
 
 ```bash
@@ -242,10 +254,14 @@ PROXY_FETCH_FREE_PROXIES=true
 # Storage
 STORAGE_DATABASE_URL=sqlite+aiosqlite:///./crawler.db
 
+```
 # Crawler rates
 CRAWLER_REQUESTS_PER_SECOND=5.0
 CRAWLER_MIN_DELAY=1.0
 CRAWLER_MAX_DELAY=3.0
+
+# Blender Emotion Visualization (sphere | anatomy | both)
+EMOTION_VISUALIZER=anatomy
 ```
 
 ## Project Structure
