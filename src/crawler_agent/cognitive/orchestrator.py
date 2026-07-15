@@ -75,6 +75,7 @@ from .outcome_verifier import CompositeOutcomeVerifier, create_outcome_verifier,
 from .blender_sandbox import BlenderSandbox, create_blender_sandbox, SimulationSpec, SimulationType
 from .mcts_planner import MCTSPlanner, create_mcts_planner, MCTSConfig
 from .tools import ToolManager, ToolResult
+from .sim_library import SimulationLibrary, SimBackend
 from ..agents import MultiAgentOrchestrator
 
 
@@ -180,6 +181,9 @@ class CognitiveOrchestrator:
 
         # Tool integrations
         self.tool_manager: ToolManager | None = None
+
+        # Simulation library
+        self.sim_library: SimulationLibrary | None = None
 
         # Current plan
         self.current_plan: Plan | None = None
@@ -359,6 +363,9 @@ class CognitiveOrchestrator:
         # Initialize tool integrations
         self.tool_manager = ToolManager(settings=self.settings, proxy_pool=self.proxy_pool)
         await self.tool_manager.initialize()
+
+        # Initialize simulation library
+        self.sim_library = SimulationLibrary(blender_sandbox=self.blender_sandbox)
 
         # Initialize crawl orchestrator with light intensity by default
         self.crawl_orchestrator = CrawlOrchestrator(
@@ -978,6 +985,34 @@ class CognitiveOrchestrator:
             step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
             step.result = f"ROS2 subscribe {'succeeded' if result.success else 'failed'}"
             return {"success": result.success, "data": result.data, "error": result.error}
+
+        elif action == "sim_scenario":
+            # Run a pre-built simulation scenario
+            if not self.sim_library:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Simulation library not available"}
+            scenario_name = step.parameters.get("scenario", "pendulum")
+            backend = step.parameters.get("backend")
+            modifications = step.parameters.get("modifications")
+            backend_enum = SimBackend(backend) if backend else None
+            result = await self.sim_library.run_scenario(scenario_name, backend=backend_enum, modifications=modifications)
+            step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
+            step.result = f"Scenario '{scenario_name}' {'succeeded' if result.success else 'failed'}"
+            return {"success": result.success, "frames": len(result.frames), "stats": result.stats, "error": result.error}
+
+        elif action == "sim_custom":
+            # Run a custom simulation
+            if not self.sim_library:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Simulation library not available"}
+            backend = step.parameters.get("backend", "blender")
+            spec_params = step.parameters.get("spec", {})
+            spec = SimulationSpec(**spec_params)
+            backend_enum = SimBackend(backend)
+            result = await self.sim_library.run_custom(spec, backend=backend_enum)
+            step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
+            step.result = f"Custom simulation {'succeeded' if result.success else 'failed'}"
+            return {"success": result.success, "frames": len(result.frames), "stats": result.stats, "error": result.error}
 
         elif action == "verify_outcome":
             # Verify the outcome of a previous action
