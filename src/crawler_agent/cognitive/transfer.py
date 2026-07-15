@@ -1,296 +1,195 @@
-"""Transfer learning module - applies knowledge across domains.
+"""Cross-domain transfer - transfer knowledge between domains.
 
-Extracts abstract patterns from one domain and applies them
-to another, enabling cross-domain reasoning.
+Provides:
+- Domain abstraction
+- Analogy mapping
+- Skill transfer between domains
+- Structural similarity detection
 """
 
-import uuid
-from collections import defaultdict
+import json
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 import structlog
 
 
 @dataclass
-class AbstractPattern:
-    """A domain-agnostic pattern that can transfer."""
-    id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    pattern_type: str = ""  # structural, procedural, causal, relational
-    description: str = ""
-    source_domain: str = ""
-    abstract_form: str = ""  # Domain-agnostic representation
-    confidence: float = 0.5
-    transfer_count: int = 0
-    success_count: int = 0
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    tags: list[str] = field(default_factory=list)
-
-    @property
-    def transfer_success_rate(self) -> float:
-        if self.transfer_count == 0:
-            return 0.0
-        return self.success_count / self.transfer_count
+class Domain:
+    name: str
+    concepts: List[str] = field(default_factory=list)
+    relations: List[Dict] = field(default_factory=list)
+    skills: List[str] = field(default_factory=list)
+    abstractions: List[str] = field(default_factory=list)
 
 
 @dataclass
-class DomainMapping:
-    """Mapping between concepts in different domains."""
-    source_domain: str = ""
-    target_domain: str = ""
-    source_concept: str = ""
-    target_concept: str = ""
-    similarity: float = 0.5
-    confidence: float = 0.5
+class TransferMapping:
+    source_domain: str
+    target_domain: str
+    concept_mappings: Dict[str, str] = field(default_factory=dict)
+    relation_mappings: Dict[str, str] = field(default_factory=dict)
+    confidence: float = 0.0
 
 
 class TransferLearner:
-    """Enables cross-domain knowledge transfer.
+    """Cross-domain knowledge transfer."""
 
-    Extracts abstract patterns from experiences in one domain
-    and applies them to problems in another domain.
-    """
+    def __init__(self, data_dir: str = "data/transfer"):
+        self.data_dir = Path(data_dir)
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.logger = structlog.get_logger(component="transfer")
 
-    def __init__(self):
-        self.abstract_patterns: dict[str, AbstractPattern] = {}
-        self.domain_mappings: dict[str, DomainMapping] = {}
-        self.transfer_history: list[dict[str, Any]] = []
-        self.domain_knowledge: dict[str, list[str]] = defaultdict(list)
-        self.logger = structlog.get_logger()
+        self.domains: Dict[str, Domain] = {}
+        self.transfer_history: List[TransferMapping] = []
 
-    async def extract_abstract_pattern(
-        self,
-        experience: dict[str, Any],
-        domain: str,
-    ) -> AbstractPattern | None:
-        """Extract an abstract pattern from a domain-specific experience."""
-        # Identify pattern type
-        pattern_type = self._identify_pattern_type(experience)
+        self._setup_domains()
+        self._load()
 
-        # Create abstract representation
-        abstract = self._abstractize(experience, domain)
-
-        if not abstract:
-            return None
-
-        pattern = AbstractPattern(
-            pattern_type=pattern_type,
-            description=abstract["description"],
-            source_domain=domain,
-            abstract_form=abstract["form"],
-            confidence=0.5,
-            tags=abstract.get("tags", []),
-        )
-
-        self.abstract_patterns[pattern.id] = pattern
-        self.domain_knowledge[domain].append(pattern.id)
-
-        self.logger.info(
-            "abstract_pattern_extracted",
-            domain=domain,
-            type=pattern_type,
-        )
-        return pattern
-
-    async def transfer_pattern(
-        self,
-        pattern_id: str,
-        target_domain: str,
-        target_context: dict[str, Any],
-    ) -> dict[str, Any]:
-        """Transfer an abstract pattern to a new domain."""
-        pattern = self.abstract_patterns.get(pattern_id)
-        if not pattern:
-            return {"error": "Pattern not found"}
-
-        # Find domain mapping
-        mapping = self._find_mapping(pattern.source_domain, target_domain)
-
-        # Apply pattern to new domain
-        application = self._apply_pattern(pattern, target_domain, target_context, mapping)
-
-        # Record transfer
-        pattern.transfer_count += 1
-        transfer_record = {
-            "pattern_id": pattern_id,
-            "source_domain": pattern.source_domain,
-            "target_domain": target_domain,
-            "success": application.get("success", False),
-            "timestamp": datetime.utcnow().isoformat(),
+    def _setup_domains(self):
+        """Setup known domains."""
+        self.domains = {
+            "physics": Domain(
+                name="physics",
+                concepts=["force", "mass", "velocity", "acceleration", "gravity", "friction"],
+                relations=[
+                    {"source": "force", "target": "mass", "type": "acts_on"},
+                    {"source": "force", "target": "acceleration", "type": "causes"},
+                ],
+                skills=["predict_motion", "estimate_force", "calculate_trajectory"],
+            ),
+            "coding": Domain(
+                name="coding",
+                concepts=["function", "variable", "loop", "condition", "array", "recursion"],
+                relations=[
+                    {"source": "function", "target": "variable", "type": "uses"},
+                    {"source": "loop", "target": "array", "type": "iterates"},
+                ],
+                skills=["write_sort", "implement_search", "debug_code"],
+            ),
+            "planning": Domain(
+                name="planning",
+                concepts=["goal", "action", "constraint", "resource", "deadline", "dependency"],
+                relations=[
+                    {"source": "action", "target": "goal", "type": "achieves"},
+                    {"source": "constraint", "target": "action", "type": "limits"},
+                ],
+                skills=["schedule_tasks", "allocate_resources", "resolve_conflicts"],
+            ),
+            "social": Domain(
+                name="social",
+                concepts=["person", "communication", "agreement", "conflict", "trust", "cooperation"],
+                relations=[
+                    {"source": "communication", "target": "person", "type": "between"},
+                    {"source": "trust", "target": "cooperation", "type": "enables"},
+                ],
+                skills=["negotiate", "persuade", "collaborate"],
+            ),
         }
-        self.transfer_history.append(transfer_record)
 
-        if application.get("success"):
-            pattern.success_count += 1
+    def _load(self):
+        domains_file = self.data_dir / "domains.json"
+        if domains_file.exists():
+            try:
+                data = json.loads(domains_file.read_text())
+                for domain_name, domain_data in data.get("domains", {}).items():
+                    self.domains[domain_name] = Domain(**domain_data)
+            except Exception as e:
+                self.logger.warning("domains_load_failed", error=str(e))
 
-        self.logger.info(
-            "pattern_transferred",
-            pattern=pattern.description[:50],
-            target=target_domain,
-            success=application.get("success", False),
+    def _save(self):
+        domains_file = self.data_dir / "domains.json"
+        domains_file.write_text(json.dumps({
+            "domains": {
+                name: {
+                    "name": d.name,
+                    "concepts": d.concepts,
+                    "relations": d.relations,
+                    "skills": d.skills,
+                    "abstractions": d.abstractions,
+                }
+                for name, d in self.domains.items()
+            },
+        }, indent=2))
+
+    def find_analogies(self, source_domain: str, target_domain: str) -> TransferMapping:
+        """Find analogies between two domains."""
+        source = self.domains.get(source_domain)
+        target = self.domains.get(target_domain)
+
+        if not source or not target:
+            return TransferMapping(source_domain=source_domain, target_domain=target_domain)
+
+        concept_mappings = {}
+        for sc in source.concepts:
+            for tc in target.concepts:
+                if self._structural_similarity(sc, tc) > 0.3:
+                    concept_mappings[sc] = tc
+                    break
+
+        confidence = len(concept_mappings) / max(len(source.concepts), 1)
+
+        mapping = TransferMapping(
+            source_domain=source_domain,
+            target_domain=target_domain,
+            concept_mappings=concept_mappings,
+            confidence=confidence,
         )
-        return application
+        self.transfer_history.append(mapping)
+        return mapping
 
-    async def find_transferable_patterns(
-        self,
-        target_domain: str,
-        target_problem: str,
-    ) -> list[dict[str, Any]]:
-        """Find patterns that could transfer to solve a target problem."""
-        candidates = []
+    def _structural_similarity(self, concept_a: str, concept_b: str) -> float:
+        """Compute structural similarity between concepts."""
+        if concept_a == concept_b:
+            return 1.0
 
-        for pattern in self.abstract_patterns.values():
-            # Skip patterns from same domain
-            if pattern.source_domain == target_domain:
-                continue
+        synonyms = {
+            "force": ["action", "effort"],
+            "mass": ["weight", "amount"],
+            "velocity": ["speed", "rate"],
+            "goal": ["objective", "target"],
+            "action": ["step", "move"],
+            "function": ["routine", "procedure"],
+            "loop": ["cycle", "iteration"],
+            "person": ["individual", "agent"],
+        }
 
-            # Check relevance
-            relevance = self._calculate_transfer_relevance(
-                pattern, target_domain, target_problem
-            )
+        for key, syns in synonyms.items():
+            if (concept_a == key and concept_b in syns) or (concept_b == key and concept_a in syns):
+                return 0.8
 
-            if relevance > 0.3:
-                candidates.append({
-                    "pattern": pattern,
-                    "relevance": relevance,
-                    "source_domain": pattern.source_domain,
-                    "success_rate": pattern.transfer_success_rate,
-                })
+        return 0.0
 
-        # Sort by relevance * success rate
-        candidates.sort(
-            key=lambda x: x["relevance"] * (x["success_rate"] + 0.1),
-            reverse=True,
-        )
-
-        return candidates[:5]
-
-    async def learn_domain_mapping(
+    def transfer_skill(
         self,
         source_domain: str,
         target_domain: str,
-        source_concept: str,
-        target_concept: str,
-        similarity: float = 0.5,
-    ):
-        """Learn a mapping between domains."""
-        mapping = DomainMapping(
-            source_domain=source_domain,
-            target_domain=target_domain,
-            source_concept=source_concept,
-            target_concept=target_concept,
-            similarity=similarity,
-        )
-        self.domain_mappings[f"{source_domain}:{target_domain}:{source_concept}"] = mapping
+        skill: str,
+    ) -> Optional[str]:
+        """Transfer a skill from one domain to another."""
+        mapping = self.find_analogies(source_domain, target_domain)
 
-    def _identify_pattern_type(self, experience: dict[str, Any]) -> str:
-        """Identify what type of pattern this is."""
-        if "sequence" in experience or "steps" in experience:
-            return "procedural"
-        elif "cause" in experience or "effect" in experience:
-            return "causal"
-        elif "relationship" in experience or "connected" in experience:
-            return "relational"
-        else:
-            return "structural"
-
-    def _abstractize(self, experience: dict[str, Any], domain: str) -> dict[str, Any] | None:
-        """Create domain-agnostic representation."""
-        # Simple abstraction: replace domain-specific terms with placeholders
-        description = str(experience.get("description", experience.get("content", "")))
-        if not description:
+        if mapping.confidence < 0.2:
             return None
 
-        # Replace domain terms with generic placeholders
-        abstract = description
-        domain_words = domain.replace("_", " ").split()
-        for word in domain_words:
-            abstract = abstract.replace(word, "{CONCEPT}")
+        transferred = f"Adapted '{skill}' from {source_domain} to {target_domain}"
+        return transferred
 
-        return {
-            "description": f"In {domain}: {description[:100]}",
-            "form": abstract[:200],
-            "tags": [domain, self._identify_pattern_type(experience)],
-        }
+    def abstract_domain(self, domain_name: str) -> List[str]:
+        """Create abstract principles from a domain."""
+        domain = self.domains.get(domain_name)
+        if not domain:
+            return []
 
-    def _apply_pattern(
-        self,
-        pattern: AbstractPattern,
-        target_domain: str,
-        target_context: dict[str, Any],
-        mapping: DomainMapping | None,
-    ) -> dict[str, Any]:
-        """Apply abstract pattern to target domain."""
-        # Simple pattern application
-        result = {
-            "pattern_type": pattern.pattern_type,
-            "source": pattern.source_domain,
-            "target": target_domain,
-            "success": True,
-            "suggestion": f"Apply {pattern.pattern_type} pattern from {pattern.source_domain} to {target_domain}",
-        }
+        abstractions = []
+        for relation in domain.relations:
+            abstraction = f"{relation['type']}: {relation['source']} -> {relation['target']}"
+            abstractions.append(abstraction)
 
-        # If we have a mapping, use it
-        if mapping:
-            result["mapping"] = {
-                "source_concept": mapping.source_concept,
-                "target_concept": mapping.target_concept,
-                "similarity": mapping.similarity,
-            }
-
-        return result
-
-    def _find_mapping(self, source_domain: str, target_domain: str) -> DomainMapping | None:
-        """Find mapping between two domains."""
-        for mapping in self.domain_mappings.values():
-            if (mapping.source_domain == source_domain and
-                mapping.target_domain == target_domain):
-                return mapping
-        return None
-
-    def _calculate_transfer_relevance(
-        self,
-        pattern: AbstractPattern,
-        target_domain: str,
-        target_problem: str,
-    ) -> float:
-        """Calculate how relevant a pattern is for transfer."""
-        relevance = 0.3  # Base relevance
-
-        # Higher success rate = more likely to transfer
-        relevance += pattern.transfer_success_rate * 0.3
-
-        # Check if we have domain mappings
-        mapping = self._find_mapping(pattern.source_domain, target_domain)
-        if mapping:
-            relevance += mapping.similarity * 0.3
-
-        # Check tag overlap
-        target_words = set(target_domain.replace("_", " ").split())
-        pattern_words = set(pattern.tags)
-        overlap = len(target_words & pattern_words)
-        relevance += overlap * 0.1
-
-        return min(1.0, relevance)
-
-    def get_stats(self) -> dict[str, Any]:
-        """Get transfer learning statistics."""
-        return {
-            "total_patterns": len(self.abstract_patterns),
-            "total_mappings": len(self.domain_mappings),
-            "total_transfers": len(self.transfer_history),
-            "successful_transfers": sum(1 for t in self.transfer_history if t.get("success")),
-            "domains": list(self.domain_knowledge.keys()),
-        }
+        domain.abstractions = abstractions
+        self._save()
+        return abstractions
 
     def to_context(self) -> str:
-        """Convert transfer learning state to context string."""
-        stats = self.get_stats()
-        lines = ["Transfer Learning:"]
-        lines.append(f"  Abstract Patterns: {stats['total_patterns']}")
-        lines.append(f"  Domain Mappings: {stats['total_mappings']}")
-        lines.append(f"  Transfers: {stats['total_transfers']} ({stats['successful_transfers']} successful)")
-        if stats['domains']:
-            lines.append(f"  Domains: {', '.join(stats['domains'][:5])}")
-        return "\n".join(lines)
+        return f"Transfer Learner: {len(self.domains)} domains, {len(self.transfer_history)} transfers"
