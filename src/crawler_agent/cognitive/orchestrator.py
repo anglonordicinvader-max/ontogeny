@@ -81,6 +81,13 @@ from .multimodal import MultimodalProcessor
 from .agent_variety import AgentPopulation
 from .skill_export import SkillExporter
 from .world_selector import WorldSelector, SelectionCriteria
+from .sensor_sim import SensorArray
+from .failure_injection import FailureInjector
+from .navigation import ObstacleAvoidance, PathPlanner, SLAMSimulation, WaypointFollower
+from .weather import WeatherSystem
+from .locomotion import LocomotionController
+from .manipulation_tasks import ManipulationController
+from .social_sim import SocialSimulator
 from ..agents import MultiAgentOrchestrator
 
 
@@ -204,6 +211,30 @@ class CognitiveOrchestrator:
 
         # World selector for practical worlds
         self.world_selector: WorldSelector | None = None
+
+        # Sensor simulation
+        self.sensor_array: SensorArray | None = None
+
+        # Failure injection
+        self.failure_injector: FailureInjector | None = None
+
+        # Navigation
+        self.obstacle_avoidance: ObstacleAvoidance | None = None
+        self.path_planner: PathPlanner | None = None
+        self.slam: SLAMSimulation | None = None
+        self.waypoint_follower: WaypointFollower | None = None
+
+        # Weather
+        self.weather: WeatherSystem | None = None
+
+        # Locomotion
+        self.locomotion: LocomotionController | None = None
+
+        # Manipulation
+        self.manipulation: ManipulationController | None = None
+
+        # Social simulation
+        self.social: SocialSimulator | None = None
 
         # Current plan
         self.current_plan: Plan | None = None
@@ -402,6 +433,18 @@ class CognitiveOrchestrator:
 
         # Initialize world selector
         self.world_selector = WorldSelector()
+
+        # Initialize simulation modules
+        self.sensor_array = SensorArray()
+        self.failure_injector = FailureInjector()
+        self.obstacle_avoidance = ObstacleAvoidance()
+        self.path_planner = PathPlanner()
+        self.slam = SLAMSimulation()
+        self.waypoint_follower = WaypointFollower()
+        self.weather = WeatherSystem()
+        self.locomotion = LocomotionController()
+        self.manipulation = ManipulationController()
+        self.social = SocialSimulator()
 
         # Initialize crawl orchestrator with light intensity by default
         self.crawl_orchestrator = CrawlOrchestrator(
@@ -1446,6 +1489,153 @@ class CognitiveOrchestrator:
             step.result = f"MCTS plan created with {len(plan.steps)} steps"
             return {"success": True, "plan_id": plan.id, "steps": len(plan.steps), "plan": plan}
 
+        # ═══════════════════════════════════════════════════════════════
+        # Simulation modules
+        # ═══════════════════════════════════════════════════════════════
+
+        elif action == "sensor_read":
+            # Read sensor data
+            if not self.sensor_array:
+                self.sensor_array = SensorArray()
+            robot_pos = step.parameters.get("robot_pos", [0, 0, 0])
+            object_positions = step.parameters.get("object_positions", {})
+            readings = self.sensor_array.read_all(object_positions, robot_pos)
+            step.status = StepStatus.COMPLETED
+            step.result = f"Sensor readings: {list(readings.keys())}"
+            return {"success": True, "readings": {k: v.data for k, v in readings.items()}}
+
+        elif action == "failure_inject":
+            # Inject failure
+            if not self.failure_injector:
+                self.failure_injector = FailureInjector()
+            failure_type = step.parameters.get("type", "battery_drain")
+            if failure_type == "battery_drain":
+                dt = step.parameters.get("dt", 1.0)
+                level = self.failure_injector.drain_battery(dt)
+                step.result = f"Battery: {level:.0%}"
+            elif failure_type == "structural_damage":
+                damage = step.parameters.get("damage", 0.1)
+                loc = step.parameters.get("location", "unknown")
+                integrity = self.failure_injector.apply_structural_damage(damage, loc)
+                step.result = f"Structural integrity: {integrity:.0%}"
+            elif failure_type == "sensor_noise":
+                sensor = step.parameters.get("sensor", "depth")
+                noise = step.parameters.get("noise", 0.3)
+                self.failure_injector.inject_sensor_noise(sensor, noise)
+                step.result = f"Injected noise into {sensor}"
+            elif failure_type == "actuator_jam":
+                actuator = step.parameters.get("actuator", "arm")
+                self.failure_injector.jam_actuator(actuator)
+                step.result = f"Jammed {actuator}"
+            elif failure_type == "comm_loss":
+                severity = step.parameters.get("severity", 0.5)
+                self.failure_injector.simulate_communication_loss(severity=severity)
+                step.result = f"Communication degraded to {severity:.0%}"
+            step.status = StepStatus.COMPLETED
+            return {"success": True, "state": self.failure_injector.get_status()}
+
+        elif action == "navigate":
+            # Path planning and obstacle avoidance
+            if not self.path_planner:
+                self.path_planner = PathPlanner()
+            if not self.obstacle_avoidance:
+                self.obstacle_avoidance = ObstacleAvoidance()
+            start = step.parameters.get("start", [0, 0, 0])
+            goal = step.parameters.get("goal", [10, 0, 0])
+            obstacles = step.parameters.get("obstacles", {})
+            algorithm = step.parameters.get("algorithm", "astar")
+
+            if algorithm == "astar":
+                path = self.path_planner.a_star(start, goal, obstacles)
+            elif algorithm == "rrt":
+                path = self.path_planner.rrt(start, goal, obstacles)
+            else:
+                path = self.path_planner.dijkstra(start, goal, obstacles)
+
+            step.status = StepStatus.COMPLETED if path.valid else StepStatus.FAILED
+            step.result = f"Path {algorithm}: {len(path.waypoints)} waypoints, cost={path.cost:.2f}"
+            return {"success": path.valid, "waypoints": path.waypoints, "cost": path.cost,
+                    "algorithm": algorithm}
+
+        elif action == "weather_update":
+            # Update weather
+            if not self.weather:
+                self.weather = WeatherSystem()
+            wind_speed = step.parameters.get("wind_speed", 0)
+            rain = step.parameters.get("rain", 0)
+            fog = step.parameters.get("fog", 0)
+            temp = step.parameters.get("temperature", 22)
+            self.weather.set_weather(wind_speed, rain, fog, temp)
+            state = self.weather.update(0.01)
+            step.status = StepStatus.COMPLETED
+            step.result = f"Weather: wind={wind_speed}m/s, rain={rain:.0%}, fog={fog:.0%}"
+            return {"success": True, "state": state}
+
+        elif action == "locomotion":
+            # Update locomotion
+            if not self.locomotion:
+                self.locomotion = LocomotionController()
+            mode = step.parameters.get("mode")
+            if mode:
+                self.locomotion.set_mode(mode)
+            cmd = step.parameters.get("cmd", {})
+            self.locomotion.set_cmd(**cmd)
+            state = self.locomotion.update(0.01)
+            step.status = StepStatus.COMPLETED
+            step.result = f"Locomotion ({self.locomotion.mode}): pos={state.position}"
+            return {"success": True, "position": state.position, "velocity": state.velocity}
+
+        elif action == "manipulate":
+            # Execute manipulation task
+            if not self.manipulation:
+                self.manipulation = ManipulationController()
+            task_type = step.parameters.get("task_type", "assembly")
+            self.manipulation.start_task(task_type, **step.parameters.get("setup", {}))
+            result = self.manipulation.execute(**step.parameters.get("execute", {}))
+            step.status = StepStatus.COMPLETED
+            step.result = f"Manipulation ({task_type}): progress={result.progress:.0%}, success={result.success}"
+            return {"success": result.success, "progress": result.progress, "step": result.step}
+
+        elif action == "social_update":
+            # Update social simulation
+            if not self.social:
+                self.social = SocialSimulator()
+            robot_pos = step.parameters.get("robot_pos", [0, 0, 0])
+            add_humans = step.parameters.get("add_humans", [])
+            for h in add_humans:
+                self.social.crowd.add_human(h.get("position", [0, 0]), h.get("target"))
+            state = self.social.update(0.01, robot_pos)
+            step.status = StepStatus.COMPLETED
+            step.result = f"Social: {state['crowd']['total_humans']} humans"
+            return {"success": True, "state": state}
+
+        elif action == "crowd_panic":
+            # Trigger crowd panic
+            if not self.social:
+                self.social = SocialSimulator()
+            epicenter = step.parameters.get("epicenter", [0, 0, 0])
+            radius = step.parameters.get("radius", 10.0)
+            self.social.crowd.trigger_panic(epicenter, radius)
+            step.status = StepStatus.COMPLETED
+            step.result = f"Panic triggered at {epicenter}"
+            return {"success": True}
+
+        elif action == "gesture_detect":
+            # Detect gesture from nearest human
+            if not self.social:
+                self.social = SocialSimulator()
+            robot_pos = step.parameters.get("robot_pos", [0, 0, 0])
+            nearest = self.social.crowd.get_nearest_human(robot_pos)
+            if nearest:
+                gesture = self.social.gesture.detect(nearest, robot_pos)
+                step.status = StepStatus.COMPLETED
+                step.result = f"Gesture: {gesture.type} ({gesture.confidence:.0%})"
+                return {"success": True, "gesture": gesture.type, "confidence": gesture.confidence,
+                        "meaning": self.social.gesture.get_meaning(gesture)}
+            step.status = StepStatus.COMPLETED
+            step.result = "No humans detected"
+            return {"success": True, "gesture": "none"}
+
     async def _check_self_improvement(self, result: dict) -> None:
         """Check if agent should improve itself. Measures before/after and auto-rollbacks."""
         # Analyze recent performance
@@ -1669,6 +1859,14 @@ class CognitiveOrchestrator:
             "health": health,
             # World Selector
             "world_selector": self.world_selector.to_context() if self.world_selector else {},
+            # Simulation modules
+            "sensors": self.sensor_array.to_context() if self.sensor_array else {},
+            "failure": self.failure_injector.to_context() if self.failure_injector else {},
+            "navigation": self.path_planner.to_context() if self.path_planner else {},
+            "weather": self.weather.to_context() if self.weather else {},
+            "locomotion": self.locomotion.to_context() if self.locomotion else {},
+            "manipulation": self.manipulation.to_context() if self.manipulation else {},
+            "social": self.social.to_context() if self.social else {},
         }
 
     async def autonomous_loop(self, max_cycles: int | None = None) -> None:
