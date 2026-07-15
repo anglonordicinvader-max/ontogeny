@@ -11,7 +11,7 @@ Features:
 - Procedural generation (terrain, buildings, clutter)
 - Domain randomization (lighting, textures, physics params)
 - Multi-format export (USD, glTF, OBJ, glb)
-- Emotion visualization: sphere (abstract proto-AGI) or face with robot body
+- Emotion visualization: sphere (abstract proto-AGI) or anatomy (humanoid robot body with face)
 """
 
 import asyncio
@@ -186,9 +186,9 @@ class SimulationSpec:
     procedural: Optional[ProceduralConfig] = None
     urdf_path: Optional[str] = None
     robot_joints: Optional[Dict] = None
-    # Emotion visualization - "sphere" (abstract, proto-AGI internal) or "face" (humanoid robot body with face)
+    # Emotion visualization - "sphere" (abstract, proto-AGI internal) or "anatomy" (humanoid robot body with face)
     emotion_config: Optional[Dict] = None
-    emotion_visualizer: Optional[str] = "sphere"  # "sphere" | "face" | "both"
+    emotion_visualizer: Optional[str] = "sphere"  # "sphere" | "anatomy" | "both"
     save_blend: bool = True
     render: bool = False
     render_resolution: tuple = (1920, 1080)
@@ -424,9 +424,9 @@ obj.modifiers["Fluid"].domain_settings.viscosity = 0.01
 
         visualizer = spec.emotion_visualizer or "sphere"
 
-        if visualizer == "face":
+        if visualizer == "anatomy":
             return f"""
-# Emotion Visualization - Face Mode (Humanoid Robot Body with Face)
+# Emotion Visualization - Anatomy Mode (Humanoid Robot Body with Face)
 # Mood: {mood}, Valence: {valence:.2f}, Arousal: {arousal:.2f}, Intensity: {intensity:.2f}
 
 # Create a simple face with shape keys for expressions
