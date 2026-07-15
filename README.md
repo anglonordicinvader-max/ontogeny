@@ -22,7 +22,7 @@ Ontogeny is a self-improving cognitive agent that autonomously explores the inte
 │                              (recursive)                  │
 │                                                           │
 │  ┌───────────┐  ┌───────────┐  ┌────────────────────┐   │
-│  │ 33        │  │ Meta-     │  │ 10 Cognitive        │   │
+│  │ 30        │  │ Meta-     │  │ 10 Cognitive        │   │
 │  │ Crawlers  │  │ Cognition │  │ Learning Modules    │   │
 │  │ +Proxies  │  │           │  │                     │   │
 │  └───────────┘  └───────────┘  └────────────────────┘   │
