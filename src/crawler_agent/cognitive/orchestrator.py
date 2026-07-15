@@ -1504,6 +1504,30 @@ class CognitiveOrchestrator:
             step.result = f"Sensor readings: {list(readings.keys())}"
             return {"success": True, "readings": {k: v.data for k, v in readings.items()}}
 
+        elif action == "yolo_detect":
+            # YOLO object detection
+            if not self.sensor_array:
+                self.sensor_array = SensorArray()
+            image = step.parameters.get("image")
+            depth_map = step.parameters.get("depth_map")
+            model_size = step.parameters.get("model_size")
+            if model_size:
+                self.sensor_array.yolo.model_size = model_size
+            result = self.sensor_array.yolo.detect(image, depth_map)
+            persons = self.sensor_array.yolo.detect_persons(result)
+            obstacles = self.sensor_array.yolo.get_navigation_obstacles(result)
+            step.status = StepStatus.COMPLETED
+            step.result = f"YOLO: {result.count} objects detected ({result.inference_time_ms:.1f}ms)"
+            return {
+                "success": True,
+                "count": result.count,
+                "objects": [o.to_dict() for o in result.objects],
+                "persons": [o.to_dict() for o in persons],
+                "obstacles": [o.to_dict() for o in obstacles],
+                "inference_ms": result.inference_time_ms,
+                "model": result.model_name,
+            }
+
         elif action == "failure_inject":
             # Inject failure
             if not self.failure_injector:

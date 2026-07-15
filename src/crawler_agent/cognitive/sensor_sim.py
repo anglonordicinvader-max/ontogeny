@@ -17,6 +17,8 @@ from typing import Dict, List, Optional, Tuple
 
 import structlog
 
+from crawler_agent.cognitive.yolo_detector import YOLODetector, DetectionResult
+
 
 @dataclass
 class SensorReading:
@@ -438,6 +440,7 @@ class SensorArray:
         self.touch = TouchSensor()
         self.thermal = ThermalCamera()
         self.night_vision = NightVision()
+        self.yolo = YOLODetector()
         self.logger = structlog.get_logger(component="sensor_array")
 
     def read_all(self, object_positions: Dict[str, List[float]] = None,
@@ -457,7 +460,8 @@ class SensorArray:
             "touch": self.touch.read(**{k: v for k, v in kwargs.items() if k in ["contact_forces"]}),
             "thermal": self.thermal.capture(**{k: v for k, v in kwargs.items() if k in ["object_temperatures", "ambient_temp"]}),
             "night_vision": self.night_vision.capture(**{k: v for k, v in kwargs.items() if k in ["ambient_light"]}),
+            "yolo": self.yolo.detect(**{k: v for k, v in kwargs.items() if k in ["image", "depth_map", "camera_fov", "camera_resolution"]}),
         }
 
     def to_context(self) -> str:
-        return "Sensor Array: depth, lidar, IMU, force/torque, proximity, touch, thermal, night vision"
+        return "Sensor Array: depth, lidar, IMU, force/torque, proximity, touch, thermal, night vision, YOLO"
