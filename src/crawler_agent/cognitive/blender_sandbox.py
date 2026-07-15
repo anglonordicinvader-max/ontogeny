@@ -10,6 +10,7 @@ Features:
 - Multi-format export (USD, glTF, OBJ, glb, STL, PLY, Alembic)
 - Procedural generation (terrain, buildings, clutter)
 - Domain randomization (lighting, textures, physics params)
+- Multi-format export (USD, glTF, OBJ, glb)
 """
 
 import asyncio
@@ -35,6 +36,7 @@ class SimulationType(Enum):
     RENDER = "render"
     URDF_ROBOT = "urdf_robot"
     SENSOR = "sensor"
+    EMOTION = "emotion"
 
 
 class ExportFormat(Enum):
@@ -103,7 +105,16 @@ class ProceduralConfig:
     building_height_range: tuple = (5, 50)
     generate_clutter: bool = False
     clutter_count: int = 100
-    clutter_types: List[str] = field(default_factory=lambda: ["cube", "sphere", "cylinder"])
+    clutter_types: list = field(default_factory=lambda: ["cube", "sphere", "cylinder"])
+
+
+@dataclass
+class RobotConfig:
+    """URDF robot configuration."""
+    urdf_path: str = ""
+    base_position: tuple = (0, 0, 0)
+    base_rotation: tuple = (0, 0, 0)
+    joint_drives: Dict[str, Dict] = field(default_factory=dict)  # joint_name -> {type: position/velocity/torque, target, kp, kd}
 
 
 @dataclass
@@ -147,6 +158,9 @@ class SimulationSpec:
     procedural: Optional[ProceduralConfig] = None
     urdf_path: Optional[str] = None
     robot_joints: Optional[Dict] = None
+    # Emotion visualization
+    emotion_config: Optional[Dict] = None
+    emotion_visualizer: Optional[str] = None
     save_blend: bool = True
     render: bool = False
     render_resolution: tuple = (1920, 1080)
@@ -195,7 +209,7 @@ class BlenderSandbox:
             self.logger.warning("blender_image_not_found", image=self.image)
             raise RuntimeError(
                 f"Blender image '{self.image}' not found. Build with:\n"
-                f"  docker build -f Dockerfile.blender -t {self.image} ."
+                f"  docker build -f Dockerfile.blender -t ontogeny-blender ."
             )
 
     async def run_simulation(self, spec: SimulationSpec) -> SimulationResult:
@@ -258,6 +272,8 @@ class BlenderSandbox:
         """Step physics in an existing .blend file with optional callback."""
         script = f"""
 import bpy
+import json
+
 bpy.ops.wm.open_mainfile(filepath="{blend_path}")
 
 for i in range({steps}):
@@ -277,7 +293,7 @@ for i in range({steps}):
                 "location": list(obj.location),
                 "rotation": list(obj.rotation_euler),
                 "velocity": list(obj.rigid_body.linear_velocity) if hasattr(obj, 'rigid_body') and obj.rigid_body else [0,0,0]
-            }})
+            }}
     
     print("STEP_RESULT:" + json.dumps(frame_data))
 """
@@ -285,25 +301,27 @@ for i in range({steps}):
         return result
 
     def _build_object_script(self, obj: ObjectSpec, i: int) -> str:
-        """Generate Blender Python code for an object."""
+        """Generate Blender Python code for a single object."""
         otype = obj.type
         loc = obj.position
         rot = obj.rotation
         scale = obj.scale
         mass = obj.mass
         passive = obj.passive
+        friction = obj.friction
+        restitution = obj.restitution
 
-        if otype == "cube":
+        if obj.type == "cube":
             prim = f'bpy.ops.mesh.primitive_cube_add(location={loc})'
-        elif otype == "sphere":
+        elif obj.type == "sphere":
             prim = f'bpy.ops.mesh.primitive_uv_sphere_add(location={loc})'
-        elif otype == "plane":
+        elif obj.type == "plane":
             prim = f'bpy.ops.mesh.primitive_plane_add(location={loc}, scale=(50, 50, 1))'
-        elif otype == "cylinder":
+        elif obj.type == "cylinder":
             prim = f'bpy.ops.mesh.primitive_cylinder_add(location={loc})'
-        elif otype == "cone":
+        elif obj.type == "cone":
             prim = f'bpy.ops.mesh.primitive_cone_add(location={loc})'
-        elif otype == "torus":
+        elif obj.type == "torus":
             prim = f'bpy.ops.mesh.primitive_torus_add(location={loc})'
         else:
             prim = f'bpy.ops.mesh.primitive_cube_add(location={loc})'
@@ -333,6 +351,7 @@ obj.rigid_body.restitution = {restitution}
 bpy.ops.object.modifier_add(type='SOFT_BODY')
 obj.modifiers["Softbody"].settings.goal_strength = 0.5
 obj.modifiers["Softbody"].settings.use_self_collision = True
+obj.modifiers["Softbody"].settings.friction = {friction}
 """
 
         # Cloth
@@ -357,311 +376,84 @@ obj.modifiers["Fluid"].domain_settings.viscosity = 0.01
 
         return code
 
-    def _build_simulation_script(self, spec: SimulationSpec) -> str:
-        """Generate Blender Python script for simulation."""
-        objects_code = [self._build_object_script(obj, i) for i, obj in enumerate(spec.objects)]
+    def _build_emotion_code(self, spec: SimulationSpec) -> str:
+        """Generate emotion visualization code."""
+        if not spec.emotion_config:
+            return ""
+        
+        ec = spec.emotion_config
+        mood = ec.get("mood", "neutral")
+        valence = ec.get("valence", 0.0)
+        arousal = ec.get("arousal", 0.5)
+        intensity = max(0.1, min(1.0, abs(valence) * 0.5 + arousal * 0.5))
 
-        # Domain randomization
-        randomization_code = ""
-        if spec.domain_randomization:
-            dr = spec.domain_randomization
-            randomization_code = f"""
-# Domain Randomization
-import random
-import math
-
-# Randomize lighting
-if {dr.randomize_lighting}:
-    for light in bpy.data.lights:
-        light.energy *= random.uniform(1 - {dr.lighting_variance}, 1 + {dr.lighting_variance})
-        light.color = (
-            random.uniform(0.8, 1.0),
-            random.uniform(0.8, 1.0),
-            random.uniform(0.8, 1.0)
-        )
-
-# Randomize physics parameters
-if {dr.randomize_physics_params}:
-    bpy.context.scene.gravity = (
-        {spec.gravity[0]} * random.uniform(1 - {dr.physics_variance}, 1 + {dr.physics_variance}),
-        {spec.gravity[1]} * random.uniform(1 - {dr.physics_variance}, 1 + {dr.physics_variance}),
-        {spec.gravity[2]} * random.uniform(1 - {dr.physics_variance}, 1 + {dr.physics_variance})
-    )
-
-# Randomize object poses
-if {dr.randomize_object_poses}:
-    for obj in bpy.data.objects:
-        if obj.name.startswith("SimObj_"):
-            obj.location = (
-                obj.location[0] + random.uniform(-{dr.pose_variance}, {dr.pose_variance}),
-                obj.location[1] + random.uniform(-{dr.pose_variance}, {dr.pose_variance}),
-                obj.location[2] + random.uniform(-{dr.pose_variance}, {dr.pose_variance})
-            )
-
-# Randomize camera
-if {dr.randomize_camera}:
-    for cam in bpy.data.cameras:
-        cam.lens = cam.lens * random.uniform(0.9, 1.1)
-"""
-
-        # Procedural generation
-        procedural_code = ""
-        if spec.procedural:
-            proc = spec.procedural
-            procedural_code = f"""
-# Procedural Generation
-import random
-import math
-
-# Terrain
-if {proc.generate_terrain}:
-    bpy.ops.mesh.primitive_plane_add(size={proc.terrain_size[0]}, location=(0, 0, 0))
-    terrain = bpy.context.active_object
-    terrain.name = "Terrain"
-    bpy.ops.object.modifier_add(type='DISPLACE')
-    terrain.modifiers["Displace"].strength = 5.0
-    terrain.modifiers["Displace"].texture = bpy.data.textures.new("TerrainTex", 'CLOUDS')
-    terrain.modifiers["Displace"].texture.noise_scale = {proc.terrain_scale}
-    terrain.modifiers["Displace"].texture.noise_depth = {proc.terrain_octaves}
-    bpy.ops.rigidbody.object_add()
-    terrain.rigid_body.type = 'PASSIVE'
-    terrain.rigid_body.collision_shape = 'MESH'
-
-# Buildings
-if {proc.generate_buildings}:
-    for i in range({proc.building_count}):
-        x = random.uniform(-{proc.terrain_size[0]/2}, {proc.terrain_size[0]/2})
-        y = random.uniform(-{proc.terrain_size[1]/2}, {proc.terrain_size[1]/2})
-        h = random.uniform({proc.building_height_range[0]}, {proc.building_height_range[1]})
-        bpy.ops.mesh.primitive_cube_add(location=(x, y, h/2), scale=(5, 5, h/2))
-        bldg = bpy.context.active_object
-        bldg.name = f"Building_{{i}}"
-        bpy.ops.rigidbody.object_add()
-        bldg.rigid_body.type = 'PASSIVE'
-        bldg.rigid_body.collision_shape = 'BOX'
-
-# Clutter
-if {proc.generate_clutter}:
-    for i in range({proc.clutter_count}):
-        x = random.uniform(-{proc.terrain_size[0]/2}, {proc.terrain_size[0]/2})
-        y = random.uniform(-{proc.terrain_size[1]/2}, {proc.terrain_size[1]/2})
-        obj_type = random.choice({proc.clutter_types})
-        if obj_type == "cube":
-            bpy.ops.mesh.primitive_cube_add(location=(x, y, 2), scale=(0.5, 0.5, 0.5))
-        elif obj_type == "sphere":
-            bpy.ops.mesh.primitive_uv_sphere_add(location=(x, y, 2), radius=0.5)
-        elif obj_type == "cylinder":
-            bpy.ops.mesh.primitive_cylinder_add(location=(x, y, 2), radius=0.3, depth=1)
-        obj = bpy.context.active_object
-        obj.name = f"Clutter_{{i}}"
-        bpy.ops.rigidbody.object_add()
-        obj.rigid_body.type = 'ACTIVE'
-        obj.rigid_body.mass = 0.1
-"""
-
-        # Robot/URDF
-        robot_code = ""
-        if spec.urdf_path:
-            robot_code = f"""
-# URDF Robot Import
-bpy.ops.import_scene.urdf(filepath="{spec.urdf_path}")
-# Rename imported objects
-for obj in bpy.data.objects:
-    if obj.name.startswith("link") or obj.name.startswith("joint"):
-        obj.name = "Robot_" + obj.name
-        # Add rigid body for links
-        bpy.ops.rigidbody.object_add()
-        obj.rigid_body.type = 'ACTIVE'
-        obj.rigid_body.mass = 1.0
-
-# Joint control
-if {bool(spec.robot_joints)}:
-    # Apply joint commands
-    for joint_name, command in {json.dumps(spec.robot_joints)}.items():
-        obj = bpy.data.objects.get(joint_name)
-        if obj and command.get("type") == "position":
-            obj.rotation_euler = command.get("value", [0,0,0])
-        elif obj and command.get("type") == "velocity":
-            obj.rigid_body.angular_velocity = command.get("value", [0,0,0])
-        elif obj and command.get("type") == "torque":
-            obj.rigid_body.angular_velocity = command.get("value", [0,0,0])  # Simplified
-"""
-
-        # Sensor init
-        sensor_init = []
-        sensor_update = []
-        if spec.sensors:
-            for i, s in enumerate(spec.sensors):
-                if s.type == "camera":
-                    sensor_init.append(f"""
-# Camera sensor {i}
-bpy.ops.object.camera_add(location={s.position}, rotation={s.rotation})
-cam = bpy.context.active_object
-cam.name = "Sensor_Camera_{i}"
-cam.data.angle = {s.fov * 3.14159 / 180.0}
-cam.data.clip_start = {s.range_min}
-cam.data.clip_end = {s.range_max}
-""")
-                    sensor_update.append(f"""
-# Render camera {i}
-bpy.context.scene.camera = bpy.data.objects["Sensor_Camera_{i}"]
-bpy.context.scene.render.filepath = "{spec.output_path}/camera_{i}_frame_{{frame}}.png"
-bpy.ops.render.render(write_still=True)
-""")
-                elif s.type == "lidar":
-                    sensor_init.append(f"""
-# LIDAR sensor {i}
-lidar_{i} = {{"position": {s.position}, "rotation": {s.rotation}, "range": {s.range_max}, "rays": 360}}
-""")
-                    sensor_update.append(f"""
-# LIDAR {i} raycast
-import math
-lidar_data_{i} = []
-for angle in range(360):
-    rad = angle * 3.14159 / 180.0
-    dir = (math.cos(rad), math.sin(rad), 0)
-    result, location, normal, index, object, matrix = bpy.context.scene.ray_cast(
-        bpy.context.view_layer.depsgraph, {s.position}, dir, distance={s.range_max})
-    if result:
-        lidar_data_{i}.append({{"angle": angle, "distance": (location[0]-{s.position[0]})**2 + (location[1]-{s.position[1]})**2}})
-"""
-            sensor_update.append(f"sensor_data['lidar_{i}'] = lidar_data_{i}")
-
-        sensor_init_code = "".join(sensor_init)
-        sensor_update_code = "".join(sensor_update)
-
-        # Exports
-        export_code = ""
-        if spec.exports:
-            for fmt in spec.exports:
-                if fmt == ExportFormat.USD:
-                    export_code += f'bpy.ops.wm.usd_export(filepath="{spec.output_path}/export.usd")\n'
-                elif fmt == ExportFormat.GLTF:
-                    export_code += f'bpy.ops.export_scene.gltf(filepath="{spec.output_path}/export.gltf", export_format="GLTF_SEPARATE")\n'
-                elif fmt == ExportFormat.GLB:
-                    export_code += f'bpy.ops.export_scene.gltf(filepath="{spec.output_path}/export.glb", export_format="GLB")\n'
-                elif fmt == ExportFormat.OBJ:
-                    export_code += f'bpy.ops.export_scene.obj(filepath="{spec.output_path}/export.obj")\n'
-                elif fmt == ExportFormat.STL:
-                    export_code += f'bpy.ops.export_mesh.stl(filepath="{spec.output_path}/export.stl")\n'
-                elif fmt == ExportFormat.PLY:
-                    export_code += f'bpy.ops.export_mesh.ply(filepath="{spec.output_path}/export.ply")\n'
-                elif fmt == ExportFormat.ALEMBIC:
-                    export_code += f'bpy.ops.wm.alembic_export(filepath="{spec.output_path}/export.abc")\n'
-
-        # Load/save blend
-        load_code = f'bpy.ops.wm.open_mainfile(filepath="{spec.load_blend}")\n' if spec.load_blend else ""
-        save_code = f'bpy.ops.wm.save_as_mainfile(filepath="{spec.save_blend}")\n' if spec.save_blend else ""
-
-        # Render
-        render_code = ""
-        if spec.render:
-            render_path = f"{spec.output_path}/render_{int(time.time())}.png"
-            render_code = f"""
-# Render settings
-bpy.context.scene.render.filepath = "{render_path}"
-bpy.context.scene.render.resolution_x = {spec.render_resolution[0]}
-bpy.context.scene.render.resolution_y = {spec.render_resolution[1]}
-bpy.context.scene.render.engine = "{spec.render_engine}"
-if spec.render_engine == "CYCLES":
-    bpy.context.scene.cycles.samples = {spec.render_samples}
-    bpy.context.scene.cycles.device = "CPU"
-bpy.ops.render.render(write_still=True)
-"""
-
-        blend_path = spec.save_blend or f"{spec.output_path}/simulation_{int(time.time())}.blend"
+        if valence < -0.3:
+            base_color = (0.2, 0.3, 1.0, 1.0)
+        elif valence > 0.3:
+            base_color = (1.0, 0.6, 0.1, 1.0)
+        else:
+            base_color = (0.8, 0.8, 0.9, 1.0)
 
         return f"""
-import bpy
-import json
-import math
-import time
-import os
+# Emotion Visualization
+# Mood: {mood}, Valence: {valence:.2f}, Arousal: {arousal:.2f}, Intensity: {intensity:.2f}
 
-# Clear scene (unless loading existing)
-{"" if spec.load_blend else "bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete()"}
+# Create emotion sphere at center
+bpy.ops.mesh.primitive_uv_sphere_add(location=(0, 0, 3), radius={max(0.1, min(1.0, abs(valence) * 0.5 + arousal * 0.5))})
+emotion_obj = bpy.context.active_object
+emotion_obj.name = "EmotionCore"
+emotion_obj.scale = ({max(0.1, min(1.0, abs(valence) * 0.5 + arousal * 0.5))},) * 3
 
-# Load existing blend
-{load_code}
+# Emission material for core
+emotion_mat = bpy.data.materials.new(name="EmotionMaterial")
+emotion_mat.use_nodes = True
+nodes = emotion_mat.node_tree.nodes
+emission = nodes.new(type='ShaderNodeEmission')
+emission.inputs['Color'].default_value = ({base_color[0]}, {base_color[1]}, {base_color[2]}, 1.0)
+emission.inputs['Strength'].default_value = {max(0.1, min(1.0, abs(valence) * 0.5 + arousal * 0.5)) * 10.0}
+output = nodes.new(type='ShaderNodeOutputMaterial')
+emotion_mat.node_tree.links.new(emission.outputs['Emission'], output.inputs['Surface'])
+emotion_obj.data.materials.append(emotion_mat)
 
-# Set units
-bpy.context.scene.unit_settings.system = 'METRIC'
+# Animate pulse based on arousal
+emotion_obj.scale = ({max(0.1, min(1.0, abs(valence) * 0.5 + arousal * 0.5))},) * 3
+emotion_obj.keyframe_insert(data_path="scale", frame=1)
+emotion_obj.scale = ({max(0.1, min(1.0, abs(valence) * 0.5 + arousal * 0.5)) * 1.3},) * 3
+emotion_obj.keyframe_insert(data_path="scale", frame=int({spec.duration} * {spec.fps} / 2))
+emotion_obj.scale = ({max(0.1, min(1.0, abs(valence) * 0.5 + arousal * 0.5))},) * 3
+emotion_obj.keyframe_insert(data_path="scale", frame=int({spec.duration} * {spec.fps}))
 
-# Rigid body world
-bpy.context.scene.rigidbody_world.enabled = True
-bpy.context.scene.rigidbody_world.time_scale = {spec.physics.time_scale}
-bpy.context.scene.rigidbody_world.steps_per_second = {spec.fps}
-bpy.context.scene.rigidbody_world.solver_iterations = {spec.physics.solver_iterations}
-bpy.context.scene.rigidbody_world.substeps_per_frame = {spec.physics.substeps}
-bpy.context.scene.gravity = {spec.gravity}
+# Lighting based on valence
+bpy.ops.object.light_add(type='SUN', location=(0, 0, 10))
+sun = bpy.context.active_object
+sun.name = "EmotionSun"
+sun.data.energy = {max(1.0, arousal * 5.0)}
+if {valence} < -0.3:
+    sun.data.color = (0.3, 0.4, 1.0)
+elif {valence} > 0.3:
+    sun.data.color = (1.0, 0.7, 0.3)
+else:
+    sun.data.color = (0.9, 0.9, 1.0)
 
-# Physics settings
-bpy.context.scene.rigidbody_world.collision_margin = {spec.physics.collision_margin}
-
-# Ground plane
-{("bpy.ops.mesh.primitive_plane_add(location=(0, 0, 0), scale=(50, 50, 1))" if spec.ground else "# No ground")}
-{("ground = bpy.context.active_object; ground.name = 'Ground'; bpy.ops.rigidbody.object_add(); ground.rigid_body.type = 'PASSIVE'; ground.rigid_body.collision_shape = 'BOX'" if spec.ground else ""})
-
-# Objects
-{"".join(objects_code)}
-
-# Robot/URDF
-{robot_code}
-
-# Domain Randomization
-{randomization_code}
-
-# Procedural Generation
-{procedural_code}
-
-# Sensors init
-{sensor_init_code}
-
-# Bake simulation
-bpy.context.scene.frame_start = 1
-bpy.context.scene.frame_end = int({spec.duration} * {spec.fps})
-bpy.ops.ptcache.bake_all(bake=True)
-
-# Collect frame data
-frames = []
-sensor_data = {{}}
-for frame in range(1, bpy.context.scene.frame_end + 1):
-    bpy.context.scene.frame_set(frame)
-    frame_data = {{"frame": frame, "objects": []}}
-    for obj in bpy.data.objects:
-        if obj.name.startswith("SimObj_") or obj.name.startswith("Robot_"):
-            frame_data["objects"].append({{
-                "name": obj.name,
-                "location": list(obj.location),
-                "rotation": list(obj.rotation_euler),
-                "velocity": list(obj.rigid_body.linear_velocity) if hasattr(obj, 'rigid_body') and obj.rigid_body else [0,0,0]
-            }})
-    frames.append(frame_data)
-    
-    # Sensor updates
-    {sensor_update_code if spec.sensors else ""}
-
-# Save .blend
-{save_code}
-
-# Render
-{render_code}
-
-# Exports
-{export_code}
-
-# Output results
-result = {{
-    "success": True,
-    "output": {{"frames": len(frames), "duration": {spec.duration}}},
-    "frames": frames,
-    "sensor_data": sensor_data,
-    "blend_path": "{blend_path}",
-    {"render_path": "{render_path}" if spec.render else ""},
-    "export_paths": {{}}
-}}
-print("SIMULATION_RESULT:" + json.dumps(result))
+# Background color shift based on mood
+world = bpy.context.scene.world
+if world is None:
+    world = bpy.data.worlds.new("World")
+    bpy.context.scene.world = world
+world.use_nodes = True
+bg_nodes = world.node_tree.nodes
+bg_emission = bg_nodes.new(type='ShaderNodeEmission')
+if {valence} < -0.3:
+    bg_emission.inputs['Color'].default_value = (0.05, 0.1, 0.2, 1.0)
+elif {valence} > 0.3:
+    bg_emission.inputs['Color'].default_value = (0.2, 0.15, 0.05, 1.0)
+else:
+    bg_emission.inputs['Color'].default_value = (0.1, 0.1, 0.15, 1.0)
+bg_emission.inputs['Strength'].default_value = {arousal * 0.5 + 0.1}
+bg_output = bg_nodes.new(type='ShaderNodeOutputWorld')
+world.node_tree.links.new(bg_emission.outputs['Emission'], bg_output.inputs['Surface'])
 """
+        return emotion_code
 
     async def _run_blender_script(
         self,
