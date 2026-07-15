@@ -79,6 +79,7 @@ from .sim_library import SimulationLibrary, SimBackend
 from .self_audit import SelfAuditor
 from .multimodal import MultimodalProcessor
 from .agent_variety import AgentPopulation
+from .skill_export import SkillExporter
 from ..agents import MultiAgentOrchestrator
 
 
@@ -196,6 +197,9 @@ class CognitiveOrchestrator:
 
         # Agent population with behavioral variation
         self.agent_population: AgentPopulation | None = None
+
+        # Skill export system
+        self.skill_exporter: SkillExporter | None = None
 
         # Current plan
         self.current_plan: Plan | None = None
@@ -388,6 +392,9 @@ class CognitiveOrchestrator:
 
         # Initialize agent population
         self.agent_population = AgentPopulation()
+
+        # Initialize skill exporter
+        self.skill_exporter = SkillExporter()
 
         # Initialize crawl orchestrator with light intensity by default
         self.crawl_orchestrator = CrawlOrchestrator(
@@ -1154,6 +1161,79 @@ class CognitiveOrchestrator:
             step.status = StepStatus.COMPLETED
             step.result = f"Diverse sample of {len(diverse)} agents"
             return {"success": True, "agents": [a.to_dict() for a in diverse]}
+
+        elif action == "skill_export":
+            # Export a skill as portable module
+            if not self.skill_exporter or not self.skill_library:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Skill exporter or library not available"}
+            skill_id = step.parameters.get("skill_id")
+            if skill_id:
+                portable = self.skill_exporter.export_from_library(self.skill_library, skill_id)
+                if portable:
+                    step.status = StepStatus.COMPLETED
+                    step.result = f"Exported skill '{portable.manifest.name}'"
+                    return {"success": True, "name": portable.manifest.name, "version": portable.manifest.version}
+                else:
+                    step.status = StepStatus.FAILED
+                    return {"success": False, "error": f"Skill '{skill_id}' not found"}
+            else:
+                # Create new skill from parameters
+                name = step.parameters.get("name", "new_skill")
+                description = step.parameters.get("description", "")
+                code = step.parameters.get("code", "")
+                category = step.parameters.get("category", "general")
+                portable = self.skill_exporter.export_skill(
+                    skill_id="new",
+                    name=name,
+                    description=description,
+                    code=code,
+                    category=category,
+                )
+                step.status = StepStatus.COMPLETED
+                step.result = f"Created and exported skill '{name}'"
+                return {"success": True, "name": name, "version": portable.manifest.version}
+
+        elif action == "skill_import":
+            # Import a portable skill
+            if not self.skill_exporter or not self.skill_library:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Skill exporter or library not available"}
+            skill_path = step.parameters.get("path")
+            if not skill_path:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "No skill path provided"}
+            skill_id = self.skill_exporter.import_to_library(self.skill_library, skill_path)
+            if skill_id:
+                step.status = StepStatus.COMPLETED
+                step.result = f"Imported skill as '{skill_id}'"
+                return {"success": True, "skill_id": skill_id}
+            else:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Failed to import skill"}
+
+        elif action == "skill_list_exported":
+            # List exported skills
+            if not self.skill_exporter:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Skill exporter not available"}
+            skills = self.skill_exporter.list_exported()
+            step.status = StepStatus.COMPLETED
+            step.result = f"{len(skills)} exported skills"
+            return {"success": True, "skills": skills}
+
+        elif action == "skill_template":
+            # Create a skill template
+            if not self.skill_exporter:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Skill exporter not available"}
+            name = step.parameters.get("name", "new_skill")
+            description = step.parameters.get("description", "")
+            category = step.parameters.get("category", "general")
+            template = self.skill_exporter.create_skill_template(name, description, category)
+            step.status = StepStatus.COMPLETED
+            step.result = f"Created template for '{name}'"
+            return {"success": True, "code": template.code, "tests": template.tests}
 
         elif action == "verify_outcome":
             # Verify the outcome of a previous action
