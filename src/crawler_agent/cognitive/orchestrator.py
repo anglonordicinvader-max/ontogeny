@@ -842,6 +842,12 @@ class CognitiveOrchestrator:
                 # Persist meta-learner state
                 self.meta_learner.save()
 
+                # 23. Auto-render snippet for significant events
+                try:
+                    await self._auto_render_significant_event(result)
+                except Exception as e:
+                    self.logger.warning("auto_render_error", error=str(e))
+
         except Exception as e:
             import traceback
             tb = traceback.format_exc()
@@ -856,6 +862,80 @@ class CognitiveOrchestrator:
             self.execution_log.append(result)
 
         return result
+
+    async def _auto_render_significant_event(self, result: dict) -> None:
+        """Auto-render MP4 snippet for significant events."""
+        if not self.blender_sandbox:
+            return
+
+        # Check video budget
+        if not self.blender_sandbox.video_budget.can_render(3.0):
+            return
+
+        # Determine if this cycle had a significant event
+        significant = False
+        event_type = "cycle"
+
+        # Goal completed
+        if result.get("goals_progress"):
+            for progress in result["goals_progress"]:
+                if progress.get("progress", 0) >= 1.0:
+                    significant = True
+                    event_type = "goal_complete"
+                    break
+
+        # Self-modification succeeded
+        if result.get("self_improvement") or result.get("recursive_modification"):
+            significant = True
+            event_type = "self_modify"
+
+        # High reward
+        if result.get("rl_reward", 0) > 0.7:
+            significant = True
+            event_type = "high_reward"
+
+        # Emotional state change
+        if result.get("emotional_state") and result["emotional_state"] != "neutral":
+            significant = True
+            event_type = f"emotion_{result['emotional_state']}"
+
+        if not significant:
+            return
+
+        # Create snippet render
+        from .blender_sandbox import SimulationSpec, SimulationType
+        spec = SimulationSpec(
+            type=SimulationType.EMOTION,
+            emotion_config={
+                "mood": result.get("emotional_state", "neutral"),
+                "valence": 0.5 if "happy" in event_type else -0.3 if "sad" in event_type or "fail" in event_type else 0.0,
+                "arousal": 0.7 if "high_reward" in event_type or "goal" in event_type else 0.4,
+            },
+            emotion_visualizer=self.settings.emotion_visualizer,
+            render=True,
+            render_animation=True,
+            snippet_mode=True,
+            snippet_duration=3.0,
+            frame_start=1,
+            frame_end=90,  # 3 seconds at 30fps
+            fps=30,
+            render_resolution=(1280, 720),
+            render_engine="BLENDER_EEVEE",  # Fast rendering
+            render_samples=32,
+            output_path=f"data/blender/snippets/{event_type}",
+            video_output_path=f"data/blender/snippets/{event_type}/snippet_{self.iteration}.mp4",
+        )
+
+        try:
+            render_result = await self.blender_sandbox.run_render(spec)
+            if render_result.success and render_result.video_path:
+                result["auto_render"] = {
+                    "event": event_type,
+                    "video_path": render_result.video_path,
+                }
+                self.logger.info("auto_render_complete", event=event_type, path=render_result.video_path)
+        except Exception as e:
+            self.logger.warning("auto_render_failed", error=str(e))
 
     async def _execute_step(
         self,

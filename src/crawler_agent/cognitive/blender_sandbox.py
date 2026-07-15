@@ -197,6 +197,10 @@ class SimulationSpec:
     video_codec: str = "H264"
     video_bitrate: int = 8000
     video_output_path: Optional[str] = None
+    # Snippet mode - short clips of notable moments
+    snippet_mode: bool = False
+    snippet_duration: float = 3.0  # seconds per snippet
+    snippet_max_clips: int = 5  # max clips per session
 
 
 @dataclass
@@ -215,6 +219,41 @@ class SimulationResult:
     stats: Dict = field(default_factory=dict)
 
 
+@dataclass
+class VideoBudget:
+    """Tracks video rendering budget to prevent large files."""
+    max_total_seconds: float = 60.0  # max total video seconds per session
+    max_clip_seconds: float = 5.0  # max seconds per clip
+    max_clips: int = 20  # max number of clips
+    bitrate_kbps: int = 8000
+
+    # Tracking
+    total_seconds_rendered: float = 0.0
+    clips_rendered: int = 0
+    session_start: float = field(default_factory=time.time)
+
+    def can_render(self, duration_seconds: float) -> bool:
+        """Check if we can render another clip within budget."""
+        if self.clips_rendered >= self.max_clips:
+            return False
+        if self.total_seconds_rendered + duration_seconds > self.max_total_seconds:
+            return False
+        return True
+
+    def record_render(self, duration_seconds: float):
+        """Record a rendered clip."""
+        self.total_seconds_rendered += duration_seconds
+        self.clips_rendered += 1
+
+    def get_stats(self) -> Dict:
+        return {
+            "total_seconds_rendered": self.total_seconds_rendered,
+            "clips_rendered": self.clips_rendered,
+            "budget_remaining": max(0, self.max_total_seconds - self.total_seconds_rendered),
+            "clips_remaining": max(0, self.max_clips - self.clips_rendered),
+        }
+
+
 class BlenderSandbox:
     """Executes Blender Python scripts in Docker for physics simulation and rendering."""
 
@@ -231,6 +270,7 @@ class BlenderSandbox:
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.logger = logger.bind(component="blender_sandbox")
+        self.video_budget = VideoBudget()
         self._verify_image()
 
     def _verify_image(self):
@@ -248,6 +288,13 @@ class BlenderSandbox:
         """Run a physics simulation and return results."""
         start = time.perf_counter()
 
+        # Check video budget before rendering
+        if spec.render_animation and spec.snippet_mode:
+            snippet_duration = spec.snippet_duration or 3.0
+            if not self.video_budget.can_render(snippet_duration):
+                self.logger.info("video_budget_exceeded", budget=self.video_budget.get_stats())
+                spec.render_animation = False  # Skip video, still render PNG
+
         try:
             script = self._build_simulation_script(spec)
             result = await self._run_blender_script(script, spec)
@@ -255,6 +302,11 @@ class BlenderSandbox:
             exec_time = (time.perf_counter() - start) * 1000
 
             if result.get("success"):
+                # Record video budget usage
+                if spec.render_animation and result.get("video_path"):
+                    snippet_duration = spec.snippet_duration if spec.snippet_mode else (spec.frame_end - spec.frame_start) / spec.fps
+                    self.video_budget.record_render(snippet_duration)
+
                 return SimulationResult(
                     success=True,
                     output=result.get("output"),
@@ -776,7 +828,37 @@ scene.render.image_settings.color_mode = 'RGBA'
         # FFmpeg MP4 animation settings
         if spec.render_animation:
             video_path = spec.video_output_path or f"{spec.output_path}/animation.mp4"
-            script_parts.append("""
+
+            # Snippet mode: short clips of notable moments
+            if spec.snippet_mode:
+                snippet_frames = int(spec.snippet_duration * spec.fps)
+                # Start from middle of animation to capture the interesting part
+                mid_frame = spec.frame_start + (spec.frame_end - spec.frame_start) // 2
+                snippet_start = max(spec.frame_start, mid_frame - snippet_frames // 2)
+                snippet_end = min(spec.frame_end, snippet_start + snippet_frames)
+                script_parts.append("""
+# FFmpeg snippet mode - short clip of notable moment
+scene.render.image_settings.file_format = 'FFMPEG'
+scene.render.ffmpeg.format = 'MPEG4'
+scene.render.ffmpeg.codec = 'H264'
+scene.render.ffmpeg.constant_rate_factor = 'PERC_LOSSLESS'
+scene.render.ffmpeg.ffmpeg_bitrate = {bitrate}
+scene.frame_start = {snippet_start}
+scene.frame_end = {snippet_end}
+
+# Render snippet
+bpy.ops.render.render(animation=True, write_still=False)
+
+# Save video path
+video_path = "{video_path}"
+""".format(
+                    bitrate=spec.video_bitrate,
+                    snippet_start=snippet_start,
+                    snippet_end=snippet_end,
+                    video_path=video_path
+                ))
+            else:
+                script_parts.append("""
 # FFmpeg animation output
 scene.render.image_settings.file_format = 'FFMPEG'
 scene.render.ffmpeg.format = 'MPEG4'
@@ -792,11 +874,11 @@ bpy.ops.render.render(animation=True, write_still=False)
 # Save video path
 video_path = "{video_path}"
 """.format(
-                bitrate=spec.video_bitrate,
-                frame_start=spec.frame_start,
-                frame_end=spec.frame_end,
-                video_path=video_path
-            ))
+                    bitrate=spec.video_bitrate,
+                    frame_start=spec.frame_start,
+                    frame_end=spec.frame_end,
+                    video_path=video_path
+                ))
         elif spec.render:
             script_parts.append("""
 # Render single frame
