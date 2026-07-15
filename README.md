@@ -149,7 +149,6 @@ The agent auto-detects the image and enables physics simulation + rendering acti
 - **Real-time Stepping** — step physics with async callbacks
 - **Multi-format Export** — USD, glTF, glb, OBJ, STL, PLY, Alembic
 - **Procedural Generation** — terrain (displacement), buildings, clutter
-- **Multi-format Export** — USD, glTF, OBJ, STL, PLY, Alembic
 
 The agent auto-detects the image and enables `blender_simulate`, `blender_render`, `blender_step` actions.
 
