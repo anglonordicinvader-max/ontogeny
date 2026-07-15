@@ -346,6 +346,86 @@ class ThermalCamera:
         )
 
 
+class NightVision:
+    """Night vision camera simulation (image intensification)."""
+
+    def __init__(self, resolution: Tuple[int, int] = (640, 480),
+                 gain: float = 10000.0, phosphor_color: str = "green"):
+        self.resolution = resolution
+        self.gain = gain
+        self.phosphor_color = phosphor_color
+        self.noise_amplitude = 0.02
+        self.logger = structlog.get_logger(component="night_vision")
+
+    def capture(self, ambient_light: float = 0.01, object_positions: Dict[str, List[float]] = None,
+                camera_pos: List[float] = None, noise: float = 0.03) -> SensorReading:
+        """Capture night vision image."""
+        if object_positions is None:
+            object_positions = {}
+        if camera_pos is None:
+            camera_pos = [0, 0, 0]
+
+        h, w = self.resolution
+        nv_image = []
+
+        intensified_light = ambient_light * self.gain
+        brightness = min(1.0, intensified_light)
+
+        for y in range(h):
+            row = []
+            for x in range(w):
+                base = brightness + random.gauss(0, noise)
+                scintillation = random.expovariate(1.0 / 0.01) if random.random() < 0.01 else 0
+                pixel = base + scintillation
+                row.append(max(0.0, min(1.0, pixel)))
+            nv_image.append(row)
+
+        for obj_id, obj_pos in object_positions.items():
+            dx = obj_pos[0] - camera_pos[0]
+            dy = obj_pos[1] - camera_pos[1]
+            dist = math.sqrt(dx**2 + dy**2)
+            if dist < 20:
+                sig = max(0, 1.0 - dist / 20)
+                px = int((obj_pos[0] + 20) / 40 * w) % w
+                py = int((obj_pos[1] + 15) / 30 * h) % h
+                for dy in range(-2, 3):
+                    for dx in range(-2, 3):
+                        ny, nx = py + dy, px + dx
+                        if 0 <= ny < h and 0 <= nx < w:
+                            nv_image[ny][nx] = min(1.0, nv_image[ny][nx] + sig * 0.5)
+
+        color_mapped = []
+        color_channels = {"green": (0.2, 1.0, 0.2), "white": (1, 1, 1), "amber": (1.0, 0.8, 0.2)}
+        rgb = color_channels.get(self.phosphor_color, (0.2, 1.0, 0.2))
+
+        for row in nv_image:
+            color_row = []
+            for pixel in row:
+                color_row.append({
+                    "r": pixel * rgb[0],
+                    "g": pixel * rgb[1],
+                    "b": pixel * rgb[2],
+                    "intensity": pixel,
+                })
+            color_mapped.append(color_row)
+
+        return SensorReading(
+            sensor_type="night_vision",
+            timestamp=0.0,
+            data={
+                "image": color_mapped,
+                "resolution": self.resolution,
+                "gain": self.gain,
+                "phosphor_color": self.phosphor_color,
+                "ambient_light": ambient_light,
+                "intensified_brightness": brightness,
+                "scintillation_events": sum(1 for row in nv_image for p in row if p > brightness + 0.1),
+            },
+            noise_level=noise,
+            valid=True,
+        )
+
+
 class SensorArray:
     """Unified sensor array for robot."""
 
@@ -357,6 +437,7 @@ class SensorArray:
         self.proximity = ProximitySensor()
         self.touch = TouchSensor()
         self.thermal = ThermalCamera()
+        self.night_vision = NightVision()
         self.logger = structlog.get_logger(component="sensor_array")
 
     def read_all(self, object_positions: Dict[str, List[float]] = None,
@@ -375,7 +456,8 @@ class SensorArray:
             "proximity": self.proximity.detect(object_positions, robot_pos),
             "touch": self.touch.read(**{k: v for k, v in kwargs.items() if k in ["contact_forces"]}),
             "thermal": self.thermal.capture(**{k: v for k, v in kwargs.items() if k in ["object_temperatures", "ambient_temp"]}),
+            "night_vision": self.night_vision.capture(**{k: v for k, v in kwargs.items() if k in ["ambient_light"]}),
         }
 
     def to_context(self) -> str:
-        return "Sensor Array: depth, lidar, IMU, force/torque, proximity, touch, thermal"
+        return "Sensor Array: depth, lidar, IMU, force/torque, proximity, touch, thermal, night vision"
