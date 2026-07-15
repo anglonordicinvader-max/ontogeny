@@ -182,6 +182,9 @@ class Settings(BaseSettings):
     heavy_llm: HeavyLLMSettings = Field(default_factory=HeavyLLMSettings)
     platform: PlatformSettings = Field(default_factory=PlatformSettings)
 
+    # Emotion visualization mode for Blender sandbox
+    emotion_visualizer: str = Field(default="sphere", env="EMOTION_VISUALIZER")  # "sphere" | "anatomy" | "both"
+
     # Logging
     log_level: str = "INFO"
     log_format: str = "json"

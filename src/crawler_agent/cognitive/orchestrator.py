@@ -892,6 +892,7 @@ class CognitiveOrchestrator:
                 render_resolution=tuple(step.parameters.get("render_resolution", [1920, 1080])),
                 render_engine=step.parameters.get("render_engine", "CYCLES"),
                 render_samples=step.parameters.get("render_samples", 128),
+                emotion_visualizer=self.settings.emotion_visualizer,
             )
             result = await self.blender_sandbox.run_simulation(spec)
             step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
