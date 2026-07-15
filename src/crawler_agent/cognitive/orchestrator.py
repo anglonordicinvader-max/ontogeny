@@ -77,6 +77,7 @@ from .mcts_planner import MCTSPlanner, create_mcts_planner, MCTSConfig
 from .tools import ToolManager, ToolResult
 from .sim_library import SimulationLibrary, SimBackend
 from .self_audit import SelfAuditor
+from .multimodal import MultimodalProcessor
 from ..agents import MultiAgentOrchestrator
 
 
@@ -188,6 +189,9 @@ class CognitiveOrchestrator:
 
         # Self-audit system
         self.self_auditor: SelfAuditor | None = None
+
+        # Multimodal processing
+        self.multimodal: MultimodalProcessor | None = None
 
         # Current plan
         self.current_plan: Plan | None = None
@@ -373,6 +377,10 @@ class CognitiveOrchestrator:
 
         # Initialize self-auditor
         self.self_auditor = SelfAuditor()
+
+        # Initialize multimodal processor
+        self.multimodal = MultimodalProcessor(settings=self.settings)
+        await self.multimodal.initialize()
 
         # Initialize crawl orchestrator with light intensity by default
         self.crawl_orchestrator = CrawlOrchestrator(
@@ -1034,6 +1042,49 @@ class CognitiveOrchestrator:
             step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
             step.result = f"Custom simulation {'succeeded' if result.success else 'failed'}"
             return {"success": result.success, "frames": len(result.frames), "stats": result.stats, "error": result.error}
+
+        elif action == "vision_analyze":
+            # Analyze an image
+            if not self.multimodal:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Multimodal processor not available"}
+            image_path = step.parameters.get("image_path")
+            image_url = step.parameters.get("image_url")
+            prompt = step.parameters.get("prompt", "Describe this image in detail.")
+            result = await self.multimodal.process_image(
+                image_path=image_path, image_url=image_url, prompt=prompt
+            )
+            step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
+            step.result = f"Vision analysis {'succeeded' if result.success else 'failed'}"
+            return {"success": result.success, "description": result.description, "objects": result.objects, "error": result.error}
+
+        elif action == "audio_transcribe":
+            # Transcribe audio
+            if not self.multimodal:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Multimodal processor not available"}
+            audio_path = step.parameters.get("audio_path")
+            language = step.parameters.get("language", "en")
+            result = await self.multimodal.process_audio(
+                audio_path=audio_path, language=language, analyze=False
+            )
+            step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
+            step.result = f"Audio transcription {'succeeded' if result.success else 'failed'}"
+            return {"success": result.success, "transcript": result.transcript, "language": result.language, "error": result.error}
+
+        elif action == "audio_analyze":
+            # Analyze audio content
+            if not self.multimodal:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "Multimodal processor not available"}
+            audio_path = step.parameters.get("audio_path")
+            prompt = step.parameters.get("prompt", "What is being discussed?")
+            result = await self.multimodal.process_audio(
+                audio_path=audio_path, analyze=True, prompt=prompt
+            )
+            step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
+            step.result = f"Audio analysis {'succeeded' if result.success else 'failed'}"
+            return {"success": result.success, "transcript": result.transcript, "metadata": result.metadata, "error": result.error}
 
         elif action == "verify_outcome":
             # Verify the outcome of a previous action
