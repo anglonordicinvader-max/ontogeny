@@ -1118,6 +1118,34 @@ class CognitiveOrchestrator:
             backend = step.parameters.get("backend")
             modifications = step.parameters.get("modifications")
             backend_enum = SimBackend(backend) if backend else None
+
+            # Anatomy mode: use practical worlds by default
+            if self.settings.emotion_visualizer in ("anatomy", "both"):
+                from crawler_agent.cognitive.practical_worlds import PRACTICAL_WORLDS, get_practical_world
+                practical = get_practical_world(scenario_name)
+                if practical:
+                    # Convert practical world to simulation spec
+                    spec = SimulationSpec(
+                        type=SimulationType.RIGID_BODY,
+                        objects=[
+                            ObjectSpec(
+                                type=obj.get("type", "cube"),
+                                position=tuple(obj.get("position", [0, 0, 0])),
+                                scale=tuple(obj.get("scale", [1, 1, 1])),
+                                mass=obj.get("mass", 1.0),
+                                passive=obj.get("passive", False),
+                            )
+                            for obj in practical.objects
+                        ],
+                        duration=10.0,
+                        fps=60,
+                        generate_buildings=False,
+                    )
+                    result = await self.sim_library.run_custom(spec, backend=backend_enum)
+                    step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
+                    step.result = f"Practical world '{scenario_name}' {'succeeded' if result.success else 'failed'}"
+                    return {"success": result.success, "frames": len(result.frames), "stats": result.stats, "error": result.error}
+
             result = await self.sim_library.run_scenario(scenario_name, backend=backend_enum, modifications=modifications)
             step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
             step.result = f"Scenario '{scenario_name}' {'succeeded' if result.success else 'failed'}"
