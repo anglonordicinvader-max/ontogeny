@@ -110,32 +110,6 @@ class ProceduralConfig:
 
 
 @dataclass
-class RobotConfig:
-    """URDF robot configuration."""
-    urdf_path: str = ""
-    base_position: tuple = (0, 0, 0)
-    base_rotation: tuple = (0, 0, 0)
-    joint_drives: Dict[str, Dict] = field(default_factory=dict)
-
-
-@dataclass
-class ObjectSpec:
-    """Object specification for simulation."""
-    type: str = "cube"
-    position: tuple = (0, 0, 5)
-    rotation: tuple = (0, 0, 0)
-    scale: tuple = (1, 1, 1)
-    mass: float = 1.0
-    passive: bool = False
-    friction: float = 0.5
-    restitution: float = 0.3
-    soft_body: bool = False
-    cloth: bool = False
-    fluid: bool = False
-    urdf_path: Optional[str] = None
-    joint_config: Optional[Dict] = None
-
-
 @dataclass
 class RobotConfig:
     """URDF robot configuration."""
@@ -726,6 +700,148 @@ world.node_tree.links.new(bg_emission.outputs['Emission'], bg_output.inputs['Sur
 """
         return emotion_code
 
+    def _build_procedural_code(self, config: ProceduralConfig) -> str:
+        """Generate procedural terrain/buildings/clutter."""
+        code = "\n# Procedural Generation\n"
+
+        if config.generate_terrain:
+            code += f"""
+# Terrain
+bpy.ops.mesh.primitive_plane_add(location=(0, 0, 0))
+terrain = bpy.context.active_object
+terrain.name = "Terrain"
+terrain.scale = ({config.terrain_size / 2}, {config.terrain_size / 2}, 1)
+bpy.ops.object.mode_set(mode='EDIT')
+bpy.ops.mesh.subdivide(number_cuts={config.terrain_octaves * 2})
+bpy.ops.object.mode_set(mode='OBJECT')
+# Displace vertices for terrain noise
+mod = terrain.modifiers.new(name="Displace", type='DISPLACE')
+mod.strength = {config.terrain_scale}
+bpy.ops.object.modifier_apply(modifier="Displace")
+"""
+
+        if config.generate_buildings:
+            code += f"""
+# Buildings
+import random
+random.seed(42)
+for i in range({config.building_count}):
+    x = random.uniform(-{config.terrain_size / 3}, {config.terrain_size / 3})
+    y = random.uniform(-{config.terrain_size / 3}, {config.terrain_size / 3})
+    height = random.uniform({config.building_height_range[0]}, {config.building_height_range[1]})
+    bpy.ops.mesh.primitive_cube_add(location=(x, y, height / 2))
+    building = bpy.context.active_object
+    building.name = f"Building_{{i}}"
+    building.scale = (random.uniform(2, 5), random.uniform(2, 5), height / 2)
+    bpy.ops.rigidbody.object_add()
+    building.rigid_body.type = 'PASSIVE'
+    building.rigid_body.mass = 1000
+    building.rigid_body.collision_shape = 'BOX'
+"""
+
+        if config.generate_clutter:
+            code += f"""
+# Clutter
+for i in range({config.clutter_count}):
+    x = random.uniform(-{config.terrain_size / 4}, {config.terrain_size / 4})
+    y = random.uniform(-{config.terrain_size / 4}, {config.terrain_size / 4})
+    obj_type = random.choice({config.clutter_types})
+    if obj_type == "cube":
+        bpy.ops.mesh.primitive_cube_add(location=(x, y, 0.25))
+    elif obj_type == "sphere":
+        bpy.ops.mesh.primitive_uv_sphere_add(location=(x, y, 0.3))
+    elif obj_type == "cylinder":
+        bpy.ops.mesh.primitive_cylinder_add(location=(x, y, 0.3))
+    clutter = bpy.context.active_object
+    clutter.name = f"Clutter_{{i}}"
+    clutter.scale = (random.uniform(0.1, 0.5), random.uniform(0.1, 0.5), random.uniform(0.1, 0.5))
+    bpy.ops.rigidbody.object_add()
+    clutter.rigid_body.type = 'ACTIVE'
+    clutter.rigid_body.mass = random.uniform(0.5, 5)
+    clutter.rigid_body.collision_shape = 'BOX'
+"""
+        return code
+
+    def _build_sensor_code(self, sensors: List[SensorConfig]) -> str:
+        """Generate sensor placement in scene."""
+        code = "\n# Sensors\n"
+        for i, sensor in enumerate(sensors):
+            pos = sensor.position
+            rot = sensor.rotation
+            code += f"""
+# Sensor {i}: {sensor.type}
+bpy.ops.object.empty_add(type='PLAIN_AXES', location={pos})
+sensor_{i} = bpy.context.active_object
+sensor_{i}.name = "Sensor_{sensor.type}_{i}"
+sensor_{i}.rotation_euler = {rot}
+"""
+            if sensor.type == "camera":
+                code += f"""
+bpy.ops.object.camera_add(location={pos})
+cam_{i} = bpy.context.active_object
+cam_{i}.name = "SensorCam_{i}"
+cam_{i}.rotation_euler = {rot}
+cam_{i}.data.lens = {50 / (sensor.fov / 60)}
+"""
+            elif sensor.type == "lidar":
+                code += f"""
+# LiDAR rays visualization
+for angle in range(0, 360, 10):
+    rad = math.radians(angle)
+    bpy.ops.mesh.primitive_cylinder_add(
+        location=({pos[0]}, {pos[1]}, {pos[2]}),
+        radius=0.01, depth={sensor.range_max}
+    )
+    ray = bpy.context.active_object
+    ray.name = f"LiDAR_Ray_{{angle}}"
+    ray.rotation_euler = (math.pi/2, 0, rad)
+"""
+        return code
+
+    def _build_urdf_code(self, urdf_path: str, joint_config: Dict = None) -> str:
+        """Generate URDF robot import."""
+        code = f"""
+# URDF Robot Import
+import xml.etree.ElementTree as ET
+
+urdf_path = "{urdf_path}"
+try:
+    tree = ET.parse(urdf_path)
+    root = tree.getroot()
+    
+    for link in root.findall('.//link'):
+        link_name = link.get('name')
+        visual = link.find('visual')
+        if visual is not None:
+            geometry = visual.find('geometry')
+            if geometry is not None:
+                mesh = geometry.find('mesh')
+                if mesh is not None:
+                    mesh_file = mesh.get('filename')
+                    if mesh_file:
+                        bpy.ops.import_scene.obj(filepath=mesh_file)
+                        
+    for joint in root.findall('.//joint'):
+        joint_name = joint.get('name')
+        joint_type = joint.get('type')
+        parent = joint.find('parent').get('link') if joint.find('parent') is not None else None
+        child = joint.find('child').get('link') if joint.find('child') is not None else None
+        
+        origin = joint.find('origin')
+        if origin is not None:
+            xyz = origin.get('xyz', '0 0 0').split()
+            rpy = origin.get('rpy', '0 0 0').split()
+            
+except Exception as e:
+    print(f"URDF import failed: {{e}}")
+"""
+        if joint_config:
+            code += f"""
+# Joint control configuration
+joint_config = {json.dumps(joint_config)}
+"""
+        return code
+
     def _build_simulation_script(self, spec: SimulationSpec) -> str:
         """Build complete Blender Python script for simulation."""
         script_parts = []
@@ -781,7 +897,19 @@ ground.rigid_body.collision_shape = 'BOX'
         # Add emotion visualization
         if spec.emotion_config and spec.emotion_visualizer:
             script_parts.append(self._build_emotion_code(spec))
-        
+
+        # Procedural generation
+        if spec.procedural:
+            script_parts.append(self._build_procedural_code(spec.procedural))
+
+        # Sensors
+        if spec.sensors:
+            script_parts.append(self._build_sensor_code(spec.sensors))
+
+        # URDF Robot
+        if spec.urdf_path:
+            script_parts.append(self._build_urdf_code(spec.urdf_path, spec.robot_joints))
+
         # Physics settings
         if spec.type != SimulationType.RENDER:
             script_parts.append("""
