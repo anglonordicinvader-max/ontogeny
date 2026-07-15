@@ -189,11 +189,14 @@ class SimulationSpec:
     # Emotion visualization - "sphere" (abstract, proto-AGI internal) or "anatomy" (humanoid robot body with face)
     emotion_config: Optional[Dict] = None
     emotion_visualizer: Optional[str] = "sphere"  # "sphere" | "anatomy" | "both"
-    save_blend: bool = True
-    render: bool = False
-    render_resolution: tuple = (1920, 1080)
-    render_engine: str = "CYCLES"
-    render_samples: int = 128
+    # Video/Animation support
+    render_animation: bool = False
+    frame_start: int = 1
+    frame_end: int = 250
+    video_format: str = "FFMPEG"
+    video_codec: str = "H264"
+    video_bitrate: int = 8000
+    video_output_path: Optional[str] = None
 
 
 @dataclass
@@ -205,6 +208,7 @@ class SimulationResult:
     frames: List[Dict] = field(default_factory=list)
     sensor_data: Dict = field(default_factory=dict)
     render_path: Optional[str] = None
+    video_path: Optional[str] = None
     blend_path: Optional[str] = None
     export_paths: Dict = field(default_factory=dict)
     execution_time_ms: float = 0.0
@@ -257,6 +261,7 @@ class BlenderSandbox:
                     frames=result.get("frames", []),
                     sensor_data=result.get("sensor_data", {}),
                     render_path=result.get("render_path"),
+                    video_path=result.get("video_path"),
                     blend_path=result.get("blend_path"),
                     export_paths=result.get("export_paths", {}),
                     execution_time_ms=exec_time,
@@ -668,6 +673,204 @@ bg_output = bg_nodes.new(type='ShaderNodeOutputWorld')
 world.node_tree.links.new(bg_emission.outputs['Emission'], bg_output.inputs['Surface'])
 """
         return emotion_code
+
+    def _build_simulation_script(self, spec: SimulationSpec) -> str:
+        """Build complete Blender Python script for simulation."""
+        script_parts = []
+        
+        # Header
+        script_parts.append("""
+import bpy
+import json
+import os
+import sys
+import math
+
+# Clear default scene
+bpy.ops.wm.read_factory_settings(use_empty=False)
+
+# Set up scene
+scene = bpy.context.scene
+scene.render.engine = '{render_engine}'
+scene.render.resolution_x = {res_x}
+scene.render.resolution_y = {res_y}
+scene.render.resolution_percentage = 100
+scene.cycles.samples = {render_samples}
+scene.frame_start = {frame_start}
+scene.frame_end = {frame_end}
+scene.frame_set({frame_start})
+""".format(
+            render_engine=spec.render_engine,
+            res_x=spec.render_resolution[0],
+            res_y=spec.render_resolution[1],
+            render_samples=spec.render_samples,
+            frame_start=spec.frame_start,
+            frame_end=spec.frame_end
+        ))
+        
+        # Ground plane
+        if spec.ground:
+            script_parts.append("""
+# Ground plane
+bpy.ops.mesh.primitive_plane_add(location=(0, 0, 0))
+ground = bpy.context.active_object
+ground.name = "Ground"
+ground.scale = (50, 50, 1)
+bpy.ops.rigidbody.object_add()
+ground.rigid_body.type = 'PASSIVE'
+ground.rigid_body.friction = 0.8
+ground.rigid_body.collision_shape = 'BOX'
+""")
+        
+        # Add objects
+        for i, obj in enumerate(spec.objects):
+            script_parts.append(self._build_object_script(obj, i))
+        
+        # Add emotion visualization
+        if spec.emotion_config and spec.emotion_visualizer:
+            script_parts.append(self._build_emotion_code(spec))
+        
+        # Physics settings
+        if spec.type != SimulationType.RENDER:
+            script_parts.append("""
+# Physics settings
+scene.rigidbody_world.point_cache.frame_start = {frame_start}
+scene.rigidbody_world.point_cache.frame_end = {frame_end}
+scene.rigidbody_world.settings.substeps_per_frame = {substeps}
+scene.rigidbody_world.settings.solver_iterations = {solver_iterations}
+""".format(
+                frame_start=spec.frame_start,
+                frame_end=spec.frame_end,
+                substeps=spec.physics.substeps,
+                solver_iterations=spec.physics.solver_iterations
+            ))
+        
+        # Add camera
+        script_parts.append("""
+# Camera
+bpy.ops.object.camera_add(location=(8, -8, 6))
+camera = bpy.context.active_object
+camera.name = "MainCamera"
+camera.rotation_euler = (math.radians(65), 0, math.radians(45))
+scene.camera = camera
+""")
+        
+        # Lighting
+        script_parts.append("""
+# Lighting
+bpy.ops.object.light_add(type='SUN', location=(5, -5, 10))
+sun = bpy.context.active_object
+sun.name = "SunLight"
+sun.data.energy = 3.0
+""")
+        
+        # Render output settings
+        if spec.render or spec.render_animation:
+            script_parts.append("""
+# Render output
+scene.render.filepath = '{output_path}/render_'
+scene.render.image_settings.file_format = 'PNG'
+scene.render.image_settings.color_mode = 'RGBA'
+""".format(output_path=spec.output_path))
+        
+        # FFmpeg MP4 animation settings
+        if spec.render_animation:
+            video_path = spec.video_output_path or f"{spec.output_path}/animation.mp4"
+            script_parts.append("""
+# FFmpeg animation output
+scene.render.image_settings.file_format = 'FFMPEG'
+scene.render.ffmpeg.format = 'MPEG4'
+scene.render.ffmpeg.codec = 'H264'
+scene.render.ffmpeg.constant_rate_factor = 'PERC_LOSSLESS'
+scene.render.ffmpeg.ffmpeg_bitrate = {bitrate}
+scene.frame_start = {frame_start}
+scene.frame_end = {frame_end}
+
+# Render animation
+bpy.ops.render.render(animation=True, write_still=False)
+
+# Save video path
+video_path = "{video_path}"
+""".format(
+                bitrate=spec.video_bitrate,
+                frame_start=spec.frame_start,
+                frame_end=spec.frame_end,
+                video_path=video_path
+            ))
+        elif spec.render:
+            script_parts.append("""
+# Render single frame
+bpy.ops.render.render(write_still=True)
+""")
+        
+        # Domain randomization
+        if spec.domain_randomization:
+            dr = spec.domain_randomization
+            script_parts.append("""
+# Domain randomization
+import random
+if {randomize_lighting}:
+    for light in bpy.data.objects:
+        if light.type == 'LIGHT':
+            light.data.energy *= random.uniform(1.0 - {lighting_var}, 1.0 + {lighting_var})
+            light.data.color = tuple(c * random.uniform(1.0 - {lighting_var}, 1.0 + {lighting_var}) for c in light.data.color)
+if {randomize_physics}:
+    for obj in bpy.data.objects:
+        if hasattr(obj, 'rigid_body') and obj.rigid_body:
+            obj.rigid_body.mass *= random.uniform(1.0 - {physics_var}, 1.0 + {physics_var})
+            obj.rigid_body.friction = max(0, min(1, obj.rigid_body.friction + random.uniform(-{physics_var}, {physics_var})))
+""".format(
+                randomize_lighting=dr.randomize_lighting,
+                lighting_var=dr.lighting_variance,
+                randomize_physics=dr.randomize_physics_params,
+                physics_var=dr.physics_variance
+            ))
+        
+        # Export settings
+        if spec.exports:
+            script_parts.append("""
+# Export paths
+export_paths = {}
+""")
+            for fmt in spec.exports:
+                ext = fmt.value if hasattr(fmt, 'value') else str(fmt)
+                script_parts.append("""
+export_paths['{ext}'] = "{output_path}/export.{ext}"
+""".format(ext=ext, output_path=spec.output_path))
+        
+        # Save blend file
+        if spec.save_blend:
+            blend_path = spec.save_blend if isinstance(spec.save_blend, str) else f"{spec.output_path}/scene.blend"
+            script_parts.append("""
+# Save blend file
+bpy.ops.wm.save_as_mainfile(filepath="{blend_path}")
+""".format(blend_path=blend_path))
+        
+        # Output result
+        script_parts.append("""
+# Output result
+result = {
+    "success": True,
+    "render_path": "{render_path}",
+    "video_path": {video_path},
+    "blend_path": "{blend_path}",
+    "export_paths": {export_paths},
+    "frame_count": scene.frame_end - scene.frame_start + 1,
+    "stats": {
+        "object_count": len(bpy.data.objects),
+        "material_count": len(bpy.data.materials),
+        "mesh_count": len(bpy.data.meshes)
+    }
+}
+print("SIMULATION_RESULT:" + json.dumps(result))
+""".format(
+            render_path=f"{spec.output_path}/render_0001.png",
+            video_path=f'"{spec.video_output_path}"' if spec.render_animation and spec.video_output_path else "None",
+            blend_path=spec.save_blend if isinstance(spec.save_blend, str) else f"{spec.output_path}/scene.blend",
+            export_paths="{}" if not spec.exports else str({fmt.value if hasattr(fmt, 'value') else str(fmt): f"{spec.output_path}/export.{fmt.value if hasattr(fmt, 'value') else str(fmt)}" for fmt in spec.exports})
+        ))
+        
+        return "\n".join(script_parts)
 
     async def _run_blender_script(
         self,

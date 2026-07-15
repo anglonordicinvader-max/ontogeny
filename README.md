@@ -162,6 +162,26 @@ Configure via `.env`:
 EMOTION_VISUALIZER=anatomy  # or "sphere" (default) | "both"
 ```
 
+**MP4 Video Rendering:**
+Render animated simulations as MP4 video files with FFmpeg H264 encoding:
+```python
+from crawler_agent.cognitive.blender_sandbox import SimulationSpec, BlenderSandbox
+
+spec = SimulationSpec(
+    render_animation=True,       # Enable animation rendering
+    frame_start=1,              # Start frame
+    frame_end=250,              # End frame
+    video_format="FFMPEG",      # Output format
+    video_codec="H264",         # Codec
+    video_bitrate=8000,         # Bitrate (kbps)
+    video_output_path="/workspace/output/animation.mp4"
+)
+
+sandbox = BlenderSandbox()
+result = await sandbox.run_render(spec)
+print(f"Video saved to: {result.video_path}")
+```
+
 The agent auto-detects the image and enables `blender_simulate`, `blender_render`, `blender_step` actions.
 
 ### macOS Setup
