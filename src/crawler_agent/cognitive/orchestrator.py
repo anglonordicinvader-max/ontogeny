@@ -1126,8 +1126,39 @@ class CognitiveOrchestrator:
             modifications = step.parameters.get("modifications")
             backend_enum = SimBackend(backend) if backend else None
 
+            # Check practical worlds first
+            from crawler_agent.cognitive.practical_worlds import get_practical_world
+            practical = get_practical_world(scenario_name)
+
+            # If not in practical worlds, check survival worlds
+            if not practical:
+                from crawler_agent.cognitive.survival_worlds import get_survival_world
+                survival = get_survival_world(scenario_name)
+                if survival:
+                    # Convert survival world to simulation spec
+                    spec = SimulationSpec(
+                        type=SimulationType.RIGID_BODY,
+                        objects=[
+                            ObjectSpec(
+                                type=obj.get("type", "cube"),
+                                position=tuple(obj.get("position", [0, 0, 0])),
+                                scale=tuple(obj.get("scale", [1, 1, 1])),
+                                mass=obj.get("mass", 1.0),
+                                passive=obj.get("passive", False),
+                            )
+                            for obj in survival.objects
+                        ],
+                        duration=survival.time_limit if survival.time_limit > 0 else 10.0,
+                        fps=60,
+                        generate_buildings=False,
+                    )
+                    result = await self.sim_library.run_custom(spec, backend=backend_enum)
+                    step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
+                    step.result = f"Survival world '{scenario_name}' {'succeeded' if result.success else 'failed'}"
+                    return {"success": result.success, "frames": len(result.frames), "stats": result.stats, "error": result.error}
+
             # Anatomy mode: use practical worlds by default
-            if self.settings.emotion_visualizer in ("anatomy", "both"):
+            if self.settings.emotion_visualizer in ("anatomy", "both") and practical:
                 from crawler_agent.cognitive.practical_worlds import PRACTICAL_WORLDS, get_practical_world
                 practical = get_practical_world(scenario_name)
                 if practical:
@@ -1173,28 +1204,33 @@ class CognitiveOrchestrator:
             return {"success": result.success, "frames": len(result.frames), "stats": result.stats, "error": result.error}
 
         elif action == "select_world":
-            # Select practical world based on skill needs
+            # Select practical or survival world based on skill needs
             if not self.world_selector:
                 self.world_selector = WorldSelector()
             goal = step.parameters.get("goal", "")
             max_difficulty = step.parameters.get("max_difficulty", 1.0)
             weak_skills = step.parameters.get("weak_skills", [])
+            tier = step.parameters.get("tier")  # Optional: force specific tier
             criteria = SelectionCriteria(
                 weak_skills=weak_skills or self.world_selector.get_weak_skills(),
                 goal_description=goal,
                 max_difficulty=max_difficulty,
             )
             result = self.world_selector.select(criteria)
+            world = result.world
             step.status = StepStatus.COMPLETED
-            step.result = f"Selected world: {result.world.name} - {result.reason}"
+            step.result = f"Selected world: {world.name} - {result.reason}"
             return {
                 "success": True,
-                "world": result.world.name,
-                "description": result.world.description,
-                "difficulty": result.world.difficulty,
-                "tags": result.world.tags,
+                "world": world.name,
+                "description": world.description,
+                "difficulty": world.difficulty if hasattr(world, 'difficulty') else world.tier / 4.0,
+                "tags": world.tags if hasattr(world, 'tags') else [],
                 "matched_skills": result.matched_skills,
                 "reason": result.reason,
+                "is_survival": hasattr(world, 'tier'),
+                "tier": world.tier if hasattr(world, 'tier') else None,
+                "hazards": [h.value for h in world.hazards] if hasattr(world, 'hazards') else [],
             }
 
         elif action == "vision_analyze":
