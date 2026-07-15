@@ -11,6 +11,7 @@ Features:
 - Procedural generation (terrain, buildings, clutter)
 - Domain randomization (lighting, textures, physics params)
 - Multi-format export (USD, glTF, OBJ, glb)
+- Emotion visualization: sphere (abstract proto-AGI) or face with robot body
 """
 
 import asyncio
@@ -18,7 +19,7 @@ import json
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable, Awaitable
 from enum import Enum
 
 import docker
@@ -114,7 +115,34 @@ class RobotConfig:
     urdf_path: str = ""
     base_position: tuple = (0, 0, 0)
     base_rotation: tuple = (0, 0, 0)
-    joint_drives: Dict[str, Dict] = field(default_factory=dict)  # joint_name -> {type: position/velocity/torque, target, kp, kd}
+    joint_drives: Dict[str, Dict] = field(default_factory=dict)
+
+
+@dataclass
+class ObjectSpec:
+    """Object specification for simulation."""
+    type: str = "cube"
+    position: tuple = (0, 0, 5)
+    rotation: tuple = (0, 0, 0)
+    scale: tuple = (1, 1, 1)
+    mass: float = 1.0
+    passive: bool = False
+    friction: float = 0.5
+    restitution: float = 0.3
+    soft_body: bool = False
+    cloth: bool = False
+    fluid: bool = False
+    urdf_path: Optional[str] = None
+    joint_config: Optional[Dict] = None
+
+
+@dataclass
+class RobotConfig:
+    """URDF robot configuration."""
+    urdf_path: str = ""
+    base_position: tuple = (0, 0, 0)
+    base_rotation: tuple = (0, 0, 0)
+    joint_drives: Dict[str, Dict] = field(default_factory=dict)
 
 
 @dataclass
@@ -158,9 +186,9 @@ class SimulationSpec:
     procedural: Optional[ProceduralConfig] = None
     urdf_path: Optional[str] = None
     robot_joints: Optional[Dict] = None
-    # Emotion visualization
+    # Emotion visualization - "sphere" (abstract, proto-AGI internal) or "face" (humanoid robot body with face)
     emotion_config: Optional[Dict] = None
-    emotion_visualizer: Optional[str] = None
+    emotion_visualizer: Optional[str] = "sphere"  # "sphere" | "face" | "both"
     save_blend: bool = True
     render: bool = False
     render_resolution: tuple = (1920, 1080)
@@ -380,7 +408,7 @@ obj.modifiers["Fluid"].domain_settings.viscosity = 0.01
         """Generate emotion visualization code."""
         if not spec.emotion_config:
             return ""
-        
+
         ec = spec.emotion_config
         mood = ec.get("mood", "neutral")
         valence = ec.get("valence", 0.0)
@@ -394,8 +422,194 @@ obj.modifiers["Fluid"].domain_settings.viscosity = 0.01
         else:
             base_color = (0.8, 0.8, 0.9, 1.0)
 
-        return f"""
-# Emotion Visualization
+        visualizer = spec.emotion_visualizer or "sphere"
+
+        if visualizer == "face":
+            return f"""
+# Emotion Visualization - Face Mode (Humanoid Robot Body with Face)
+# Mood: {mood}, Valence: {valence:.2f}, Arousal: {arousal:.2f}, Intensity: {intensity:.2f}
+
+# Create a simple face with shape keys for expressions
+# Base head
+bpy.ops.mesh.primitive_uv_sphere_add(location=(0, 0, 3), radius=1.2)
+head_obj = bpy.context.active_object
+head_obj.name = "EmotionHead"
+head_obj.scale = (1.2, 1.0, 1.0)
+
+# Add shape keys for facial expressions
+head_obj.shape_key_add(name="Basis")
+sk_brow_down = head_obj.shape_key_add(name="BrowDown")
+sk_brow_up = head_obj.shape_key_add(name="BrowUp")
+sk_mouth_smile = head_obj.shape_key_add(name="MouthSmile")
+sk_mouth_frown = head_obj.shape_key_add(name="MouthFrown")
+sk_eyes_wide = head_obj.shape_key_add(name="EyesWide")
+sk_eyes_squint = head_obj.shape_key_add(name="EyesSquint")
+
+# Create simple facial features using separate objects
+# Eyes
+bpy.ops.mesh.primitive_uv_sphere_add(location=(-0.3, 0.9, 3.3), radius=0.15)
+left_eye = bpy.context.active_object
+left_eye.name = "LeftEye"
+bpy.ops.mesh.primitive_uv_sphere_add(location=(0.3, 0.9, 3.3), radius=0.15)
+right_eye = bpy.context.active_object
+right_eye.name = "RightEye"
+
+# Eyebrows
+bpy.ops.mesh.primitive_cube_add(location=(-0.3, 0.95, 3.4), scale=(0.25, 0.02, 0.05))
+left_brow = bpy.context.active_object
+left_brow.name = "LeftBrow"
+bpy.ops.mesh.primitive_cube_add(location=(0.3, 0.95, 3.4), scale=(0.25, 0.02, 0.05))
+right_brow = bpy.context.active_object
+right_brow.name = "RightBrow"
+
+# Mouth
+bpy.ops.mesh.primitive_cube_add(location=(0, 0.6, 3.3), scale=(0.3, 0.02, 0.02))
+mouth = bpy.context.active_object
+mouth.name = "Mouth"
+
+# Parent facial features to head
+for obj in [left_eye, right_eye, left_brow, right_brow, mouth]:
+    obj.parent = head_obj
+
+# Head material
+head_mat = bpy.data.materials.new(name="FaceMaterial")
+head_mat.use_nodes = True
+nodes = head_mat.node_tree.nodes
+bsdf = nodes.get("Principled BSDF")
+if bsdf:
+    bsdf.inputs['Base Color'].default_value = (0.9, 0.75, 0.65, 1.0)
+    bsdf.inputs['Roughness'].default_value = 0.4
+head_obj.data.materials.append(head_mat)
+
+# Eye material (white)
+eye_mat = bpy.data.materials.new(name="EyeMaterial")
+eye_mat.use_nodes = True
+nodes = eye_mat.node_tree.nodes
+bsdf = nodes.get("Principled BSDF")
+if bsdf:
+    bsdf.inputs['Base Color'].default_value = (1, 1, 1, 1)
+left_eye.data.materials.append(eye_mat)
+right_eye.data.materials.append(eye_mat)
+
+# Pupil material (black)
+pupil_mat = bpy.data.materials.new(name="PupilMaterial")
+pupil_mat.use_nodes = True
+nodes = pupil_mat.node_tree.nodes
+bsdf = nodes.get("Principled BSDF")
+if bsdf:
+    bsdf.inputs['Base Color'].default_value = (0.05, 0.05, 0.05, 1.0)
+
+# Add pupils
+bpy.ops.mesh.primitive_uv_sphere_add(location=(-0.3, 1.0, 3.35), radius=0.06)
+left_pupil = bpy.context.active_object
+left_pupil.name = "LeftPupil"
+left_pupil.parent = head_obj
+left_pupil.data.materials.append(pupil_mat)
+
+bpy.ops.mesh.primitive_uv_sphere_add(location=(0.3, 1.0, 3.35), radius=0.06)
+right_pupil = bpy.context.active_object
+right_pupil.name = "RightPupil"
+right_pupil.parent = head_obj
+right_pupil.data.materials.append(pupil_mat)
+
+# Head position and scale
+head_obj.location = (0, 0, 3)
+head_obj.scale = (1.0, 1.0, 1.0)
+
+# Add a simple body for the robot/agent
+# Torso
+bpy.ops.mesh.primitive_cylinder_add(location=(0, 0, 1.5), radius=0.6, depth=1.5)
+torso = bpy.context.active_object
+torso.name = "Torso"
+torso.parent = head_obj
+
+# Torso material
+torso_mat = bpy.data.materials.new(name="TorsoMaterial")
+torso_mat.use_nodes = True
+nodes = torso_mat.node_tree.nodes
+bsdf = nodes.get("Principled BSDF")
+if bsdf:
+    bsdf.inputs['Base Color'].default_value = (0.9, 0.75, 0.65, 1.0)
+    bsdf.inputs['Roughness'].default_value = 0.4
+torso.data.materials.append(torso_mat)
+
+# Arms
+for side, x in [("Left", -0.85), ("Right", 0.85)]:
+    bpy.ops.mesh.primitive_cylinder_add(location=(x, 0, 2.0), radius=0.12, depth=1.2, rotation=(0, 1.57, 0))
+    arm = bpy.context.active_object
+    arm.name = f"{side}Arm"
+    arm.parent = head_obj
+    arm.data.materials.append(torso_mat)
+
+# Legs
+for side, x in [("Left", -0.25), ("Right", 0.25)]:
+    bpy.ops.mesh.primitive_cylinder_add(location=(x, 0, 0.5), radius=0.18, depth=1.5, rotation=(0, 1.57, 0))
+    leg = bpy.context.active_object
+    leg.name = f"{side}Leg"
+    leg.parent = head_obj
+    leg.data.materials.append(torso_mat)
+
+# Parent all to head so body moves with head
+torso.parent = head_obj
+
+# Animate based on valence/arousal
+# Valence controls mouth smile/frown
+if {valence} > 0.3:
+    # Happy - smile
+    sk_mouth_smile.value = min({valence}, 1.0)
+    sk_brow_up.value = min({valence * 0.5}, 1.0)
+elif {valence} < -0.3:
+    # Sad/angry - frown
+    sk_mouth_frown.value = min(abs({valence}), 1.0)
+    sk_brow_down.value = min(abs({valence} * 0.5), 1.0)
+else:
+    # Neutral
+    pass
+
+# Arousal controls eye widen/squint and blink rate
+if {arousal} > 0.7:
+    sk_eyes_wide.value = min(({arousal} - 0.7) * 3, 1.0)
+elif {arousal} < 0.3:
+    sk_eyes_squint.value = min((0.3 - {arousal}) * 3, 1.0)
+
+# Lighting based on valence
+bpy.ops.object.light_add(type='SUN', location=(0, 0, 10))
+sun = bpy.context.active_object
+sun.name = "EmotionSun"
+sun.data.energy = {max(1.0, arousal * 5.0)}
+if {valence} < -0.3:
+    sun.data.color = (0.3, 0.4, 1.0)
+elif {valence} > 0.3:
+    sun.data.color = (1.0, 0.7, 0.3)
+else:
+    sun.data.color = (0.9, 0.9, 1.0)
+
+# Head position
+head_obj.location = (0, 0, 3)
+head_obj.rotation_euler = (0, 0, 0)
+
+# Background color shift based on mood
+world = bpy.context.scene.world
+if world is None:
+    world = bpy.data.worlds.new("World")
+    bpy.context.scene.world = world
+world.use_nodes = True
+bg_nodes = world.node_tree.nodes
+bg_emission = bg_nodes.new(type='ShaderNodeEmission')
+if {valence} < -0.3:
+    bg_emission.inputs['Color'].default_value = (0.05, 0.1, 0.2, 1.0)
+elif {valence} > 0.3:
+    bg_emission.inputs['Color'].default_value = (0.2, 0.15, 0.05, 1.0)
+else:
+    bg_emission.inputs['Color'].default_value = (0.1, 0.1, 0.15, 1.0)
+bg_emission.inputs['Strength'].default_value = {arousal * 0.5 + 0.1}
+bg_output = bg_nodes.new(type='ShaderNodeOutputWorld')
+world.node_tree.links.new(bg_emission.outputs['Emission'], bg_output.inputs['Surface'])
+"""
+        else:
+            # Original sphere visualization (abstract proto-AGI internal state)
+            return f"""
+# Emotion Visualization - Sphere Mode (Abstract Proto-AGI Internal State)
 # Mood: {mood}, Valence: {valence:.2f}, Arousal: {arousal:.2f}, Intensity: {intensity:.2f}
 
 # Create emotion sphere at center
