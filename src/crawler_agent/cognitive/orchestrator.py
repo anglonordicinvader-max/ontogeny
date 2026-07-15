@@ -76,6 +76,7 @@ from .blender_sandbox import BlenderSandbox, create_blender_sandbox, SimulationS
 from .mcts_planner import MCTSPlanner, create_mcts_planner, MCTSConfig
 from .tools import ToolManager, ToolResult
 from .sim_library import SimulationLibrary, SimBackend
+from .self_audit import SelfAuditor
 from ..agents import MultiAgentOrchestrator
 
 
@@ -184,6 +185,9 @@ class CognitiveOrchestrator:
 
         # Simulation library
         self.sim_library: SimulationLibrary | None = None
+
+        # Self-audit system
+        self.self_auditor: SelfAuditor | None = None
 
         # Current plan
         self.current_plan: Plan | None = None
@@ -366,6 +370,9 @@ class CognitiveOrchestrator:
 
         # Initialize simulation library
         self.sim_library = SimulationLibrary(blender_sandbox=self.blender_sandbox)
+
+        # Initialize self-auditor
+        self.self_auditor = SelfAuditor()
 
         # Initialize crawl orchestrator with light intensity by default
         self.crawl_orchestrator = CrawlOrchestrator(
@@ -777,6 +784,20 @@ class CognitiveOrchestrator:
                 # 20. Sleep consolidation every 10 cycles
                 await self.sleep_consolidator.consolidate(self.memory, self.pattern_learner)
                 result["consolidation"] = self.sleep_consolidator.get_stats()
+
+                # 20b. Periodic self-audit every 10 cycles
+                if self.self_auditor and self.self_auditor.should_run_audit():
+                    try:
+                        audit_report = await self.self_auditor.run_full_audit(self)
+                        result["audit_report"] = {
+                            "id": audit_report.id,
+                            "healthy": audit_report.overall_healthy,
+                            "checks": len(audit_report.checks),
+                            "warnings": sum(1 for c in audit_report.checks if c.severity == "warning"),
+                            "recommendations": audit_report.recommendations[:3],
+                        }
+                    except Exception as e:
+                        self.logger.warning("audit_error", error=str(e))
 
                 # 21. Generate exploration goal from curiosity (auto-feed into GoalManager)
                 exploration_goal = await self.curiosity.generate_exploration_goal()
