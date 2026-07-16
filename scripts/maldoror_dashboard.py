@@ -19,9 +19,7 @@ BOLD = "\033[1m"
 DIM = "\033[2m"
 RESET = "\033[0m"
 
-MALDOROR_LOGO = f"""{RED}{BOLD}
-    MALDOROR
-{RESET}{DIM}    {MALDOROR_VERSION:^{60}}{RESET}"""
+MALDOROR_LOGO = f"""{RED}{BOLD}MALDOROR{RESET}\n{DIM}{MALDOROR_VERSION}{RESET}"""
 
 
 def divider(char="=", width=60):
@@ -48,7 +46,7 @@ def main():
         print("Make sure you're running from the project root.")
         sys.exit(1)
 
-    print(f"\n{MALDOROR_LOGO}")
+    print(MALDOROR_LOGO)
     print(section("MALDOROR PIPELINE DASHBOARD"))
 
     # Modification Memory
