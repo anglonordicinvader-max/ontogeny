@@ -96,6 +96,7 @@ from .custom_model_manager import CustomModelManager
 from .model_evaluation import ModelEvaluator, QualityGate, RollbackManager, ABTestRunner
 from .production import PerformanceMonitor, RetrainingTrigger, CircuitBreaker, GracefulDegradation, MetricType
 from .self_training import SelfTrainingSynthesizer
+from .contrastive_trainer import ContrastiveTrainer
 from ..agents import MultiAgentOrchestrator
 
 
@@ -502,6 +503,10 @@ class CognitiveOrchestrator:
 
         # === Self-Training Loop ===
         self.self_trainer = SelfTrainingSynthesizer(
+            backend=self.backend,
+            modification_memory=self.modification_memory,
+        )
+        self.contrastive_trainer = ContrastiveTrainer(
             backend=self.backend,
             modification_memory=self.modification_memory,
         )
@@ -2158,6 +2163,33 @@ class CognitiveOrchestrator:
                                 except Exception as e:
                                     self.logger.warning("self_training_synthesis_error", error=str(e))
 
+                            # === Contrastive Training: record failure for contrastive learning ===
+                            else:
+                                try:
+                                    from .modification_memory import ModificationRecord
+                                    fail_record = ModificationRecord(
+                                        id=f"{mod.id}_fail",
+                                        timestamp=datetime.utcnow().isoformat(),
+                                        source_module="self_modify",
+                                        target_file=skill.metadata.get("skill_name", "unknown"),
+                                        task_type="optimization",
+                                        description=mod.description,
+                                        reasoning=mod.reasoning,
+                                        modified_code=mod.code,
+                                        success=False,
+                                        performance_delta=perf_delta,
+                                    )
+                                    self.modification_memory.record(fail_record)
+                                    # Generate contrastive data from the failure
+                                    contrastive = await self.contrastive_trainer.generate_contrastive_data()
+                                    if contrastive:
+                                        result["contrastive_training"] = {
+                                            "generated": len(contrastive),
+                                            "types": [e.example_type for e in contrastive],
+                                        }
+                                except Exception as e:
+                                    self.logger.warning("contrastive_training_error", error=str(e))
+
                             break
 
         # === RECURSIVE: Improve the improvement process itself ===
@@ -2566,6 +2598,8 @@ class CognitiveOrchestrator:
             parts.append(f"Custom Models:\n{self.custom_model_manager.to_context()}")
         if self.self_trainer:
             parts.append(f"Self-Training:\n{self.self_trainer.to_context()}")
+        if self.contrastive_trainer:
+            parts.append(f"Contrastive Training:\n{self.contrastive_trainer.to_context()}")
         if self.rollback_manager:
             rb_stats = self.rollback_manager.get_stats()
             if rb_stats["total_rollbacks"] > 0:

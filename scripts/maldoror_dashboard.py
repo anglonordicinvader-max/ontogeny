@@ -213,6 +213,29 @@ def main():
     except ImportError as e:
         print(f"  Error: {e}")
 
+    # Contrastive Training
+    print(section("11. Contrastive Training"))
+    try:
+        from src.crawler_agent.cognitive.contrastive_trainer import ContrastiveTrainer
+        print(f"  Module:              ContrastiveTrainer")
+        print(f"  Function:            Trains on both successful AND failed modifications")
+        print(f"  Types:               prediction, diagnosis, comparison")
+        print(f"  Integration:         Wired into orchestrator reactive optimization (failure path)")
+        contrastive_records = [r for r in mm.records if r.source_module == "contrastive_training"]
+        print(f"  Contrastive Records: {len(contrastive_records)}")
+        if contrastive_records:
+            by_type = {}
+            for r in contrastive_records:
+                t = r.metadata.get("example_type", "unknown")
+                by_type[t] = by_type.get(t, 0) + 1
+            print(f"  By Type:")
+            for t, count in by_type.items():
+                print(f"    {t}: {count}")
+        failed_records = [r for r in mm.records if not r.success]
+        print(f"  Failed Records:      {len(failed_records)}")
+    except ImportError as e:
+        print(f"  Error: {e}")
+
     # Pipeline readiness
     checks.append(("Evaluation reports exist", len(eval_reports) > 0))
     all_pass = True
