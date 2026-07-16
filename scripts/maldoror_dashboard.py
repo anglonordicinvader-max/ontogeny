@@ -11,6 +11,27 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+MALDOROR_VERSION = "v0.1.0"
+
+# ANSI colors
+RED = "\033[91m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
+RESET = "\033[0m"
+
+MALDOROR_LOGO = f"""{RED}{BOLD}
+ ##      ## ####  ######  ##    ##    ###    ##     ## ########  #######   ######  
+ ##  ##  ## ## ## ##    ## ##   ##     ## ##   ##     ##    ##    ##     ## ##    ## 
+ ## ###### ##    ##       ##  ##      ##   ##  ##     ##    ##    ##     ## ##       
+ ##  ##  ## ####  ######  #####      ##     ## ##     ##    ##    ##     ##  ######  
+ ##      ## ##         ## ##  ##     #########  ##     ##    ##    ##     ##       ## 
+ ##      ## ##    ##    ## ##   ##   ##     ##   ##   ##     ##    ##     ## ##    ## 
+ ##      ## ####  ######  ##    ##  ##     ##    ## ###      ##     #######   ######  
+{RESET}{RED}    +--[{('=' * 48)}]--+
+{RESET}{RED}    | {'  >> RECURSIVE SELF-MODIFICATION <<  ':^{48}} |
+{RESET}{RED}    +--[{('=' * 48)}]--+
+{RESET}{DIM}    {MALDOROR_VERSION:^{60}}{RESET}"""
+
 
 def divider(char="=", width=60):
     return char * width
@@ -36,6 +57,7 @@ def main():
         print("Make sure you're running from the project root.")
         sys.exit(1)
 
+    print(f"\n{MALDOROR_LOGO}")
     print(section("MALDOROR PIPELINE DASHBOARD"))
 
     # Modification Memory
