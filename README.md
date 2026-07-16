@@ -528,11 +528,11 @@ data/
 └── maldoror/eval/           # Evaluation reports
 
 scripts/
-├── maldoror_dashboard.py    # CLI dashboard for pipeline status
-└── ...                      # Other utility scripts
+├── train_maldoror.py         # End-to-end training pipeline
+├── maldoror_dashboard.py     # CLI dashboard for pipeline status
+└── ...                       # Other utility scripts
 
-Modelfile                   # Ollama model definition for maldoror
-Modelfile.maldoror          # Alternative maldoror model definition
+Modelfile                    # Ollama model definition for maldoror
 
 tests/
 ├── test_smoke.py            # 77 module import/instantiation/operation tests
@@ -545,8 +545,6 @@ tests/
 ├── test_emergent_curriculum.py # 6 emergent curriculum tests
 ├── test_adversarial_trainer.py # 5 adversarial trainer tests
 └── test_architecture_modifier.py # 15 architecture modifier tests
-
-Modelfile.maldoror           # Ollama model definition for maldoror
 ```
 
 ## How Autonomous Mode Works
