@@ -189,19 +189,21 @@ def step_generate(num_examples: int) -> int:
 
 def check_model_cached() -> bool:
     """Check if the base model is fully cached locally."""
+    local_model = PROJECT_ROOT / "data" / "maldoror" / "merged"
+    if local_model.exists() and (local_model / "model.safetensors").exists():
+        return True
     cache_dir = Path(os.path.expanduser("~/.cache/huggingface/hub"))
     model_dir = cache_dir / "models--Qwen--Qwen2.5-7B-Instruct"
     if not model_dir.exists():
         return False
-    # Check for safetensors files (main model weights)
     snapshots = model_dir / "snapshots"
     if not snapshots.exists():
         return False
     for snapshot in snapshots.iterdir():
         safetensors = list(snapshot.glob("*.safetensors"))
-        if len(safetensors) >= 2:  # Qwen2.5-7B has 2+ safetensors files
+        if len(safetensors) >= 2:
             total_size = sum(f.stat().st_size for f in safetensors)
-            if total_size > 10_000_000_000:  # >10GB = likely complete
+            if total_size > 10_000_000_000:
                 return True
     return False
 
@@ -228,7 +230,8 @@ def _train_local(epochs: int, batch_size: int) -> bool:
     cmd = [sys.executable, str(TRAIN_SCRIPT)]
 
     env = os.environ.copy()
-    env["MALDOROR_BASE_MODEL"] = "Qwen/Qwen2.5-7B-Instruct"
+    local_model = str(PROJECT_ROOT / "data" / "maldoror" / "merged")
+    env["MALDOROR_BASE_MODEL"] = local_model
     env["MALDOROR_ADAPTER_DIR"] = str(ADAPTER_DIR)
     env["MALDOROR_DATASET"] = str(TRAIN_DATA)
     env["MALDOROR_NUM_EPOCHS"] = str(epochs)

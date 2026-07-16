@@ -455,187 +455,7 @@ obj.modifiers["Fluid"].domain_settings.viscosity = 0.01
         visualizer = spec.emotion_visualizer or "sphere"
 
         if visualizer == "anatomy":
-            return f"""
-# Emotion Visualization - Anatomy Mode (Humanoid Robot Body with Face)
-# Mood: {mood}, Valence: {valence:.2f}, Arousal: {arousal:.2f}, Intensity: {intensity:.2f}
-
-# Create a simple face with shape keys for expressions
-# Base head
-bpy.ops.mesh.primitive_uv_sphere_add(location=(0, 0, 3), radius=1.2)
-head_obj = bpy.context.active_object
-head_obj.name = "EmotionHead"
-head_obj.scale = (1.2, 1.0, 1.0)
-
-# Add shape keys for facial expressions
-head_obj.shape_key_add(name="Basis")
-sk_brow_down = head_obj.shape_key_add(name="BrowDown")
-sk_brow_up = head_obj.shape_key_add(name="BrowUp")
-sk_mouth_smile = head_obj.shape_key_add(name="MouthSmile")
-sk_mouth_frown = head_obj.shape_key_add(name="MouthFrown")
-sk_eyes_wide = head_obj.shape_key_add(name="EyesWide")
-sk_eyes_squint = head_obj.shape_key_add(name="EyesSquint")
-
-# Create simple facial features using separate objects
-# Eyes
-bpy.ops.mesh.primitive_uv_sphere_add(location=(-0.3, 0.9, 3.3), radius=0.15)
-left_eye = bpy.context.active_object
-left_eye.name = "LeftEye"
-bpy.ops.mesh.primitive_uv_sphere_add(location=(0.3, 0.9, 3.3), radius=0.15)
-right_eye = bpy.context.active_object
-right_eye.name = "RightEye"
-
-# Eyebrows
-bpy.ops.mesh.primitive_cube_add(location=(-0.3, 0.95, 3.4), scale=(0.25, 0.02, 0.05))
-left_brow = bpy.context.active_object
-left_brow.name = "LeftBrow"
-bpy.ops.mesh.primitive_cube_add(location=(0.3, 0.95, 3.4), scale=(0.25, 0.02, 0.05))
-right_brow = bpy.context.active_object
-right_brow.name = "RightBrow"
-
-# Mouth
-bpy.ops.mesh.primitive_cube_add(location=(0, 0.6, 3.3), scale=(0.3, 0.02, 0.02))
-mouth = bpy.context.active_object
-mouth.name = "Mouth"
-
-# Parent facial features to head
-for obj in [left_eye, right_eye, left_brow, right_brow, mouth]:
-    obj.parent = head_obj
-
-# Head material
-head_mat = bpy.data.materials.new(name="FaceMaterial")
-head_mat.use_nodes = True
-nodes = head_mat.node_tree.nodes
-bsdf = nodes.get("Principled BSDF")
-if bsdf:
-    bsdf.inputs['Base Color'].default_value = (0.9, 0.75, 0.65, 1.0)
-    bsdf.inputs['Roughness'].default_value = 0.4
-head_obj.data.materials.append(head_mat)
-
-# Eye material (white)
-eye_mat = bpy.data.materials.new(name="EyeMaterial")
-eye_mat.use_nodes = True
-nodes = eye_mat.node_tree.nodes
-bsdf = nodes.get("Principled BSDF")
-if bsdf:
-    bsdf.inputs['Base Color'].default_value = (1, 1, 1, 1)
-left_eye.data.materials.append(eye_mat)
-right_eye.data.materials.append(eye_mat)
-
-# Pupil material (black)
-pupil_mat = bpy.data.materials.new(name="PupilMaterial")
-pupil_mat.use_nodes = True
-nodes = pupil_mat.node_tree.nodes
-bsdf = nodes.get("Principled BSDF")
-if bsdf:
-    bsdf.inputs['Base Color'].default_value = (0.05, 0.05, 0.05, 1.0)
-
-# Add pupils
-bpy.ops.mesh.primitive_uv_sphere_add(location=(-0.3, 1.0, 3.35), radius=0.06)
-left_pupil = bpy.context.active_object
-left_pupil.name = "LeftPupil"
-left_pupil.parent = head_obj
-left_pupil.data.materials.append(pupil_mat)
-
-bpy.ops.mesh.primitive_uv_sphere_add(location=(0.3, 1.0, 3.35), radius=0.06)
-right_pupil = bpy.context.active_object
-right_pupil.name = "RightPupil"
-right_pupil.parent = head_obj
-right_pupil.data.materials.append(pupil_mat)
-
-# Head position and scale
-head_obj.location = (0, 0, 3)
-head_obj.scale = (1.0, 1.0, 1.0)
-
-# Add a simple body for the robot/agent
-# Torso
-bpy.ops.mesh.primitive_cylinder_add(location=(0, 0, 1.5), radius=0.6, depth=1.5)
-torso = bpy.context.active_object
-torso.name = "Torso"
-torso.parent = head_obj
-
-# Torso material
-torso_mat = bpy.data.materials.new(name="TorsoMaterial")
-torso_mat.use_nodes = True
-nodes = torso_mat.node_tree.nodes
-bsdf = nodes.get("Principled BSDF")
-if bsdf:
-    bsdf.inputs['Base Color'].default_value = (0.9, 0.75, 0.65, 1.0)
-    bsdf.inputs['Roughness'].default_value = 0.4
-torso.data.materials.append(torso_mat)
-
-# Arms
-for side, x in [("Left", -0.85), ("Right", 0.85)]:
-    bpy.ops.mesh.primitive_cylinder_add(location=(x, 0, 2.0), radius=0.12, depth=1.2, rotation=(0, 1.57, 0))
-    arm = bpy.context.active_object
-    arm.name = f"{side}Arm"
-    arm.parent = head_obj
-    arm.data.materials.append(torso_mat)
-
-# Legs
-for side, x in [("Left", -0.25), ("Right", 0.25)]:
-    bpy.ops.mesh.primitive_cylinder_add(location=(x, 0, 0.5), radius=0.18, depth=1.5, rotation=(0, 1.57, 0))
-    leg = bpy.context.active_object
-    leg.name = f"{side}Leg"
-    leg.parent = head_obj
-    leg.data.materials.append(torso_mat)
-
-# Parent all to head so body moves with head
-torso.parent = head_obj
-
-# Animate based on valence/arousal
-# Valence controls mouth smile/frown
-if {valence} > 0.3:
-    # Happy - smile
-    sk_mouth_smile.value = min({valence}, 1.0)
-    sk_brow_up.value = min({valence * 0.5}, 1.0)
-elif {valence} < -0.3:
-    # Sad/angry - frown
-    sk_mouth_frown.value = min(abs({valence}), 1.0)
-    sk_brow_down.value = min(abs({valence} * 0.5), 1.0)
-else:
-    # Neutral
-    pass
-
-# Arousal controls eye widen/squint and blink rate
-if {arousal} > 0.7:
-    sk_eyes_wide.value = min(({arousal} - 0.7) * 3, 1.0)
-elif {arousal} < 0.3:
-    sk_eyes_squint.value = min((0.3 - {arousal}) * 3, 1.0)
-
-# Lighting based on valence
-bpy.ops.object.light_add(type='SUN', location=(0, 0, 10))
-sun = bpy.context.active_object
-sun.name = "EmotionSun"
-sun.data.energy = {max(1.0, arousal * 5.0)}
-if {valence} < -0.3:
-    sun.data.color = (0.3, 0.4, 1.0)
-elif {valence} > 0.3:
-    sun.data.color = (1.0, 0.7, 0.3)
-else:
-    sun.data.color = (0.9, 0.9, 1.0)
-
-# Head position
-head_obj.location = (0, 0, 3)
-head_obj.rotation_euler = (0, 0, 0)
-
-# Background color shift based on mood
-world = bpy.context.scene.world
-if world is None:
-    world = bpy.data.worlds.new("World")
-    bpy.context.scene.world = world
-world.use_nodes = True
-bg_nodes = world.node_tree.nodes
-bg_emission = bg_nodes.new(type='ShaderNodeEmission')
-if {valence} < -0.3:
-    bg_emission.inputs['Color'].default_value = (0.05, 0.1, 0.2, 1.0)
-elif {valence} > 0.3:
-    bg_emission.inputs['Color'].default_value = (0.2, 0.15, 0.05, 1.0)
-else:
-    bg_emission.inputs['Color'].default_value = (0.1, 0.1, 0.15, 1.0)
-bg_emission.inputs['Strength'].default_value = {arousal * 0.5 + 0.1}
-bg_output = bg_nodes.new(type='ShaderNodeOutputWorld')
-world.node_tree.links.new(bg_emission.outputs['Emission'], bg_output.inputs['Surface'])
-"""
+            return self._build_tocabi_anatomy_code(mood, valence, arousal, intensity, base_color, spec)
         else:
             # Original sphere visualization (abstract proto-AGI internal state)
             return f"""
@@ -698,6 +518,410 @@ bg_output = bg_nodes.new(type='ShaderNodeOutputWorld')
 world.node_tree.links.new(bg_emission.outputs['Emission'], bg_output.inputs['Surface'])
 """
         return emotion_code
+
+    def _build_tocabi_anatomy_code(self, mood, valence, arousal, intensity, base_color, spec) -> str:
+        """Generate TOCABI humanoid robot anatomy visualization with emotion-driven animation.
+
+        Adds: facial expressions, idle breathing, body posture, hand tremors, dynamic lighting.
+        """
+        tocabi_dir = Path(__file__).parent.parent.parent.parent / "data" / "blender" / "models" / "tocabi"
+        meshes_dir = tocabi_dir / "combined" / "meshes"
+
+        stl_files = []
+        if meshes_dir.exists():
+            for f in sorted(meshes_dir.glob("*.stl")):
+                stl_files.append(f.name)
+
+        stl_list = ", ".join(f'"{n}"' for n in stl_files)
+
+        # Compute emotion-driven parameters
+        # Posture: happy/confident = upright, sad/anxious = slightly hunched
+        posture_pitch = valence * 0.05  # radians, small forward/back tilt
+        # Breathing rate: faster when aroused
+        breath_rate = 0.8 + arousal * 1.2  # cycles per second
+        # Hand tremor amplitude: higher arousal = more tremor
+        tremor_amp = arousal * 0.015  # radians
+        # Eye scale: wide when aroused, squint when calm
+        eye_scale = 0.8 + arousal * 0.6
+        # Mouth shape: smile when positive, frown when negative
+        mouth_smile = max(0, valence) * 0.08
+        mouth_frown = max(0, -valence) * 0.08
+        # Brow position: raised when positive/alert, furrowed when negative
+        brow_raise = max(0, valence) * 0.04
+        brow_furrow = max(0, -valence) * 0.04
+
+        return f"""
+# Emotion Visualization - TOCABI Humanoid Robot Anatomy Mode
+# Mood: {mood}, Valence: {valence:.2f}, Arousal: {arousal:.2f}, Intensity: {intensity:.2f}
+# Posture pitch: {posture_pitch:.3f} rad, Breath rate: {breath_rate:.1f} Hz
+# Tremor: {tremor_amp:.4f} rad, Eye scale: {eye_scale:.2f}
+
+import os
+import math
+
+# ============================================================
+# 1. LOAD TOCABI STL MESHES
+# ============================================================
+meshes_dir = "/workspace/models/tocabi/combined/meshes"
+stl_files = [{stl_list}]
+
+loaded_objects = []
+for fname in stl_files:
+    fpath = os.path.join(meshes_dir, fname)
+    if os.path.exists(fpath):
+        try:
+            bpy.ops.import_mesh.stl(filepath=fpath)
+            obj = bpy.context.active_object
+            if obj:
+                obj.name = fname.replace('.stl', '')
+                loaded_objects.append(obj)
+        except Exception as e:
+            print(f"Failed to load {{fname}}: {{e}}")
+
+# Center and scale using fast dimension-based approach
+if loaded_objects:
+    for obj in loaded_objects:
+        obj.scale = (0.001, 0.001, 0.001)
+        bpy.context.view_layer.objects.active = obj
+        obj.select_set(True)
+        bpy.ops.object.transform_apply(scale=True)
+        obj.select_set(False)
+
+    all_locs = [obj.location.copy() for obj in loaded_objects]
+    cx = sum(l.x for l in all_locs) / len(all_locs)
+    cy = sum(l.y for l in all_locs) / len(all_locs)
+    cz = sum(l.z for l in all_locs) / len(all_locs)
+    for obj in loaded_objects:
+        obj.location.x -= cx
+        obj.location.y -= cy
+        obj.location.z -= cz
+
+    max_dim = max(max(obj.dimensions) for obj in loaded_objects)
+    sf = 2.0 / max_dim if max_dim > 0 else 1.0
+    for obj in loaded_objects:
+        obj.scale = (sf, sf, sf)
+
+    # Decimate heavy meshes for faster rendering
+    for obj in loaded_objects:
+        if obj.type == 'MESH' and len(obj.data.polygons) > 1000:
+            mod = obj.modifiers.new(name="Decimate", type='DECIMATE')
+            mod.ratio = 0.15
+            bpy.context.view_layer.objects.active = obj
+            obj.select_set(True)
+            bpy.ops.object.modifier_apply(modifier="Decimate")
+            obj.select_set(False)
+
+# ============================================================
+# 2. MATERIALS
+# ============================================================
+def _mat(name, color, metallic=0.0, roughness=0.5, emission=0.0):
+    m = bpy.data.materials.new(name=name)
+    m.use_nodes = True
+    b = m.node_tree.nodes.get("Principled BSDF")
+    b.inputs['Base Color'].default_value = color
+    b.inputs['Metallic'].default_value = metallic
+    b.inputs['Roughness'].default_value = roughness
+    if emission > 0:
+        b.inputs['Emission Strength'].default_value = emission
+    return m
+
+mat_body = _mat("Body", (0.55, 0.58, 0.62, 1), metallic=0.8, roughness=0.25)
+mat_joint = _mat("Joint", (0.2, 0.22, 0.25, 1), metallic=0.9, roughness=0.15)
+mat_accent = _mat("Accent", (0.0, 0.5, 0.9, 1), metallic=0.7, roughness=0.3, emission=0.5)
+mat_emotion = _mat("Emotion", ({base_color[0]}, {base_color[1]}, {base_color[2]}, 1),
+                    metallic=0.3, roughness=0.4, emission={intensity * 3.0})
+mat_eye_white = _mat("EyeWhite", (0.95, 0.95, 0.95, 1), roughness=0.1)
+mat_pupil = _mat("Pupil", (0.02, 0.02, 0.02, 1), roughness=0.05)
+mat_mouth = _mat("Mouth", ({0.6 + valence * 0.2}, 0.15, 0.1, 1), roughness=0.3)
+mat_eyebrow = _mat("Eyebrow", (0.15, 0.15, 0.18, 1), metallic=0.7)
+
+# Apply materials to robot parts
+for obj in loaded_objects:
+    if obj.type == 'MESH':
+        obj.data.materials.clear()
+        nl = obj.name.lower()
+        if any(k in nl for k in ['ankle', 'wrist', 'knee', 'hip_1', 'hip_2']):
+            obj.data.materials.append(mat_joint)
+        elif any(k in nl for k in ['waist', 'body', 'neck', 'shoulder', 'pelvis']):
+            obj.data.materials.append(mat_accent)
+        else:
+            obj.data.materials.append(mat_body)
+
+# Head region gets emotion glow overlay
+head_names = ['U_Neck_1v4_1', 'U_Neck_2_simv5_1', 'U_Body_1v21_1']
+for nm in head_names:
+    obj = bpy.data.objects.get(nm)
+    if obj and obj.type == 'MESH':
+        obj.data.materials.clear()
+        obj.data.materials.append(mat_emotion)
+
+# ============================================================
+# 3. FACIAL FEATURES (procedural, on top of head)
+# ============================================================
+# Find head position (highest Z part)
+head_z = 0
+for obj in loaded_objects:
+    if obj.location.z + obj.dimensions.z * 0.5 > head_z:
+        head_z = obj.location.z + obj.dimensions.z * 0.5
+
+face_y = 0.12  # slightly forward on face
+face_z = head_z + 0.05
+
+# Eyes
+for side, x in [("L", -0.12), ("R", 0.12)]:
+    # Eye socket (dark recess)
+    bpy.ops.mesh.primitive_uv_sphere_add(location=(x, face_y - 0.01, face_z), radius=0.06)
+    socket = bpy.context.active_object
+    socket.name = f"EyeSocket{{side}}"
+    socket.scale = (0.8, 0.5, {eye_scale})
+    socket.data.materials.append(_mat(f"Socket{{side}}", (0.05, 0.05, 0.08, 1), roughness=0.9))
+
+    # Eye white
+    bpy.ops.mesh.primitive_uv_sphere_add(location=(x, face_y, face_z), radius=0.045)
+    eye = bpy.context.active_object
+    eye.name = f"Eye{{side}}"
+    eye.scale = (0.9, 0.5, {eye_scale})
+    eye.data.materials.append(mat_eye_white)
+
+    # Pupil (looks slightly forward when aroused)
+    pupil_forward = {arousal} * 0.01
+    bpy.ops.mesh.primitive_uv_sphere_add(
+        location=(x, face_y + 0.03 + pupil_forward, face_z + 0.005),
+        radius=0.022)
+    pupil = bpy.context.active_object
+    pupil.name = f"Pupil{{side}}"
+    pupil.scale = (0.8, 0.5, {eye_scale * 0.9})
+    pupil.data.materials.append(mat_pupil)
+
+    # Pupil emission glow (emotion-colored when highly aroused)
+    if {arousal} > 0.5:
+        glow_mat = _mat(f"PupilGlow{{side}}", ({base_color[0]}, {base_color[1]}, {base_color[2]}, 1),
+                        emission={intensity * 2.0})
+        pupil.data.materials.clear()
+        pupil.data.materials.append(glow_mat)
+
+# Eyebrows
+for side, x in [("L", -0.12), ("R", 0.12)]:
+    brow_z_offset = {brow_raise} - {brow_furrow}
+    # Outer brow tilts down when angry (negative valence)
+    outer_tilt = -{brow_furrow} * 0.5 if side == "L" else {brow_furrow} * 0.5
+    bpy.ops.mesh.primitive_cube_add(
+        location=(x, face_y + 0.04, face_z + 0.09 + brow_z_offset),
+        scale=(0.06, 0.012, 0.015))
+    brow = bpy.context.active_object
+    brow.name = f"Brow{{side}}"
+    brow.rotation_euler = (outer_tilt, 0, 0)
+    brow.data.materials.append(mat_eyebrow)
+
+# Mouth - horizontal slit that curves with emotion
+mouth_z = face_z - 0.12
+mouth_width = 0.15
+# Center of mouth
+bpy.ops.mesh.primitive_cube_add(
+    location=(0, face_y + 0.06, mouth_z),
+    scale=(mouth_width / 2, 0.008, 0.012))
+mouth_center = bpy.context.active_object
+mouth_center.name = "MouthCenter"
+mouth_center.data.materials.append(mat_mouth)
+
+# Mouth corners (lift for smile, drop for frown)
+for side, x_sign in [("L", -1), ("R", 1)]:
+    corner_y_offset = {mouth_smile} - {mouth_frown}
+    bpy.ops.mesh.primitive_uv_sphere_add(
+        location=(x_sign * mouth_width / 2, face_y + 0.06, mouth_z + corner_y_offset * 0.3),
+        radius=0.012)
+    corner = bpy.context.active_object
+    corner.name = f"MouthCorner{{side}}"
+    corner.data.materials.append(mat_mouth)
+
+# Smile curve using small cubes along mouth
+for i in range(5):
+    t = (i - 2) / 2.0  # -1 to 1
+    x_pos = t * mouth_width / 2
+    curve_y = {mouth_smile} * (1 - t**2) * 0.3 - {mouth_frown} * (1 - t**2) * 0.3
+    bpy.ops.mesh.primitive_cube_add(
+        location=(x_pos, face_y + 0.06, mouth_z + curve_y),
+        scale=(0.025, 0.008, 0.01))
+    seg = bpy.context.active_object
+    seg.name = f"MouthSeg{{i}}"
+    seg.data.materials.append(mat_mouth)
+
+# ============================================================
+# 4. BODY POSTURE (emotion-driven tilt)
+# ============================================================
+# Tilt entire torso slightly based on emotion
+posture_obj = bpy.data.objects.get("U_Body_1v21_1")
+if posture_obj:
+    posture_obj.rotation_euler.x = {posture_pitch}
+
+# Arms hang more loosely when calm, tense up when aroused
+for arm_name in ["UL_Arm_1v3_1", "UR_Arm_1v3_1"]:
+    arm_obj = bpy.data.objects.get(arm_name)
+    if arm_obj:
+        # Slight inward rotation when anxious, outward when confident
+        arm_obj.rotation_euler.z = {valence * 0.03}
+
+# ============================================================
+# 5. IDLE ANIMATION (breathing, tremor, blinking)
+# ============================================================
+scene = bpy.context.scene
+fps = 24
+duration = {max(3.0, spec.duration)}
+total_frames = int(duration * fps)
+scene.frame_start = 1
+scene.frame_end = total_frames
+
+# Find torso for breathing
+torso = bpy.data.objects.get("U_Body_1v21_1") or bpy.data.objects.get("U_Waist_2v8_1")
+if torso:
+    # Breathing: subtle Z-scale oscillation
+    breath_period = fps / {breath_rate}
+    for frame in range(1, total_frames + 1):
+        scene.frame_set(frame)
+        breath_val = math.sin(2 * math.pi * frame / breath_period)
+        scale_bump = 1.0 + breath_val * 0.008 * {arousal}
+        torso.scale.z = torso.scale.z * scale_bump
+        torso.keyframe_insert(data_path="scale", frame=frame)
+
+# Hand tremor animation
+for hand_name in ["UL_Hand_1v6_1", "UR_Hand_1v6_1"]:
+    hand = bpy.data.objects.get(hand_name)
+    if hand and {tremor_amp} > 0.001:
+        for frame in range(1, total_frames + 1):
+            scene.frame_set(frame)
+            # Random-ish tremor using sin with multiple frequencies
+            tremor_x = {tremor_amp} * math.sin(frame * 0.7 + 1.3)
+            tremor_y = {tremor_amp} * math.sin(frame * 1.1 + 0.8)
+            hand.rotation_euler.x = tremor_x
+            hand.rotation_euler.y = tremor_y
+            hand.keyframe_insert(data_path="rotation_euler", frame=frame)
+
+# Subtle head tracking (slight look toward camera direction)
+neck = bpy.data.objects.get("U_Neck_1v4_1")
+if neck:
+    for frame in range(1, total_frames + 1):
+        scene.frame_set(frame)
+        # Gentle side-to-side
+        neck.rotation_euler.y = math.sin(frame * 0.05) * 0.02
+        neck.keyframe_insert(data_path="rotation_euler", frame=frame)
+
+# Pupil tracking (eyes follow a slow pan)
+for pupil_name in ["PupilL", "PupilR"]:
+    pupil = bpy.data.objects.get(pupil_name)
+    if pupil:
+        for frame in range(1, total_frames + 1):
+            scene.frame_set(frame)
+            pupil.location.x += math.sin(frame * 0.08) * 0.001
+            pupil.keyframe_insert(data_path="location", frame=frame)
+
+# ============================================================
+# 6. CAMERA (front view, full body)
+# ============================================================
+bpy.ops.object.camera_add(location=(0, -9, 1.8))
+cam = bpy.context.active_object
+cam.name = "Camera"
+cam.rotation_euler = (1.27, 0, 0)
+cam.data.lens = 35
+scene.camera = cam
+
+# ============================================================
+# 7. LIGHTING (emotion-responsive)
+# ============================================================
+# Key light - warm/cool based on valence
+bpy.ops.object.light_add(type='AREA', location=(2, -3, 3))
+key = bpy.context.active_object
+key.name = "KeyLight"
+key.data.energy = 500
+key.data.size = 3
+if {valence} < -0.3:
+    key.data.color = (0.7, 0.8, 1.0)  # cool blue for negative
+elif {valence} > 0.3:
+    key.data.color = (1.0, 0.9, 0.7)  # warm for positive
+else:
+    key.data.color = (0.95, 0.95, 1.0)
+
+# Fill light
+bpy.ops.object.light_add(type='AREA', location=(-2, -2, 2))
+fill = bpy.context.active_object
+fill.name = "FillLight"
+fill.data.energy = 200
+fill.data.size = 4
+
+# Rim light
+bpy.ops.object.light_add(type='AREA', location=(0, 3, 3))
+rim = bpy.context.active_object
+rim.name = "RimLight"
+rim.data.energy = 300
+rim.data.size = 2
+
+# Sun - intensity driven by arousal
+bpy.ops.object.light_add(type='SUN', location=(0, 0, 10))
+sun = bpy.context.active_object
+sun.name = "EmotionSun"
+sun.data.energy = {max(0.5, arousal * 3.0)}
+if {valence} < -0.3:
+    sun.data.color = (0.3, 0.4, 1.0)
+elif {valence} > 0.3:
+    sun.data.color = (1.0, 0.7, 0.3)
+else:
+    sun.data.color = (0.9, 0.9, 1.0)
+
+# Emotion glow light (near face, pulses with arousal)
+bpy.ops.object.light_add(type='POINT', location=(0, 0.3, {face_z + 0.2}))
+glow = bpy.context.active_object
+glow.name = "EmotionGlow"
+glow.data.energy = {intensity * 80}
+glow.data.color = ({base_color[0]}, {base_color[1]}, {base_color[2]})
+glow.data.shadow_soft_size = 0.5
+
+# ============================================================
+# 8. WORLD (mood-colored background)
+# ============================================================
+world = bpy.data.worlds.new("World")
+scene.world = world
+world.use_nodes = True
+bg = world.node_tree.nodes.get("Background")
+if {valence} < -0.3:
+    bg.inputs['Color'].default_value = (0.05, 0.08, 0.18, 1.0)
+elif {valence} > 0.3:
+    bg.inputs['Color'].default_value = (0.18, 0.13, 0.05, 1.0)
+else:
+    bg.inputs['Color'].default_value = (0.10, 0.11, 0.15, 1.0)
+bg.inputs['Strength'].default_value = {arousal * 0.5 + 0.1}
+
+# ============================================================
+# 9. GROUND
+# ============================================================
+mat_ground = _mat("Ground", (0.18, 0.2, 0.22, 1), roughness=0.95)
+bpy.ops.mesh.primitive_plane_add(location=(0, 0, -1.1), scale=(6, 6, 1))
+ground = bpy.context.active_object
+ground.name = "Ground"
+ground.data.materials.append(mat_ground)
+
+# ============================================================
+# 10. RENDER
+# ============================================================
+scene.render.engine = 'BLENDER_EEVEE'
+scene.render.resolution_x = 800
+scene.render.resolution_y = 600
+scene.render.resolution_percentage = 100
+scene.render.image_settings.file_format = 'PNG'
+scene.cycles.samples = 32
+
+os.makedirs("/workspace/output", exist_ok=True)
+scene.render.filepath = "/workspace/output/tocabi_emotion.png"
+
+# Render animation (short snippet)
+if {total_frames} > 1:
+    scene.render.filepath = "/workspace/output/tocabi_emotion_"
+    bpy.ops.render.render(animation=True, write_still=False)
+    print("ANIMATION_RENDERED")
+else:
+    bpy.ops.render.render(write_still=True)
+    print("STILL_RENDERED")
+
+print(f"Done! Mood={mood} Valence={valence:.2f} Arousal={arousal:.2f}")
+"""
 
     def _build_procedural_code(self, config: ProceduralConfig) -> str:
         """Generate procedural terrain/buildings/clutter."""

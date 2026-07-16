@@ -299,24 +299,28 @@ class PatternBackend(CognitiveBackend):
 
 
 class HybridBackend(CognitiveBackend):
-    """Three-tier hybrid backend: routine → code → reasoning.
+    """Four-tier hybrid backend: routine → code → reasoning → modifier.
 
     Routes based on task complexity:
     - routine (llama3.2): memory queries, goal generation, simple reasoning, classification
     - code (deepseek-coder-v2:16b): code generation, self-modification, optimization
     - reasoning (qwen2.5:72b): planning, causal reasoning, complex analysis
+    - modifier (maldoror): recursive self-modification, architecture rewrites
     """
 
-    # Tasks that need code generation (code model)
     CODE_TASKS = {
         "code_generation", "code_gen", "self_modify", "optimize",
         "recursive", "analyze_source", "skill_composition",
     }
 
-    # Tasks that need heavy reasoning (reasoning model)
     REASONING_TASKS = {
         "planning", "plan", "causal_reasoning", "counterfactual",
         "simulation", "architecture", "design", "strategy",
+    }
+
+    MODIFIER_TASKS = {
+        "recursive_modify", "self_rewrite", "evolution",
+        "architecture_modify", "bottleneck", "self_improve",
     }
 
     def __init__(
@@ -324,20 +328,25 @@ class HybridBackend(CognitiveBackend):
         routine: CognitiveBackend,
         code: CognitiveBackend | None = None,
         reasoning: CognitiveBackend | None = None,
+        modifier: CognitiveBackend | None = None,
     ):
         self.routine = routine
         self.code = code or routine
         self.reasoning = reasoning or code or routine
+        self.modifier = modifier or self.reasoning
         self.logger = structlog.get_logger()
         self._routine_calls = 0
         self._code_calls = 0
         self._reasoning_calls = 0
+        self._modifier_calls = 0
         self._has_code = code is not None
         self._has_reasoning = reasoning is not None
+        self._has_modifier = modifier is not None
 
     def _route(self, prompt: str, system: str = "") -> str:
-        """Determine which tier to use. Returns 'reasoning', 'code', or 'routine'."""
         combined = (prompt + " " + system).lower()
+        if self._has_modifier and any(task in combined for task in self.MODIFIER_TASKS):
+            return "modifier"
         if self._has_reasoning and any(task in combined for task in self.REASONING_TASKS):
             return "reasoning"
         if self._has_code and any(task in combined for task in self.CODE_TASKS):
@@ -352,13 +361,14 @@ class HybridBackend(CognitiveBackend):
         temperature: float = 0.7,
     ) -> CognitiveResponse:
         tier = self._route(prompt, system)
-        if tier == "reasoning":
+        if tier == "modifier":
+            self._modifier_calls += 1
+            return await self.modifier.complete(prompt, system, max_tokens, temperature)
+        elif tier == "reasoning":
             self._reasoning_calls += 1
-            self.logger.debug("routing_reasoning", calls=self._reasoning_calls)
             return await self.reasoning.complete(prompt, system, max_tokens, temperature)
         elif tier == "code":
             self._code_calls += 1
-            self.logger.debug("routing_code", calls=self._code_calls)
             return await self.code.complete(prompt, system, max_tokens, temperature)
         else:
             self._routine_calls += 1
@@ -381,15 +391,23 @@ class HybridBackend(CognitiveBackend):
         return await self.routine.extract_patterns(data)
 
     def get_stats(self) -> dict[str, Any]:
-        total = self._routine_calls + self._code_calls + self._reasoning_calls
+        total = self._routine_calls + self._code_calls + self._reasoning_calls + self._modifier_calls
         return {
             "routine_calls": self._routine_calls,
             "code_calls": self._code_calls,
             "reasoning_calls": self._reasoning_calls,
+            "modifier_calls": self._modifier_calls,
             "routine_backend": self.routine.get_name(),
             "code_backend": self.code.get_name(),
             "reasoning_backend": self.reasoning.get_name(),
+            "modifier_backend": self.modifier.get_name(),
         }
 
     def get_name(self) -> str:
-        return f"hybrid({self.routine.get_name()}+{self.code.get_name()}+{self.reasoning.get_name()})"
+        return f"hybrid({self.routine.get_name()}+{self.code.get_name()}+{self.reasoning.get_name()}+{self.modifier.get_name()})"
+
+    def update_modifier(self, modifier: CognitiveBackend | None) -> None:
+        """Hot-swap the modifier backend (e.g. after deploying maldoror)."""
+        self.modifier = modifier or self.reasoning
+        self._has_modifier = modifier is not None
+        self.logger.info("modifier_backend_updated", has_modifier=self._has_modifier)

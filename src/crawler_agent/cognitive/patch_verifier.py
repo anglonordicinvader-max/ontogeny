@@ -187,18 +187,11 @@ class PatchVerifier:
         # Build test file
         test_code = self._build_test_file(module_name, tests)
 
-        # Write to temp location
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmp_path = Path(tmpdir)
-            test_file = tmp_path / f"test_{module_name}.py"
-            test_file.write_text(test_code)
-
-            # Copy target module
-            target_copy = tmp_path / target_file.name
-            target_copy.write_text(target_file.read_text())
-
-            # Run pytest
-            result = await self._run_pytest_in_sandbox(tmp_path, test_file)
+        # Try real sandbox execution first, fall back to local
+        try:
+            result = await self._run_pytest_in_sandbox_real(target_file, test_code, module_name)
+        except Exception:
+            result = await self._run_pytest_local(target_file, test_code)
 
         passed = result.get("passed", 0)
         total = result.get("total", len(tests))
@@ -230,17 +223,146 @@ from {module_name} import *
 {test_functions}
 """
 
-    async def _run_pytest_in_sandbox(self, workdir: Path, test_file: Path) -> dict:
-        """Run pytest in Docker sandbox."""
-        # This would use the sandbox to run pytest
-        # For now, return mock result
-        return {
-            "passed": 3,
-            "total": 5,
-            "output": "3 passed, 2 failed",
-            "errors": ["test_x failed: AssertionError"],
-            "coverage": 0.6,
-        }
+    async def _run_pytest_in_sandbox_real(
+        self, target_file: Path, test_code: str, module_name: str
+    ) -> dict:
+        """Run pytest in Docker sandbox using CodeSandbox."""
+        if not self.sandbox:
+            return await self._run_pytest_local(target_file, test_code)
+
+        # Check if sandbox has execute_code method (CodeSandbox)
+        if not hasattr(self.sandbox, 'execute_code'):
+            return await self._run_pytest_local(target_file, test_code)
+
+        # Build a combined script: install deps, write files, run pytest
+        target_content = target_file.read_text(encoding="utf-8")
+
+        combined_script = f"""
+import subprocess, sys, os, tempfile, json
+
+# Install pytest if needed
+subprocess.run([sys.executable, "-m", "pip", "install", "pytest", "-q"], capture_output=True)
+
+# Create temp workspace
+workspace = tempfile.mkdtemp()
+sys.path.insert(0, workspace)
+
+# Write target module
+with open(os.path.join(workspace, "{module_name}.py"), "w") as f:
+    f.write('''{target_content.replace("'", "\\'").replace("\\n", "\\\\n")}''')
+
+# Write test file
+with open(os.path.join(workspace, "test_{module_name}.py"), "w") as f:
+    f.write('''{test_code.replace("'", "\\'").replace("\\n", "\\\\n")}''')
+
+# Run pytest
+result = subprocess.run(
+    [sys.executable, "-m", "pytest", os.path.join(workspace, "test_{module_name}.py"),
+     "-v", "--tb=short", "--no-header"],
+    capture_output=True, text=True, timeout=30, cwd=workspace
+)
+
+output = result.stdout + result.stderr
+
+# Parse results
+passed = output.count(" PASSED")
+failed = output.count(" FAILED")
+errors_list = []
+for line in output.split("\\n"):
+    if "FAILED" in line:
+        errors_list.append(line.strip())
+
+print(json.dumps({{
+    "passed": passed,
+    "total": passed + failed,
+    "output": output[:2000],
+    "errors": errors_list[:5],
+    "exit_code": result.returncode
+}}))
+"""
+        try:
+            exec_result = await self.sandbox.execute_code(
+                combined_script, language="python", timeout=30
+            )
+            if exec_result.success and exec_result.output.strip():
+                # Parse JSON output from the script
+                output = exec_result.output.strip()
+                # Find the JSON line in output
+                for line in output.split("\n"):
+                    line = line.strip()
+                    if line.startswith("{") and line.endswith("}"):
+                        return json.loads(line)
+            # Fall back to local if sandbox fails
+            return await self._run_pytest_local(target_file, test_code)
+        except Exception:
+            return await self._run_pytest_local(target_file, test_code)
+
+    async def _run_pytest_local(self, target_file: Path, test_code: str) -> dict:
+        """Run pytest locally as fallback."""
+        import subprocess
+        import sys as _sys
+
+        module_name = target_file.stem
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+
+            # Copy target module
+            target_copy = tmp_path / target_file.name
+            target_copy.write_text(target_file.read_text(encoding="utf-8"))
+
+            # Write test file
+            test_file = tmp_path / f"test_{module_name}.py"
+            test_file.write_text(test_code)
+
+            # Also copy the parent directory's __init__.py if it exists
+            init_file = target_file.parent / "__init__.py"
+            if init_file.exists():
+                (tmp_path / "__init__.py").write_text(init_file.read_text(encoding="utf-8"))
+
+            # Copy sibling modules that might be imported
+            for sibling in target_file.parent.glob("*.py"):
+                if sibling.name != target_file.name and sibling.name != "__init__.py":
+                    dest = tmp_path / sibling.name
+                    if not dest.exists():
+                        dest.write_text(sibling.read_text(encoding="utf-8"))
+
+            try:
+                result = subprocess.run(
+                    [_sys.executable, "-m", "pytest", str(test_file),
+                     "-v", "--tb=short", "--no-header"],
+                    capture_output=True, text=True, timeout=30,
+                    cwd=str(tmp_path),
+                )
+                output = result.stdout + result.stderr
+
+                passed = output.count(" PASSED")
+                failed = output.count(" FAILED")
+                errors = []
+                for line in output.split("\n"):
+                    if "FAILED" in line:
+                        errors.append(line.strip())
+
+                return {
+                    "passed": passed,
+                    "total": passed + failed,
+                    "output": output[:2000],
+                    "errors": errors[:5],
+                }
+            except subprocess.TimeoutExpired:
+                return {
+                    "passed": 0,
+                    "total": len(test_code.split("\ndef test_")),
+                    "output": "Test execution timed out",
+                    "errors": ["timeout"],
+                }
+            except Exception as e:
+                return {
+                    "passed": 0,
+                    "total": 0,
+                    "output": str(e),
+                    "errors": [str(e)],
+                }
 
 
 class CritiqueAgent:

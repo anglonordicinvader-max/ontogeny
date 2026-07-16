@@ -1,6 +1,7 @@
 """Full anatomy mode - humanoid robot body with IK, muscles, grasp, collision.
 
 Provides:
+- TOCABI humanoid robot model (38 STL meshes, URDF)
 - Inverse kinematics for 7-DOF arm
 - Muscle force simulation
 - Grasp planning and execution
@@ -10,9 +11,12 @@ Provides:
 """
 
 import math
+import os
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from xml.etree import ElementTree
 
 import structlog
 
@@ -43,6 +47,18 @@ class Joint:
 
     def is_within_limits(self, angle: float) -> bool:
         return self.lower_limit <= angle <= self.upper_limit
+
+
+@dataclass
+class TocabiPart:
+    """A single part of the TOCABI robot."""
+    name: str
+    stl_path: str
+    joint_name: str
+    parent_link: str
+    origin_xyz: List[float]
+    origin_rpy: List[float]
+    mass: float = 1.0
 
 
 @dataclass
@@ -82,14 +98,20 @@ class CollisionInfo:
 class AnatomyMode:
     """Full humanoid anatomy with IK, muscles, and physics."""
 
-    def __init__(self):
+    TOCABI_DEFAULT_DIR = Path(__file__).parent.parent.parent.parent / "data" / "blender" / "models" / "tocabi"
+
+    def __init__(self, tocabi_dir: Optional[str] = None):
         self.logger = structlog.get_logger(component="anatomy_mode")
         self.joints: Dict[str, Joint] = {}
         self.links: Dict[str, Link] = {}
         self.muscles: Dict[str, Dict] = {}
         self.collision_pairs: List[CollisionInfo] = []
+        self.tocabi_parts: List[TocabiPart] = []
+        self.tocabi_dir = Path(tocabi_dir) if tocabi_dir else self.TOCABI_DEFAULT_DIR
+        self.tocabi_urdf: Optional[str] = None
 
         self._setup_robot()
+        self._load_tocabi_model()
 
     def _setup_robot(self):
         """Setup 7-DOF robotic arm + 5-finger hand."""
@@ -136,6 +158,122 @@ class AnatomyMode:
             "deltoid": {"joint": "shoulder_pitch", "max_force": 120, "side": "flexor"},
             "rotator_cuff": {"joint": "shoulder_roll", "max_force": 60, "side": "stabilizer"},
         }
+
+    def _load_tocabi_model(self):
+        """Load TOCABI humanoid robot model from URDF + STL meshes."""
+        urdf_path = self.tocabi_dir / "combined" / "urdf" / "FullBody.urdf"
+        meshes_dir = self.tocabi_dir / "combined" / "meshes"
+
+        if not urdf_path.exists() or not meshes_dir.exists():
+            self.logger.warning("tocabi_model_not_found",
+                                urdf=str(urdf_path), meshes=str(meshes_dir))
+            return
+
+        try:
+            tree = ElementTree.parse(str(urdf_path))
+            root = tree.getroot()
+            self.tocabi_urdf = str(urdf_path)
+
+            for joint_elem in root.findall(".//joint"):
+                joint_name = joint_elem.get("name")
+                joint_type = joint_elem.get("type")
+                child_elem = joint_elem.find("child")
+                child_link = child_elem.get("link") if child_elem is not None else ""
+
+                origin = joint_elem.find("origin")
+                xyz = [0.0, 0.0, 0.0]
+                rpy = [0.0, 0.0, 0.0]
+                if origin is not None:
+                    xyz_str = origin.get("xyz", "0 0 0").split()
+                    rpy_str = origin.get("rpy", "0 0 0").split()
+                    xyz = [float(v) for v in xyz_str]
+                    rpy = [float(v) for v in rpy_str]
+
+                axis_elem = joint_elem.find("axis")
+                axis = [0, 0, 1]
+                if axis_elem is not None:
+                    axis = [float(v) for v in axis_elem.get("xyz", "0 0 1").split()]
+
+                limit = joint_elem.find("limit")
+                lower = -3.14
+                upper = 3.14
+                max_torque = 50.0
+                if limit is not None:
+                    lower = float(limit.get("lower", "-3.14"))
+                    upper = float(limit.get("upper", "3.14"))
+                    max_torque = float(limit.get("effort", "50"))
+
+                limb_type = LimbType.ARM
+                name_lower = joint_name.lower()
+                if "hip" in name_lower or "knee" in name_lower or "ankle" in name_lower or "foot" in name_lower:
+                    limb_type = LimbType.LEG
+                elif "hand" in name_lower or "wrist" in name_lower or "finger" in name_lower:
+                    limb_type = LimbType.HAND
+                elif "waist" in name_lower or "body" in name_lower or "pelvis" in name_lower:
+                    limb_type = LimbType.TORSO
+                elif "neck" in name_lower or "head" in name_lower:
+                    limb_type = LimbType.HEAD
+
+                if joint_type == "revolute" or joint_type == "continuous":
+                    jt = JointType.REVOLUTE
+                elif joint_type == "prismatic":
+                    jt = JointType.PRISMATIC
+                else:
+                    continue
+
+                self.joints[joint_name] = Joint(
+                    name=joint_name,
+                    joint_type=jt,
+                    limb_type=limb_type,
+                    axis=axis,
+                    lower_limit=lower,
+                    upper_limit=upper,
+                    max_torque=max_torque,
+                )
+
+            for link_elem in root.findall(".//link"):
+                link_name = link_elem.get("name")
+                visual = link_elem.find("visual")
+                if visual is not None:
+                    geometry = visual.find("geometry")
+                    if geometry is not None:
+                        mesh_elem = geometry.find("mesh")
+                        if mesh_elem is not None:
+                            filename = mesh_elem.get("filename", "")
+                            if filename.startswith("package://"):
+                                filename = filename[len("package://"):]
+                            stl_path = meshes_dir / os.path.basename(filename)
+                            origin = visual.find("origin")
+                            xyz = [0.0, 0.0, 0.0]
+                            if origin is not None:
+                                xyz_str = origin.get("xyz", "0 0 0").split()
+                                xyz = [float(v) for v in xyz_str]
+
+                            if stl_path.exists():
+                                part = TocabiPart(
+                                    name=link_name,
+                                    stl_path=str(stl_path),
+                                    joint_name=link_name,
+                                    parent_link=link_name,
+                                    origin_xyz=xyz,
+                                    origin_rpy=[0.0, 0.0, 0.0],
+                                )
+                                self.tocabi_parts.append(part)
+
+            self.logger.info("tocabi_model_loaded",
+                             parts=len(self.tocabi_parts),
+                             joints=len(self.joints))
+
+        except Exception as e:
+            self.logger.error("tocabi_load_failed", error=str(e))
+
+    def get_tocabi_stl_files(self) -> List[str]:
+        """Return paths to all TOCABI STL mesh files."""
+        return [p.stl_path for p in self.tocabi_parts if os.path.exists(p.stl_path)]
+
+    def get_tocabi_joint_names(self) -> List[str]:
+        """Return list of TOCABI joint names."""
+        return list(self.joints.keys())
 
     def solve_ik(
         self,

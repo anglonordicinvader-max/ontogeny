@@ -6,8 +6,12 @@ from .goals import GoalManager, Goal, GoalSource, GoalPriority, GoalStatus
 from .self_modify import SelfModifier, Modification, ModificationType, SafetyLevel
 from .recursive_modify import RecursiveSelfModifier, RecursiveModification, ModificationTarget
 from .planning import Planner, Plan, PlanStep, PlanStatus
-from .learning import FocusedLearner, LearningMode
 from .scheduler import AdaptiveScheduler, CrawlOrchestrator, CrawlIntensity
+
+# Lazy imports to avoid circular dependencies
+def _lazy_learning():
+    from .learning import FocusedLearner, LearningMode
+    return FocusedLearner, LearningMode
 
 # Advanced cognitive modules
 from .knowledge_graph import KnowledgeGraph, Concept, Relation, RelationType
@@ -45,7 +49,6 @@ __all__ = [
     "GoalManager", "Goal", "GoalSource", "GoalPriority", "GoalStatus",
     "SelfModifier", "Modification", "ModificationType", "SafetyLevel",
     "Planner", "Plan", "PlanStep", "PlanStatus",
-    "FocusedLearner", "LearningMode",
     "AdaptiveScheduler", "CrawlOrchestrator", "CrawlIntensity",
     
     # Advanced
@@ -79,4 +82,7 @@ __all__ = [
     "DomainRandomizationConfig", "ProceduralConfig", "RobotConfig", "SimulationSpec", "SimulationResult",
     "CompositeOutcomeVerifier", "create_outcome_verifier", "VerificationSpec", "VerificationStatus",
     "MCTSPlanner", "create_mcts_planner", "MCTSConfig",
+    
+    # Lazy imports (use via function calls)
+    "_lazy_learning",
 ]

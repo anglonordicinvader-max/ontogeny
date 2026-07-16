@@ -343,3 +343,213 @@ Estimate causal effect:"""
             "counterfactuals": len(self.counterfactuals),
             "is_dag": nx.is_directed_acyclic_graph(self.dag) if self.dag.number_of_nodes() > 0 else True,
         }
+
+    # === Temporal Causal Discovery ===
+
+    async def discover_temporal_causality(
+        self,
+        event_sequence: list[dict[str, Any]],
+        time_window: float = 1.0,
+    ) -> list[CausalEdge]:
+        """Discover causal relationships from temporal event sequences.
+
+        Uses temporal precedence, co-occurrence, and Granger-like
+        reasoning to identify causal links.
+
+        Args:
+            event_sequence: [{event_type, timestamp, variables, outcome}]
+            time_window: Max time gap to consider for causal candidates
+        """
+        if len(event_sequence) < 2:
+            return []
+
+        # Sort by timestamp
+        sorted_events = sorted(event_sequence, key=lambda e: e.get("timestamp", 0))
+
+        system_prompt = """Discover causal relationships from a temporal sequence of events.
+
+Analyze:
+1. Temporal precedence (cause before effect)
+2. Consistent co-occurrence patterns
+3. Strength of temporal association
+4. Potential confounders
+5. Time lag between cause and effect
+
+Return JSON with:
+- causal_edges: [{cause_event, effect_event, relation, strength, time_lag, confidence, evidence}]
+- temporal_patterns: [{pattern_description, frequency}]
+- confounders: [{variable, affects}]"""
+
+        user_prompt = f"""Event Sequence ({len(sorted_events)} events):
+{self._format_events_for_prompt(sorted_events)}
+
+Time Window: {time_window}
+
+Discover causal relationships:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
+            max_tokens=2000,
+            temperature=0.3,
+        )
+
+        discovered = []
+        try:
+            data = response.parsed_json
+            for edge_data in data.get("causal_edges", []):
+                cause = edge_data.get("cause_event", "unknown")
+                effect = edge_data.get("effect_event", "unknown")
+
+                edge = CausalEdge(
+                    source=str(cause).lower().replace(" ", "_"),
+                    target=str(effect).lower().replace(" ", "_"),
+                    relation=CausalRelation(edge_data.get("relation", "direct_cause")),
+                    strength=edge_data.get("strength", 0.5),
+                    confidence=edge_data.get("confidence", 0.5),
+                    evidence=[str(e.get("event_type", "")) for e in sorted_events[:5]],
+                )
+                discovered.append(edge)
+
+                # Add to model
+                self.add_edge(edge)
+        except Exception as e:
+            self.logger.error("temporal_discovery_failed", error=str(e))
+
+        self.logger.info(
+            "temporal_causality_discovered",
+            edges_found=len(discovered),
+            events_analyzed=len(sorted_events),
+        )
+
+        return discovered
+
+    def _format_events_for_prompt(self, events: list[dict[str, Any]]) -> str:
+        """Format events for prompt."""
+        lines = []
+        for i, e in enumerate(events[:20]):
+            ts = e.get("timestamp", "N/A")
+            etype = e.get("event_type", "unknown")
+            vars_str = ", ".join(str(k) for k in e.get("variables", {}).keys()) if isinstance(e.get("variables"), dict) else ""
+            lines.append(f"  {i}: [{ts}] {etype} ({vars_str})")
+        return "\n".join(lines)
+
+    async def plan_interventions(
+        self,
+        desired_outcome: str,
+        current_state: dict[str, Any] | None = None,
+        constraints: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Plan a sequence of interventions to achieve a desired outcome.
+
+        Uses the causal model to identify:
+        1. Which variables to intervene on
+        2. What values to set
+        3. What order to apply interventions
+        4. Expected cascade effects
+        5. Risk assessment for each intervention
+        """
+        system_prompt = """Plan causal interventions to achieve a desired outcome.
+
+Consider:
+1. Which variables are intervention points (not confounders)
+2. Order of interventions (respect causal direction)
+3. Expected cascading effects
+4. Risk of unintended consequences
+5. Confidence in each intervention
+
+Return JSON with:
+- intervention_plan: [{variable, value, rationale, expected_effects, risk_level, confidence}]
+- execution_order: [variable_names in order]
+- total_expected_effect: 0-1
+- risk_assessment: {overall_risk, mitigations}
+- alternative_plans: [{plan_name, interventions}]"""
+
+        user_prompt = f"""Desired Outcome: {desired_outcome}
+Current State: {current_state or {}}
+Constraints: {constraints or []}
+
+Causal Model:
+Variables: {list(self.variables.keys())[:20]}
+Edges: {[(e.source, e.target, e.relation.value) for e in self.edges[:15]]}
+
+Plan interventions:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
+            max_tokens=2000,
+            temperature=0.3,
+        )
+
+        try:
+            data = response.parsed_json
+
+            # Record interventions
+            for interv in data.get("intervention_plan", []):
+                self.interventions.append(Intervention(
+                    variable=interv.get("variable", "unknown"),
+                    value=interv.get("value"),
+                ))
+
+            return data
+        except Exception as e:
+            self.logger.error("intervention_planning_failed", error=str(e))
+            return {"intervention_plan": [], "total_expected_effect": 0}
+
+    async def predict_cascade(
+        self,
+        initial_change: dict[str, Any],
+        depth: int = 3,
+    ) -> dict[str, Any]:
+        """Predict the cascade of effects from an initial change.
+
+        Traces through the causal graph to predict:
+        1. Direct effects
+        2. Indirect effects (through mediators)
+        3. Feedback loops (if any)
+        4. Converging causes
+        """
+        if not initial_change:
+            return {"effects": [], "cascade_depth": 0}
+
+        variable = list(initial_change.keys())[0] if initial_change else "unknown"
+        value = initial_change[variable] if variable in initial_change else "unknown"
+
+        # Trace causal paths
+        effects = []
+        visited = set()
+        current_level = [(variable, value, 1.0)]  # (var, val, strength)
+
+        for d in range(depth):
+            next_level = []
+            for var, val, strength in current_level:
+                if var in visited:
+                    continue
+                visited.add(var)
+
+                # Find direct effects
+                for edge in self.edges:
+                    if edge.source == var and edge.target not in visited:
+                        effect_strength = strength * edge.strength
+                        effects.append({
+                            "variable": edge.target,
+                            "via_path": f"{var} -> {edge.target}",
+                            "relation": edge.relation.value,
+                            "strength": effect_strength,
+                            "depth": d + 1,
+                            "confidence": edge.confidence * strength,
+                        })
+                        next_level.append((edge.target, "affected", effect_strength))
+
+            current_level = next_level
+            if not current_level:
+                break
+
+        return {
+            "initial_change": initial_change,
+            "effects": effects,
+            "cascade_depth": len(effects),
+            "variables_affected": len(set(e["variable"] for e in effects)),
+            "strongest_effect": max(effects, key=lambda e: e["strength"]) if effects else None,
+        }

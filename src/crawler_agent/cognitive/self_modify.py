@@ -290,6 +290,9 @@ class SelfModifier:
         self.skills: dict[str, str] = {}
         self.history_file = Path("./data/self_modification_history.json")
         self.history_file.parent.mkdir(parents=True, exist_ok=True)
+        self.training_log = Path("./data/modification_training_log.jsonl")
+        self.training_log.parent.mkdir(parents=True, exist_ok=True)
+        self.verifier = None  # Set externally if PatchVerifier available
         self.logger = structlog.get_logger()
         self._load_history()
 
@@ -439,9 +442,33 @@ class SelfModifier:
 
         mod.applied = True
         mod.approved = True
+
+        # Record to training log
+        self._record_training_log(mod, success=True)
+
         self.logger.info("modification_applied", mod_id=mod_id, type=mod.mod_type.value)
         self._save_history()
         return True
+
+    def _record_training_log(self, mod: Modification, success: bool):
+        """Record modification to training log for future fine-tuning."""
+        record = {
+            "id": mod.id,
+            "timestamp": mod.timestamp.isoformat(),
+            "mod_type": mod.mod_type.value,
+            "description": mod.description,
+            "reasoning": mod.reasoning,
+            "expected_benefit": mod.expected_benefit,
+            "safety_level": mod.safety_level.value,
+            "success": success,
+            "code": mod.code[:2000] if mod.code else "",
+            "config": mod.config,
+        }
+        try:
+            with open(self.training_log, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record) + "\n")
+        except Exception as e:
+            self.logger.warning("training_log_write_failed", error=str(e))
 
     async def test_modification(self, mod_id: str) -> dict[str, Any]:
         """Test a modification by executing it in sandbox and measuring results."""
@@ -514,6 +541,8 @@ class SelfModifier:
         mod = next((m for m in self.modifications if m.id == mod_id), None)
         if mod:
             mod.performance_delta = performance_delta
+            # Update training log with actual outcome
+            self._record_training_log(mod, success=success)
             if not success:
                 await self.rollback(mod_id)
             self._save_history()

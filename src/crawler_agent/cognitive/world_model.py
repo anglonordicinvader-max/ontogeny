@@ -334,3 +334,216 @@ class BayesianWorldModel:
 
         dfs(start)
         return list(reversed(path))
+
+    # === Prediction-Error Minimization ===
+
+    @dataclass
+    class PredictionRecord:
+        """Record of a prediction and its outcome."""
+        id: str = field(default_factory=lambda: str(uuid.uuid4()))
+        prediction: str = ""
+        predicted_probability: float = 0.5
+        actual_outcome: bool = False
+        prediction_error: float = 0.0
+        context: dict[str, Any] = field(default_factory=dict)
+        timestamp: datetime = field(default_factory=datetime.utcnow)
+        updated: bool = False
+
+    async def predict_and_update(
+        self,
+        query: str,
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Make a prediction and return it for later comparison.
+
+        This implements the predict-compare-update cycle:
+        1. Generate prediction
+        2. Record it
+        3. Later, compare with actual outcome
+        4. Update model based on prediction error
+        """
+        # Make prediction using existing method
+        prediction = await self.predict(query, context)
+
+        # Record for later comparison
+        record = self.PredictionRecord(
+            prediction=query,
+            predicted_probability=prediction.get("predicted_probability", 0.5),
+            context=context or {},
+        )
+        self.prediction_history.append(record)
+
+        return {
+            "prediction_id": record.id,
+            "predicted_probability": record.predicted_probability,
+            "query": query,
+            "context": context,
+        }
+
+    async def update_from_outcome(
+        self,
+        prediction_id: str,
+        actual_outcome: bool,
+        observation: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Update world model based on actual outcome vs prediction.
+
+        Calculates prediction error and adjusts beliefs accordingly.
+        """
+        # Find the prediction record
+        record = None
+        for r in self.prediction_history:
+            if isinstance(r, self.PredictionRecord) and r.id == prediction_id:
+                record = r
+                break
+
+        if not record:
+            return {"error": "Prediction not found"}
+
+        # Calculate prediction error
+        predicted = record.predicted_probability
+        actual = 1.0 if actual_outcome else 0.0
+        prediction_error = abs(predicted - actual)
+        record.prediction_error = prediction_error
+        record.actual_outcome = actual_outcome
+        record.updated = True
+
+        # Update relevant beliefs based on error
+        beliefs_updated = []
+        for belief in self.beliefs.values():
+            if record.prediction.lower() in belief.statement.lower():
+                # High prediction error = we need to update this belief
+                if prediction_error > 0.3:
+                    # Large error: significant update
+                    update_direction = actual > predicted
+                    strength = prediction_error * 1.5  # Amplify based on error
+                    belief.update_with_evidence(update_direction, strength)
+                    beliefs_updated.append(belief.statement)
+
+        # Update causal links if observation provided
+        links_updated = []
+        if observation:
+            for link in self.causal_links.values():
+                if self._observation_involves(link, observation):
+                    link.update(actual_outcome)
+                    links_updated.append(f"{link.cause} -> {link.effect}")
+
+        # Record prediction error in history
+        self.prediction_history.append({
+            "type": "update",
+            "prediction_id": prediction_id,
+            "prediction_error": prediction_error,
+            "beliefs_updated": len(beliefs_updated),
+            "links_updated": len(links_updated),
+        })
+
+        self.logger.info(
+            "world_model_updated",
+            prediction_error=prediction_error,
+            beliefs_updated=len(beliefs_updated),
+            links_updated=len(links_updated),
+        )
+
+        return {
+            "prediction_error": prediction_error,
+            "beliefs_updated": beliefs_updated,
+            "links_updated": links_updated,
+            "model_quality": 1.0 - self._calculate_average_prediction_error(),
+        }
+
+    def _calculate_average_prediction_error(self) -> float:
+        """Calculate average prediction error from recent history."""
+        errors = [
+            r.prediction_error for r in self.prediction_history
+            if isinstance(r, self.PredictionRecord) and r.updated
+        ]
+        if not errors:
+            return 0.5  # Unknown quality
+
+        # Weight recent errors more heavily
+        recent = errors[-20:] if len(errors) > 20 else errors
+        weights = [0.9 ** i for i in range(len(recent))]
+        weighted_error = sum(e * w for e, w in zip(recent, weights)) / sum(weights)
+        return weighted_error
+
+    async def internal_simulation(
+        self,
+        action: str,
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Simulate an action internally before executing.
+
+        Uses the world model to predict outcomes without taking real action.
+        This enables "thinking before acting".
+        """
+        system_prompt = """Simulate what would happen if an action is taken.
+
+Use the world model to predict:
+1. Direct effects of this action
+2. Indirect effects through causal chains
+3. Potential risks and side effects
+4. Expected state after action
+5. Confidence in simulation accuracy
+
+Return JSON with:
+- predicted_effects: [{variable, change, confidence}]
+- risks: [{risk, probability, severity}]
+- final_state_estimate: {key_changes}
+- simulation_confidence: 0-1
+- reasoning: brief explanation"""
+
+        user_prompt = f"""Action: {action}
+Context: {context or {}}
+
+World Model:
+Beliefs: {[(b.statement, b.probability) for b in list(self.beliefs.values())[:10]]}
+Causal Links: {[(c.cause, c.effect, c.strength) for c in list(self.causal_links.values())[:10]]}
+Variables: {dict(list(self.variables.items())[:15])}
+
+Simulate:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
+            max_tokens=1000,
+            temperature=0.3,
+        )
+
+        try:
+            data = response.parsed_json
+
+            # Record simulation for later comparison with actual outcomes
+            self.prediction_history.append({
+                "type": "simulation",
+                "action": action,
+                "predicted_effects": data.get("predicted_effects", []),
+                "risks": data.get("risks", []),
+                "confidence": data.get("simulation_confidence", 0.5),
+                "context": context,
+            })
+
+            return data
+        except Exception:
+            return {"simulation_confidence": 0, "predicted_effects": []}
+
+    def get_model_quality(self) -> dict[str, Any]:
+        """Assess the quality of the world model."""
+        avg_error = self._calculate_average_prediction_error()
+        total_predictions = sum(
+            1 for r in self.prediction_history
+            if isinstance(r, self.PredictionRecord)
+        )
+        updated_predictions = sum(
+            1 for r in self.prediction_history
+            if isinstance(r, self.PredictionRecord) and r.updated
+        )
+
+        return {
+            "average_prediction_error": avg_error,
+            "model_accuracy": 1.0 - avg_error,
+            "total_predictions": total_predictions,
+            "updated_predictions": updated_predictions,
+            "update_rate": updated_predictions / max(1, total_predictions),
+            "belief_count": len(self.beliefs),
+            "causal_link_count": len(self.causal_links),
+        }

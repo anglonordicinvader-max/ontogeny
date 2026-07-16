@@ -49,8 +49,12 @@ from .goals import GoalManager, Goal, GoalSource, GoalPriority
 from .self_modify import SelfModifier, Modification
 from .recursive_modify import RecursiveSelfModifier, RecursiveModification
 from .planning import Planner, Plan, PlanStep, PlanStatus, StepStatus
-from .learning import FocusedLearner, LearningMode
 from .scheduler import AdaptiveScheduler, CrawlOrchestrator, CrawlIntensity
+
+# Lazy import to avoid circular dependency
+def _get_learning():
+    from .learning import FocusedLearner, LearningMode
+    return FocusedLearner, LearningMode
 from .knowledge_graph import KnowledgeGraph
 from .causal_reasoning import CausalReasoner
 from .skill_composition import SkillComposer
@@ -189,7 +193,7 @@ class CognitiveOrchestrator:
         self.proxy_pool = self.proxy_manager.pool
 
         # Learning system
-        self.learner: FocusedLearner | None = None
+        self.learner = None  # FocusedLearner, lazy loaded
         self.crawl_orchestrator: CrawlOrchestrator | None = None
 
         # Advanced cognitive modules
@@ -374,6 +378,7 @@ class CognitiveOrchestrator:
             self.multi_agent.set_sandbox(self.code_sandbox)
         
         # Initialize learning system
+        FocusedLearner, _ = _get_learning()
         self.learner = FocusedLearner(
             llm=self.llm,
             memory=self.memory,
@@ -2551,9 +2556,12 @@ class CognitiveOrchestrator:
         self,
         topic: str,
         max_items: int = 10,
-        mode: LearningMode = LearningMode.FOCUSED,
+        mode=None,
     ) -> dict[str, Any]:
         """Run focused learning session."""
+        _, LearningMode = _get_learning()
+        if mode is None:
+            mode = LearningMode.FOCUSED
         session = await self.learner.start_session(topic, mode, max_items)
 
         # Get priority sources

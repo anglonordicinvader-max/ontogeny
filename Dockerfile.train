@@ -1,0 +1,12 @@
+FROM pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime
+
+RUN pip install --no-cache-dir \
+    rich \
+    "transformers>=4.40.0,<4.45" \
+    "peft>=0.10.0,<0.13" \
+    "trl>=0.8.0,<0.10" \
+    "accelerate>=0.28.0,<0.30" \
+    bitsandbytes \
+    datasets
+
+WORKDIR /workspace

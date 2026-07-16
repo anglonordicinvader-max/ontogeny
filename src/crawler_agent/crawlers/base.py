@@ -15,7 +15,11 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from ..utils.rate_limiter import TokenBucket, SlidingWindowRateLimiter
 from ..utils.proxy import ProxyPool, ProxyAwareClient, Proxy
-from ..cognitive.reliability import get_reliability_manager, RetryConfig
+
+# Lazy import to avoid circular dependency
+def _get_reliability():
+    from ..cognitive.reliability import get_reliability_manager, RetryConfig
+    return get_reliability_manager, RetryConfig
 
 
 class ContentType(str, Enum):
@@ -131,6 +135,7 @@ class BaseCrawler(ABC):
             raise RuntimeError("Crawler not initialized")
 
         # Use reliability manager for structured retry with circuit breaker
+        get_reliability_manager, RetryConfig = _get_reliability()
         reliability = get_reliability_manager()
         retry_config = RetryConfig(
             max_retries=self.config.max_retries,
