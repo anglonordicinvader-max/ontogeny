@@ -236,6 +236,31 @@ def main():
     except ImportError as e:
         print(f"  Error: {e}")
 
+    # Model Population
+    print(section("12. Model Population (Evolutionary Training)"))
+    try:
+        from src.crawler_agent.cognitive.model_population import ModelPopulation
+        pop_dir = Path("data/maldoror/population")
+        state_path = pop_dir / "population_state.json"
+        if state_path.exists():
+            state = json.loads(state_path.read_text())
+            print(f"  Generation:          {state.get('generation', 0)}")
+            print(f"  Best Fitness:        {state.get('best_variant', {}).get('fitness', 0) if state.get('best_variant') else 0:.3f}")
+            best = state.get("best_variant")
+            if best:
+                print(f"  Best Strategy:       {best.get('config', {}).get('name', 'unknown')}")
+            gens = state.get("generations", [])
+            if gens:
+                latest = gens[-1]
+                print(f"  Latest Generation:   {latest.get('variants', 0)} variants, avg_fitness={latest.get('avg_fitness', 0):.3f}")
+        else:
+            print(f"  Status:              Not yet initialized")
+            print(f"  Will run first competition when training data is available")
+        print(f"  Function:            Evolutionary training — multiple variants compete, winners propagate")
+        print(f"  Integration:         Runs every 20 iterations via orchestrator._population_compete()")
+    except ImportError as e:
+        print(f"  Error: {e}")
+
     # Pipeline readiness
     checks.append(("Evaluation reports exist", len(eval_reports) > 0))
     all_pass = True

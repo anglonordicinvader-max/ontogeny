@@ -97,6 +97,7 @@ from .model_evaluation import ModelEvaluator, QualityGate, RollbackManager, ABTe
 from .production import PerformanceMonitor, RetrainingTrigger, CircuitBreaker, GracefulDegradation, MetricType
 from .self_training import SelfTrainingSynthesizer
 from .contrastive_trainer import ContrastiveTrainer
+from .model_population import ModelPopulation
 from ..agents import MultiAgentOrchestrator
 
 
@@ -509,6 +510,13 @@ class CognitiveOrchestrator:
         self.contrastive_trainer = ContrastiveTrainer(
             backend=self.backend,
             modification_memory=self.modification_memory,
+        )
+
+        # === Population-Based Training ===
+        self.model_population = ModelPopulation(
+            model_trainer=self.model_trainer,
+            modification_memory=self.modification_memory,
+            evaluator=self.model_evaluator,
         )
 
         # Initialize crawl orchestrator with light intensity by default
@@ -997,6 +1005,10 @@ class CognitiveOrchestrator:
                     if trigger["retrain"]:
                         asyncio.create_task(self._maldoror_retrain(result))
 
+                # 25. Population-based training every 20 iterations
+                if self.iteration % 20 == 0 and self.model_population:
+                    asyncio.create_task(self._population_compete(result))
+
         except Exception as e:
             import traceback
             tb = traceback.format_exc()
@@ -1087,6 +1099,43 @@ class CognitiveOrchestrator:
             }
         except Exception as e:
             self.logger.warning("maldoror_retrain_error", error=str(e))
+
+    async def _population_compete(self, result: dict) -> None:
+        """Background task: run population competition to evolve better training strategies."""
+        try:
+            if not self.model_population:
+                return
+            if not self.modification_memory.ready_for_training(min_examples=10):
+                return
+
+            self.logger.info("starting_population_competition", generation=self.model_population.generation)
+            best = await self.model_population.compete()
+
+            if best and best.training_run and best.training_run.success:
+                # Deploy the winner
+                deployed = await self.custom_model_manager.deploy(best.training_run)
+                if deployed:
+                    await self.custom_model_manager.switch_to(best.training_run.version)
+                    modifier_llm = LLMBackend(
+                        api_key=self.settings.llm.api_key or "ollama",
+                        model=deployed.name,
+                        api_base=self.settings.llm.api_base,
+                    )
+                    self.backend.update_modifier(modifier_llm)
+                    self.logger.info(
+                        "population_winner_deployed",
+                        strategy=best.config.name,
+                        fitness=best.fitness,
+                        generation=best.generation,
+                    )
+                    result["population_competition"] = {
+                        "generation": best.generation,
+                        "winner_strategy": best.config.name,
+                        "winner_fitness": best.fitness,
+                        "best_fitness": self.model_population.best_variant.fitness if self.model_population.best_variant else 0,
+                    }
+        except Exception as e:
+            self.logger.warning("population_competition_error", error=str(e))
 
     async def _auto_render_significant_event(self, result: dict) -> None:
         """Auto-render MP4 snippet for significant events."""
@@ -2600,6 +2649,8 @@ class CognitiveOrchestrator:
             parts.append(f"Self-Training:\n{self.self_trainer.to_context()}")
         if self.contrastive_trainer:
             parts.append(f"Contrastive Training:\n{self.contrastive_trainer.to_context()}")
+        if self.model_population:
+            parts.append(f"Model Population:\n{self.model_population.to_context()}")
         if self.rollback_manager:
             rb_stats = self.rollback_manager.get_stats()
             if rb_stats["total_rollbacks"] > 0:
