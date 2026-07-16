@@ -514,4 +514,4 @@ python -m pytest tests/test_production.py -v      # 28 production tests
 
 ## License
 
-MIT
+AGPL-3.0
