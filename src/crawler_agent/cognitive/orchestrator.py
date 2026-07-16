@@ -101,6 +101,7 @@ from .model_population import ModelPopulation
 from .emergent_curriculum import EmergentCurriculum
 from .adversarial_trainer import AdversarialTrainer
 from .architecture_modifier import ArchitectureModifier
+from .fs_access import FileSystemAccessControl, GitWorkflow
 from ..agents import MultiAgentOrchestrator
 
 
@@ -555,6 +556,10 @@ class CognitiveOrchestrator:
         self.architecture_modifier = ArchitectureModifier(
             output_dir="data/maldoror/architecture",
         )
+
+        # === Filesystem Access Control & PR Workflow ===
+        self.fs_access = FileSystemAccessControl(base_path=Path("."))
+        self.git_workflow = GitWorkflow(base_path=Path("."))
 
         # Initialize crawl orchestrator with light intensity by default
         self.crawl_orchestrator = CrawlOrchestrator(

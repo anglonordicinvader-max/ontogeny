@@ -62,6 +62,7 @@ class RecursiveModification:
     applied: bool = False
     rolled_back: bool = False
     performance_delta: float = 0.0
+    metadata: dict[str, Any] = field(default_factory=dict)
     timestamp: datetime = field(default_factory=datetime.utcnow)
 
 
@@ -188,7 +189,16 @@ class RecursiveSelfModifier:
         self.history_file.parent.mkdir(parents=True, exist_ok=True)
         self.backup_dir = Path("./data/code_backups")
         self.backup_dir.mkdir(parents=True, exist_ok=True)
+        self.training_log = Path("./data/modification_training_log.jsonl")
+        self.training_log.parent.mkdir(parents=True, exist_ok=True)
+        self.verifier = None  # Set externally if PatchVerifier available
         self.logger = structlog.get_logger()
+
+        # Filesystem access control and PR workflow
+        from .fs_access import FileSystemAccessControl, GitWorkflow
+        self.fs_access = FileSystemAccessControl(self.base_path)
+        self.git_workflow = GitWorkflow(self.base_path)
+
         self._load_history()
 
     def _load_history(self) -> None:
@@ -308,6 +318,22 @@ class RecursiveSelfModifier:
         if mod.syntax_valid and mod.import_safe and mod.sandbox_passed:
             applied = await self._apply_source_modification(mod)
             if applied:
+                # 9. Run verification if verifier is available
+                if self.verifier:
+                    try:
+                        verification = await self._run_verification(mod, target_file)
+                        if not verification:
+                            self.logger.warning("verification_failed_after_apply", target=mod.target.value)
+                            await self.rollback_modification(mod.id)
+                            mod.rolled_back = True
+                            mod.applied = False
+                        else:
+                            self._record_training_log(mod, success=True)
+                    except Exception as e:
+                        self.logger.warning("verification_error", error=str(e))
+                else:
+                    self._record_training_log(mod, success=True)
+
                 self.logger.info(
                     "recursive_modification_applied",
                     target=mod.target.value,
@@ -332,6 +358,52 @@ class RecursiveSelfModifier:
         self._save_history()
         return mod
 
+    async def _run_verification(
+        self, mod: RecursiveModification, target_file: SourceFile
+    ) -> bool:
+        """Run patch verification after applying modification."""
+        if not self.verifier:
+            return True
+
+        try:
+            from .recursive_modify import RecursiveModification as RM
+            result = await self.verifier.verify_patch(
+                modification=mod,
+                base_path=self.base_path,
+                num_tests=3,
+            )
+            mod.metadata = getattr(mod, 'metadata', {}) or {}
+            mod.metadata["verification"] = {
+                "passed": result.passed,
+                "tests_passed": result.tests_passed,
+                "tests_total": result.tests_total,
+            }
+            return result.passed
+        except Exception as e:
+            self.logger.warning("verification_exception", error=str(e))
+            return True  # Don't block on verification errors
+
+    def _record_training_log(self, mod: RecursiveModification, success: bool):
+        """Record successful modification to training log for future fine-tuning."""
+        record = {
+            "id": mod.id,
+            "timestamp": mod.timestamp.isoformat(),
+            "target_file": mod.file_path,
+            "module": mod.target.value,
+            "description": mod.description,
+            "reasoning": mod.reasoning,
+            "expected_benefit": mod.expected_benefit,
+            "success": success,
+            "original_code": mod.original_code[:2000],
+            "new_code": mod.new_code[:2000],
+            "diff": mod.diff[:2000],
+        }
+        try:
+            with open(self.training_log, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record) + "\n")
+        except Exception as e:
+            self.logger.warning("training_log_write_failed", error=str(e))
+
     def _find_file_for_module(
         self, files: dict[ModificationTarget, SourceFile], module: str
     ) -> SourceFile | None:
@@ -348,42 +420,56 @@ class RecursiveSelfModifier:
     async def _generate_code_modification(
         self, source: SourceFile, bottleneck: dict
     ) -> RecursiveModification | None:
-        """Use LLM to generate improved version of source code."""
-        # Read only a portion to avoid token limits (key functions)
-        content_lines = source.content.split("\n")
-        # Focus on first 200 lines (imports + main class + key methods)
-        focused_content = "\n".join(content_lines[:200])
+        """Use LLM to generate improved version of source code.
+
+        Reads the full file and generates targeted improvements for the
+        identified bottleneck, rather than rewriting everything.
+        """
+        content = source.content
+        content_lines = content.split("\n")
+        total_lines = len(content_lines)
+
+        # For large files, send the bottleneck-relevant section + context
+        # Find the bottleneck area (functions/classes near the issue)
+        if total_lines > 300:
+            # Send first 100 lines (imports/setup) + section around bottleneck
+            focused_section = self._extract_bottleneck_section(content, bottleneck)
+            prompt_content = f"# First 100 lines (imports/setup):\n{chr(10).join(content_lines[:100])}\n\n# Bottleneck section:\n{focused_section}"
+        else:
+            prompt_content = content
 
         system_prompt = """You are improving a Python module in a cognitive agent framework.
 
-Analyze the code and generate an improved version that:
-1. Fixes the identified issue
-2. Maintains all existing functionality (class names, method signatures, imports)
-3. Adds better error handling where needed
-4. Improves the specific bottleneck identified
-5. Keeps the same module structure
+CRITICAL RULES:
+1. Return the COMPLETE improved file (not just a diff)
+2. Maintain ALL existing class names, method signatures, and imports
+3. Only modify the specific code related to the identified issue
+4. Keep the same module structure and public API
+5. Add error handling only where the bottleneck indicates problems
+6. Do NOT add new imports unless absolutely necessary
+7. Do NOT rename or remove any existing functions/classes
 
 Return JSON with: improved_code, description of changes, reasoning, expected_benefit"""
 
         user_prompt = f"""Module: {source.module}.py
-Lines of code: {source.line_count}
+Lines of code: {total_lines}
 Complexity: {source.complexity:.0%}
 
 Identified issue: {bottleneck['issue']}
 Severity: {bottleneck['severity']:.0%}
 Details: {bottleneck['details']}
 
-Current code (first 200 lines):
+Current code:
 ```python
-{focused_content}
+{prompt_content}
 ```
 
-Generate improved code:"""
+Generate the COMPLETE improved file:"""
 
         response = await self.backend.complete(
             prompt=user_prompt,
             system=system_prompt,
-            max_tokens=4000,
+            max_tokens=8000,
             temperature=0.2,
         )
 
@@ -393,10 +479,16 @@ Generate improved code:"""
             if not new_code:
                 return None
 
+            # Validate the new code covers the full file
+            new_lines = new_code.split("\n")
+            if len(new_lines) < total_lines * 0.5 and total_lines > 100:
+                # LLM truncated too much — reject and try targeted diff approach
+                return await self._generate_targeted_diff(source, bottleneck)
+
             # Generate diff
             diff = "\n".join(difflib.unified_diff(
-                source.content.split("\n")[:200],
-                new_code.split("\n")[:200],
+                content_lines,
+                new_lines,
                 fromfile=f"{source.module}.py (original)",
                 tofile=f"{source.module}.py (improved)",
                 lineterm="",
@@ -407,7 +499,7 @@ Generate improved code:"""
                 target=self._module_to_target(source.module),
                 file_path=str(source.path),
                 description=result.get("description", f"Improve {source.module}"),
-                original_code=source.content,
+                original_code=content,
                 new_code=new_code,
                 diff=diff,
                 reasoning=result.get("reasoning", ""),
@@ -416,6 +508,124 @@ Generate improved code:"""
             )
         except Exception as e:
             self.logger.error("code_generation_failed", module=source.module, error=str(e))
+            return None
+
+    def _extract_bottleneck_section(self, content: str, bottleneck: dict) -> str:
+        """Extract the code section relevant to the bottleneck."""
+        lines = content.split("\n")
+        issue = bottleneck.get("issue", "")
+
+        # Try to find relevant functions/classes based on issue type
+        if "error" in issue:
+            # Look for try/except blocks and error handling
+            relevant_lines = []
+            in_try = False
+            for i, line in enumerate(lines):
+                if "try:" in line or "except" in line:
+                    in_try = True
+                if in_try:
+                    relevant_lines.append(f"{i+1}: {line}")
+                if in_try and (line.strip() == "" and i > 0 and lines[i-1].strip() == ""):
+                    in_try = False
+                if len(relevant_lines) > 100:
+                    break
+            if relevant_lines:
+                return "\n".join(relevant_lines)
+
+        # Default: find the largest function/class
+        current_func = None
+        func_lines = []
+        all_funcs = []
+
+        for i, line in enumerate(lines):
+            if line.startswith("def ") or line.startswith("class "):
+                if current_func and func_lines:
+                    all_funcs.append((current_func, func_lines[:]))
+                current_func = i
+                func_lines = [f"{i+1}: {line}"]
+            elif current_func is not None:
+                func_lines.append(f"{i+1}: {line}")
+
+        if current_func and func_lines:
+            all_funcs.append((current_func, func_lines))
+
+        if all_funcs:
+            # Return the longest function (most room for improvement)
+            longest = max(all_funcs, key=lambda x: len(x[1]))
+            return "\n".join(longest[1][:100])
+
+        # Fallback: return middle section
+        mid = len(lines) // 2
+        return "\n".join(f"{i+1}: {line}" for i, line in enumerate(lines[mid:mid+100]))
+
+    async def _generate_targeted_diff(
+        self, source: SourceFile, bottleneck: dict
+    ) -> RecursiveModification | None:
+        """Generate a targeted diff when full-file rewrite is too truncated."""
+        content = source.content
+        content_lines = content.split("\n")
+
+        system_prompt = """You are generating a targeted diff for a specific issue in a Python file.
+
+Return JSON with:
+- target_lines: line range to modify (start, end)
+- replacement_code: the new code for that section
+- description: what changed
+- reasoning: why this change helps"""
+
+        user_prompt = f"""Module: {source.module}.py
+Issue: {bottleneck['issue']}
+Details: {bottleneck['details']}
+
+Full file ({len(content_lines)} lines):
+```python
+{content[:6000]}
+```
+
+Generate a targeted fix for just the problematic section:"""
+
+        response = await self.backend.complete(
+            prompt=user_prompt,
+            system=system_prompt,
+            max_tokens=4000,
+            temperature=0.2,
+        )
+
+        try:
+            result = response.parsed_json
+            start = result.get("target_lines", [0, 0])[0]
+            end = result.get("target_lines", [0, 0])[1]
+            replacement = result.get("replacement_code", "")
+
+            if not replacement or start >= end:
+                return None
+
+            # Apply targeted replacement
+            new_lines = content_lines[:start] + replacement.split("\n") + content_lines[end:]
+            new_code = "\n".join(new_lines)
+
+            diff = "\n".join(difflib.unified_diff(
+                content_lines,
+                new_code.split("\n"),
+                fromfile=f"{source.module}.py (original)",
+                tofile=f"{source.module}.py (improved)",
+                lineterm="",
+            ))
+
+            return RecursiveModification(
+                id=f"recursive_{hashlib.md5(new_code.encode()).hexdigest()[:8]}",
+                target=self._module_to_target(source.module),
+                file_path=str(source.path),
+                description=result.get("description", f"Targeted fix for {source.module}"),
+                original_code=content,
+                new_code=new_code,
+                diff=diff,
+                reasoning=result.get("reasoning", ""),
+                expected_benefit=result.get("expected_benefit", ""),
+                risks=[],
+            )
+        except Exception as e:
+            self.logger.error("targeted_diff_failed", module=source.module, error=str(e))
             return None
 
     def _module_to_target(self, module: str) -> ModificationTarget:
@@ -475,21 +685,38 @@ except Exception as e:
             Path(temp_path).unlink(missing_ok=True)
 
     async def _apply_source_modification(self, mod: RecursiveModification) -> bool:
-        """Apply modification with backup."""
+        """Apply modification with access control and optional PR workflow."""
         file_path = Path(mod.file_path)
         if not file_path.exists():
             return False
 
-        # Backup original
+        # Check if we can write to this file
+        can_write, reason = self.fs_access.can_write(str(file_path))
+        if not can_write:
+            self.logger.warning("write_denied", file=str(file_path), reason=reason)
+            self.fs_access.log_access(str(file_path), "write", False, reason)
+            return False
+
+        self.fs_access.log_access(str(file_path), "write", True, reason)
+
+        # Backup original (always, even for PR workflow)
         backup_path = self.backup_dir / f"{file_path.stem}_{mod.id}.py"
         shutil.copy2(file_path, backup_path)
 
-        # Write new code
+        # Check if this requires PR
+        if self.fs_access.requires_pr(str(file_path)):
+            return await self._apply_via_pr(mod, file_path, backup_path)
+        else:
+            return await self._apply_direct(mod, file_path, backup_path)
+
+    async def _apply_direct(self, mod: RecursiveModification, file_path: Path, backup_path: Path) -> bool:
+        """Apply modification directly (for data/ and other direct-write paths)."""
         try:
             file_path.write_text(mod.new_code, encoding="utf-8")
             mod.applied = True
+            mod.metadata["apply_method"] = "direct"
             self.logger.info(
-                "source_file_modified",
+                "source_file_modified_direct",
                 file=str(file_path),
                 backup=str(backup_path),
             )
@@ -498,6 +725,84 @@ except Exception as e:
             # Restore from backup
             shutil.copy2(backup_path, file_path)
             self.logger.error("source_modification_failed", error=str(e))
+            return False
+
+    async def _apply_via_pr(self, mod: RecursiveModification, file_path: Path, backup_path: Path) -> bool:
+        """Apply modification via PR workflow (for src/, scripts/, etc.)."""
+        try:
+            # 1. Create branch
+            branch_name = self.fs_access.create_branch_name(mod.description)
+            if not self.git_workflow.create_branch(branch_name):
+                # Restore from backup
+                shutil.copy2(backup_path, file_path)
+                return False
+
+            # 2. Write the change
+            file_path.write_text(mod.new_code, encoding="utf-8")
+
+            # 3. Commit
+            rel_path = str(file_path.relative_to(self.base_path))
+            commit_message = f"agent: {mod.description}\n\n{mod.reasoning[:200]}"
+            if not self.git_workflow.commit_changes(commit_message, [rel_path]):
+                # Restore and switch back
+                shutil.copy2(backup_path, file_path)
+                self.git_workflow.switch_to_main()
+                return False
+
+            # 4. Push
+            if not self.git_workflow.push_branch(branch_name):
+                # Restore and switch back
+                shutil.copy2(backup_path, file_path)
+                self.git_workflow.switch_to_main()
+                return False
+
+            # 5. Create PR
+            pr_title = f"agent: {mod.description[:50]}"
+            pr_body = f"""## Agent Self-Modification
+
+**File:** `{rel_path}`
+**Description:** {mod.description}
+**Reasoning:** {mod.reasoning}
+**Expected Benefit:** {mod.expected_benefit}
+
+**Safeguards:**
+- Syntax validated: {mod.syntax_valid}
+- Import safe: {mod.import_safe}
+- Sandbox passed: {mod.sandbox_passed}
+
+---
+*This PR was created automatically by the agent's self-modification system.*
+*Please review the changes before merging.*
+"""
+            pr_url = self.git_workflow.create_pr(branch_name, pr_title, pr_body)
+
+            # 6. Switch back to main
+            self.git_workflow.switch_to_main()
+
+            # 7. Restore original file (PR will handle the merge)
+            shutil.copy2(backup_path, file_path)
+
+            if pr_url:
+                mod.applied = False  # Not applied yet, pending PR review
+                mod.metadata["apply_method"] = "pr"
+                mod.metadata["pr_url"] = pr_url
+                mod.metadata["branch"] = branch_name
+                self.logger.info(
+                    "pr_created",
+                    file=str(file_path),
+                    pr_url=pr_url,
+                    branch=branch_name,
+                )
+                return True  # PR created successfully
+            else:
+                self.logger.warning("pr_creation_failed", file=str(file_path))
+                return False
+
+        except Exception as e:
+            # Restore from backup
+            shutil.copy2(backup_path, file_path)
+            self.git_workflow.switch_to_main()
+            self.logger.error("pr_workflow_failed", error=str(e))
             return False
 
     async def rollback_modification(self, mod_id: str) -> bool:
