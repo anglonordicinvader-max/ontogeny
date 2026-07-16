@@ -288,15 +288,34 @@ class CognitiveOrchestrator:
                 api_base=self.settings.heavy_llm.api_base,
             )
 
-        # Modifier backend: uses maldoror when deployed, otherwise falls back to code
+        # Modifier backend: uses maldoror (trained model) when available, otherwise falls back to reasoning
         modifier_backend = None
+        try:
+            mal_backend = LLMBackend(
+                api_key=self.settings.llm.api_key or "ollama",
+                model="maldoror",
+                api_base=self.settings.llm.api_base,
+            )
+            # Quick probe to confirm maldoror exists in Ollama
+            import httpx
+            resp = await httpx.AsyncClient().get(
+                f"{self.settings.llm.api_base or 'http://localhost:11434'}/api/tags",
+                timeout=5.0,
+            )
+            if resp.status_code == 200:
+                models = [m["name"] for m in resp.json().get("models", [])]
+                if any("maldoror" in m for m in models):
+                    modifier_backend = mal_backend
+                    self.logger.info("maldoror_modifier_loaded")
+        except Exception as e:
+            self.logger.debug("maldoror_modifier_unavailable", error=str(e))
 
         self.logger.info(
             "four_tier_llm",
             routine=self.settings.llm.model,
             code=self.settings.code_llm.model if code_backend else "disabled",
             reasoning=self.settings.heavy_llm.model if reasoning_backend else "disabled",
-            modifier="maldoror (on-demand)",
+            modifier=modifier_backend.get_name() if modifier_backend else "reasoning (fallback)",
         )
 
         self.backend = HybridBackend(
