@@ -305,6 +305,34 @@ def main():
     except ImportError as e:
         print(f"  Error: {e}")
 
+    # Architecture Modifier
+    print(section("15. Architecture Modifier (Neural Network Structural Modification)"))
+    try:
+        from src.crawler_agent.cognitive.architecture_modifier import ArchitectureModifier
+        arch_dir = Path("data/maldoror/architecture")
+        state_path = arch_dir / "architecture_state.json"
+        print(f"  Module:              ArchitectureModifier")
+        print(f"  Function:            maldoror rewrites its own transformer structure")
+        print(f"  Modifications:       add_layer, remove_layer, modify_heads, modify_ffn, expand_tokenizer")
+        print(f"  Integration:         Runs every 50 iterations via orchestrator._architecture_modify()")
+        if state_path.exists():
+            state = json.loads(state_path.read_text())
+            cs = state.get("current_state", {})
+            print(f"  Current Version:     {cs.get('version', 'v0')}")
+            print(f"  Total Params:        {cs.get('total_params', 0):,}")
+            print(f"  Layers:              {cs.get('num_layers', 0)}")
+            print(f"  Attention Heads:     {cs.get('num_attention_heads', 0)}")
+            print(f"  FFN Dim:             {cs.get('ffn_dim', 0)}")
+            print(f"  Vocab Size:          {cs.get('vocab_size', 0)}")
+            history = state.get("history", [])
+            successful = [h for h in history if h.get("success")]
+            print(f"  Modifications:       {len(history)} ({len(successful)} success)")
+        else:
+            print(f"  Status:              Not yet initialized")
+            print(f"  Will run first modification when triggered")
+    except ImportError as e:
+        print(f"  Error: {e}")
+
     # Pipeline readiness
     checks.append(("Evaluation reports exist", len(eval_reports) > 0))
     all_pass = True

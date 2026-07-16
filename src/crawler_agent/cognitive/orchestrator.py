@@ -100,6 +100,7 @@ from .contrastive_trainer import ContrastiveTrainer
 from .model_population import ModelPopulation
 from .emergent_curriculum import EmergentCurriculum
 from .adversarial_trainer import AdversarialTrainer
+from .architecture_modifier import ArchitectureModifier
 from ..agents import MultiAgentOrchestrator
 
 
@@ -529,6 +530,11 @@ class CognitiveOrchestrator:
         self.adversarial_trainer = AdversarialTrainer(
             backend=self.backend,
             modification_memory=self.modification_memory,
+        )
+
+        # === Architecture Modifier (neural network structural modification) ===
+        self.architecture_modifier = ArchitectureModifier(
+            output_dir="data/maldoror/architecture",
         )
 
         # Initialize crawl orchestrator with light intensity by default
@@ -1029,6 +1035,10 @@ class CognitiveOrchestrator:
                 if self.iteration % 15 == 0 and self.adversarial_trainer:
                     asyncio.create_task(self._adversarial_train(result))
 
+                # 28. Architecture modification — structural evolution every 50 iterations
+                if self.iteration % 50 == 0 and self.architecture_modifier:
+                    asyncio.create_task(self._architecture_modify(result))
+
         except Exception as e:
             import traceback
             tb = traceback.format_exc()
@@ -1196,6 +1206,44 @@ class CognitiveOrchestrator:
                 }
         except Exception as e:
             self.logger.warning("adversarial_training_error", error=str(e))
+
+    async def _architecture_modify(self, result: dict) -> None:
+        """Background task: attempt structural modification of the model architecture."""
+        try:
+            if not self.architecture_modifier:
+                return
+
+            # Recommend a modification based on history
+            modification = self.architecture_modifier.recommend_modification()
+            if not modification:
+                return
+
+            self.logger.info(
+                "starting_architecture_modification",
+                mod_type=modification.mod_type.value,
+                description=modification.description,
+            )
+
+            # Apply the modification
+            mod_result = await self.architecture_modifier.apply_modification(modification)
+
+            if mod_result.success:
+                result["architecture_modification"] = {
+                    "mod_type": modification.mod_type.value,
+                    "description": modification.description,
+                    "eval_score": mod_result.eval_score,
+                    "duration": mod_result.duration_seconds,
+                    "new_version": mod_result.after_state.version if mod_result.after_state else "unknown",
+                }
+            else:
+                result["architecture_modification"] = {
+                    "mod_type": modification.mod_type.value,
+                    "success": False,
+                    "error": mod_result.error,
+                }
+
+        except Exception as e:
+            self.logger.warning("architecture_modification_error", error=str(e))
 
     async def _auto_render_significant_event(self, result: dict) -> None:
         """Auto-render MP4 snippet for significant events."""
@@ -2715,6 +2763,8 @@ class CognitiveOrchestrator:
             parts.append(f"Emergent Curriculum:\n{self.emergent_curriculum.to_context()}")
         if self.adversarial_trainer:
             parts.append(f"Adversarial Training:\n{self.adversarial_trainer.to_context()}")
+        if self.architecture_modifier:
+            parts.append(f"Architecture Modifier:\n{self.architecture_modifier.to_context()}")
         if self.rollback_manager:
             rb_stats = self.rollback_manager.get_stats()
             if rb_stats["total_rollbacks"] > 0:
