@@ -53,6 +53,8 @@ It also trains in a Blender physics sandbox with **9 sensor types** (depth, LiDA
 │  │  Recursive: improves the improvement process itself         │   │
 │  │  Persistent: survives restarts                              │   │
 │  │  Self-Training: QLoRA fine-tuning on successful mods        │   │
+│  │  6 Phases: self-train · contrastive · population ·          │   │
+│  │           curriculum · adversarial · architecture            │   │
 │  └───────────────────────────────────────────────────────────┘   │
 │                                                                   │
 │  ┌───────────────────────────────────────────────────────────┐   │
@@ -81,20 +83,29 @@ Routing is automatic based on task keywords. The modifier tier hot-swaps when a 
 
 ### Maldoror — Custom Fine-Tuned Model
 
-Maldoror is a **metacognitive self-modification agent** — a QLoRA fine-tuned Qwen2.5-7B specialized in rewriting the agent's own source code.
+Maldoror is a **metacognitive self-modification agent** — a QLoRA fine-tuned Qwen2.5-7B specialized in rewriting the agent's own source code. **Deployed to Ollama and wired as the modifier tier** in the four-tier hybrid backend.
 
 **Pipeline:**
 1. **Training data** — successful self-modifications logged from `recursive_modify` and `self_modify`
 2. **Modification Memory** — aggregates, deduplicates, scores quality, exports in ChatML format
-3. **Model Trainer** — QLoRA fine-tuning via Docker GPU (peft + trl + 4-bit quantization)
-4. **Custom Model Manager** — deploys to Ollama, manages versions, A/B testing
-5. **Quality Gates** — evaluates maldoror vs base before activation
-6. **Rollback** — auto-reverts if quality drops >15%
-7. **Hot-swap** — runtime backend switch without restarting
+3. **Self-Training Synthesizer** — generates variations, inverses, reasoning chains from successes
+4. **Contrastive Trainer** — generates attempt + critique + counter-example triples from failures
+5. **Model Trainer** — QLoRA fine-tuning via Docker GPU (peft + trl + 4-bit quantization)
+6. **Model Population** — evolutionary training with 5 strategies, variant competition
+7. **Emergent Curriculum** — analyzes weaknesses, generates targeted training tasks
+8. **Adversarial Trainer** — self-criticism via adversarial training data
+9. **Architecture Modifier** — rewrites transformer structure (layers, heads, FFN, hidden dim)
+10. **Custom Model Manager** — deploys to Ollama, manages versions, A/B testing
+11. **Quality Gates** — evaluates maldoror vs base before activation
+12. **Rollback** — auto-reverts if quality drops >15%
+13. **Hot-swap** — runtime backend switch without restarting
 
 ```bash
 # View maldoror pipeline status
 python scripts/maldoror_dashboard.py
+
+# Maldoror is now auto-loaded at startup if available in Ollama
+# The orchestrator probes /api/tags and loads it as the modifier tier
 ```
 
 ### Cognitive Systems
@@ -159,6 +170,21 @@ Pattern learning, reinforcement learning, curiosity-driven exploration, world mo
 - **Quality Gates** — pre-deployment checks (min score, latency, pattern matching)
 - **Auto-Rollback** — reverts to previous model on regression >15%
 
+### Maldoror Self-Improvement (6 Phases)
+
+Maldoror doesn't just get trained — it trains itself through six interconnected phases that run autonomously during the cognitive loop:
+
+| Phase | Module | Trigger | What It Does |
+|-------|--------|---------|--------------|
+| 1 | **Self-Training Synthesizer** | Every successful modification | Generates variations, inverses, reasoning chains, generalizations from what worked |
+| 2 | **Contrastive Trainer** | Every failed modification | Generates attempt + diagnosis + counter-example triples — learns from mistakes |
+| 3 | **Model Population** | Every 20 iterations | Evolutionary competition between 5 training strategies (standard, curriculum, adversarial, exploratory, ensemble), winner propagates |
+| 4 | **Emergent Curriculum** | Every 10 iterations | Analyzes modification memory for weaknesses, generates targeted training tasks (error patterns, task types, remediation) |
+| 5 | **Adversarial Trainer** | Every 15 iterations | Generates adversarial training data — self-critique of own modification attempts |
+| 6 | **Architecture Modifier** | Every 50 iterations | Rewrites its own transformer structure — adds layers, changes attention heads, modifies FFN dims, expands tokenizer, with backup/rollback |
+
+Each phase writes to `data/maldoror/` and the results feed back into the next training cycle, creating a continuous self-improvement loop.
+
 ### Docker Sandbox
 Isolated code execution in Docker containers with resource limits and automatic cleanup. GPU-accelerated Blender rendering via NVIDIA CUDA.
 
@@ -167,7 +193,7 @@ Isolated code execution in Docker containers with resource limits and automatic 
 ### Prerequisites
 - Python 3.11+
 - Docker Desktop (for code execution sandbox + Blender sandbox + GPU training)
-- Ollama with llama3.2, deepseek-coder-v2:16b, and qwen2.5:72b
+- Ollama with llama3.2, deepseek-coder-v2:16b, qwen2.5:72b, and maldoror
 - NVIDIA Container Toolkit (optional, for GPU training)
 
 ```bash
@@ -175,6 +201,7 @@ Isolated code execution in Docker containers with resource limits and automatic 
 ollama pull llama3.2
 ollama pull deepseek-coder-v2:16b
 ollama pull qwen2.5:72b
+# maldoror is created from training output — see Maldoror Training section
 
 # Build Blender sandbox image (one-time)
 docker build -f Dockerfile.blender -t ontogeny-blender .
@@ -259,10 +286,15 @@ Maldoror fine-tuning runs automatically in Docker GPU when enough training data 
 
 1. Self-modifications logged to `data/modification_training_log.jsonl`
 2. Modification Memory aggregates and scores quality
-3. When 20+ examples exist, training triggers automatically
-4. QLoRA fine-tuning runs in Docker GPU container (~2 hours)
-5. Deployed to Ollama, evaluated against base model
-6. Quality gates checked, auto-rollback on regression
+3. Self-Training Synthesizer generates variations from successes
+4. Contrastive Trainer generates triples from failures
+5. When 20+ examples exist, training triggers automatically
+6. QLoRA fine-tuning runs in Docker GPU container (~2 hours for 3 epochs)
+7. LoRA adapters merged into full model (`data/maldoror/merge.py`)
+8. Deployed to Ollama, evaluated against base model
+9. Quality gates checked, auto-rollback on regression
+
+**First training completed:** 3 epochs, 26 seconds on RTX 3090, loss 2.945. Model deployed to Ollama as `maldoror`.
 
 ```bash
 # Manual training (if needed)
@@ -275,6 +307,12 @@ t = ModelTrainer(modification_memory=mm)
 import asyncio
 asyncio.run(t.train())
 "
+
+# Merge LoRA adapters into full model for Ollama
+python data/maldoror/merge.py
+
+# Create Ollama model from merged weights
+ollama create maldoror -f Modelfile
 ```
 
 ### Interactive Commands
@@ -375,7 +413,7 @@ src/crawler_agent/
 ├── config/
 │   └── settings.py          # All settings (env-loaded)
 ├── cognitive/
-│   ├── orchestrator.py      # Main cognitive loop (all 5 phases integrated)
+│   ├── orchestrator.py      # Main cognitive loop (all phases integrated)
 │   ├── backend.py           # Four-tier hybrid LLM backend
 │   ├── planning.py          # Plan creation & execution
 │   ├── goals.py             # Goal & drive management
@@ -396,6 +434,12 @@ src/crawler_agent/
 │   ├── custom_model_manager.py # Ollama model lifecycle
 │   ├── model_evaluation.py  # Benchmark, A/B test, quality gates, rollback
 │   ├── production.py        # Monitoring, triggers, circuit breaker
+│   ├── self_training.py     # Self-training synthesizer (Phase 1)
+│   ├── contrastive_trainer.py # Contrastive trainer (Phase 2)
+│   ├── model_population.py  # Population-based training (Phase 3)
+│   ├── emergent_curriculum.py # Emergent curriculum (Phase 4)
+│   ├── adversarial_trainer.py # Adversarial trainer (Phase 5)
+│   ├── architecture_modifier.py # Architecture modifier (Phase 6)
 │   ├── skill_composition.py # Skill chaining
 │   ├── simulator.py         # Action simulation
 │   ├── memory.py            # Multi-layer persistent memory
@@ -457,11 +501,16 @@ src/crawler_agent/
 
 data/
 ├── maldoror/
-│   ├── train.py             # QLoRA training script (Docker GPU)
-│   ├── _gen_train.py        # Train script generator
+│   ├── train_v0.jsonl       # Training data (ChatML format, 21KB)
+│   ├── train_v2.py          # QLoRA training script (fixed: BitsAndBytesConfig, bf16)
+│   ├── merge.py             # Merges LoRA adapters into full model for Ollama
 │   ├── models.json          # Deployed model registry
 │   ├── runs.json            # Training run history
 │   ├── rollback_history.json # Rollback log
+│   ├── adapters/            # LoRA adapter weights from training
+│   │   └── v0/              # First training run adapters
+│   ├── merged/              # Full merged model (14GB) for Ollama deployment
+│   ├── architecture/        # Architecture modification history & backups
 │   ├── eval/                # Evaluation reports & detailed results
 │   └── monitoring/          # Performance metrics & snapshots
 ├── modification_memory/
@@ -470,13 +519,23 @@ data/
 └── maldoror/eval/           # Evaluation reports
 
 scripts/
-└── maldoror_dashboard.py    # CLI dashboard for pipeline status
+├── maldoror_dashboard.py    # CLI dashboard for pipeline status
+└── ...                      # Other utility scripts
+
+Modelfile                   # Ollama model definition for maldoror
+Modelfile.maldoror          # Alternative maldoror model definition
 
 tests/
 ├── test_smoke.py            # 77 module import/instantiation/operation tests
 ├── test_maldoror_e2e.py     # 20 maldoror pipeline E2E tests
 ├── test_evaluation.py       # 15 evaluation/gate/rollback/A/B tests
-└── test_production.py       # 28 monitoring/trigger/circuit breaker tests
+├── test_production.py       # 28 monitoring/trigger/circuit breaker tests
+├── test_self_training.py    # 13 self-training synthesizer tests
+├── test_contrastive.py      # 14 contrastive trainer tests
+├── test_population.py       # 16 population-based training tests
+├── test_emergent_curriculum.py # 6 emergent curriculum tests
+├── test_adversarial_trainer.py # 5 adversarial trainer tests
+└── test_architecture_modifier.py # 15 architecture modifier tests
 
 Modelfile.maldoror           # Ollama model definition for maldoror
 ```
@@ -495,21 +554,33 @@ Each cycle:
 8. **Emotional update** — mood shifts based on outcomes
 9. **Causal extraction** — builds cause-effect relationships
 10. **Self-modification** — creates new skills, optimizes failing ones, or improves its own improvement process
-11. **Smart retraining** — triggers maldoror fine-tuning when quality degrades
-12. **Monitoring** — records performance metrics, checks for drift
-13. **Repeat** — until Ctrl+C
+11. **Self-training synthesis** — generates training variations from successful modifications (every 10 iterations)
+12. **Contrastive training** — generates critique triples from failed modifications (every 15 iterations)
+13. **Population competition** — evolutionary training strategy selection (every 20 iterations)
+14. **Emergent curriculum** — weakness-targeted task generation (every 10 iterations)
+15. **Adversarial training** — self-critique data generation (every 15 iterations)
+16. **Architecture modification** — transformer structure evolution (every 50 iterations)
+17. **Smart retraining** — triggers maldoror fine-tuning when quality degrades
+18. **Monitoring** — records performance metrics, checks for drift
+19. **Repeat** — until Ctrl+C
 
 ## Testing
 
 ```bash
-# Run all tests (140 tests)
+# Run all tests (205 tests)
 python -m pytest tests/ -v
 
 # Run specific suites
-python -m pytest tests/test_smoke.py -v           # 77 smoke tests
-python -m pytest tests/test_maldoror_e2e.py -v    # 20 E2E pipeline tests
-python -m pytest tests/test_evaluation.py -v      # 15 evaluation tests
-python -m pytest tests/test_production.py -v      # 28 production tests
+python -m pytest tests/test_smoke.py -v                    # 77 smoke tests
+python -m pytest tests/test_maldoror_e2e.py -v             # 20 E2E pipeline tests
+python -m pytest tests/test_evaluation.py -v               # 15 evaluation tests
+python -m pytest tests/test_production.py -v               # 28 production tests
+python -m pytest tests/test_self_training.py -v            # 13 self-training tests
+python -m pytest tests/test_contrastive.py -v              # 14 contrastive tests
+python -m pytest tests/test_population.py -v               # 16 population tests
+python -m pytest tests/test_emergent_curriculum.py -v      # 6 curriculum tests
+python -m pytest tests/test_adversarial_trainer.py -v      # 5 adversarial tests
+python -m pytest tests/test_architecture_modifier.py -v    # 15 architecture tests
 ```
 
 ## License
