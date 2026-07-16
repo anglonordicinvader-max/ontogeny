@@ -4,12 +4,10 @@
   "description": "Ontogeny - AI-Native Research Workstation",
   "main": "main/index.js",
   "scripts": {
-    "dev": "concurrently \"npm run dev:renderer\" \"npm run dev:main\"",
+    "dev": "concurrently \"npm run dev:renderer\" \"wait-on http://localhost:5173 && electron .\"",
     "dev:renderer": "cd renderer && npm run dev",
-    "dev:main": "cd main && npm run dev",
-    "build": "npm run build:renderer && npm run build:main",
+    "build": "npm run build:renderer",
     "build:renderer": "cd renderer && npm run build",
-    "build:main": "cd main && npm run build",
     "package": "npm run build && electron-builder --win",
     "package:portable": "npm run build && electron-builder --win portable",
     "package:installer": "npm run build && electron-builder --win nsis",
@@ -18,12 +16,13 @@
   "author": "",
   "license": "AGPL-3.0",
   "dependencies": {
-    "electron-updater": "^6.3.0"
+    "electron-updater": "^6.8.9"
   },
   "devDependencies": {
+    "concurrently": "^9.0.0",
     "electron": "^35.0.0",
     "electron-builder": "^26.0.0",
-    "concurrently": "^9.0.0"
+    "wait-on": "^8.0.0"
   },
   "build": {
     "appId": "com.ontogeny.app",
@@ -34,28 +33,27 @@
     "files": [
       "main/**/*",
       "renderer/dist/**/*",
-      "preload/**/*",
-      "backend/**/*"
+      "preload/**/*"
     ],
     "extraResources": [
       {
         "from": "../backend/dist/ontogeny-backend.exe",
         "to": "backend/ontogeny-backend.exe"
-      },
-      {
-        "from": "../backend/blender",
-        "to": "backend/blender"
       }
     ],
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "renderer/public/icon.ico"
