@@ -20,11 +20,8 @@ DIM = "\033[2m"
 RESET = "\033[0m"
 
 MALDOROR_LOGO = f"""{RED}{BOLD}
-M     M  AAA  L     DDDD   OOO  R     R  OOO  R     R
-MM   MM A   A L     D   D O   O R   R   O   O R   R
-M M M M AAAAA L     D   D O   O R R     O   O R R
-M  M  M A   A L     D   D O   O RR      O   O RR
-M     M A   A LLLLL DDDD   OOO  R  R     OOO  R  R
+__  __ ____ _    ___  ____ ____ ____ ____
+|\\/| |--| |___ |__> [__] |--< [__] |--<
 {RESET}{RED}    +--[{('=' * 48)}]--+
 {RESET}{RED}    | {'  >> RECURSIVE SELF-MODIFICATION <<  ':^{48}} |
 {RESET}{RED}    +--[{('=' * 48)}]--+
