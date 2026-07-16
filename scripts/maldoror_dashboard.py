@@ -261,6 +261,50 @@ def main():
     except ImportError as e:
         print(f"  Error: {e}")
 
+    # Emergent Curriculum
+    print(section("13. Emergent Curriculum (Self-Directed Training)"))
+    try:
+        from src.crawler_agent.cognitive.emergent_curriculum import EmergentCurriculum
+        print(f"  Module:              EmergentCurriculum")
+        print(f"  Function:            Analyzes weaknesses, generates targeted training tasks")
+        print(f"  Types:               error_pattern, task_type, remediation")
+        print(f"  Integration:         Runs every 10 iterations via orchestrator._emergent_curriculum_generate()")
+        curriculum_records = [r for r in mm.records if r.source_module == "emergent_curriculum"]
+        print(f"  Curriculum Records:  {len(curriculum_records)}")
+        if curriculum_records:
+            by_type = {}
+            for r in curriculum_records:
+                t = r.metadata.get("weakness_type", "unknown")
+                by_type[t] = by_type.get(t, 0) + 1
+            print(f"  By Type:")
+            for t, count in by_type.items():
+                print(f"    {t}: {count}")
+    except ImportError as e:
+        print(f"  Error: {e}")
+
+    # Adversarial Training
+    print(section("14. Adversarial Training (Self-Critique)"))
+    try:
+        from src.crawler_agent.cognitive.adversarial_trainer import AdversarialTrainer
+        print(f"  Module:              AdversarialTrainer")
+        print(f"  Function:            Generates attempt + critique + counter-example triples")
+        print(f"  Integration:         Runs every 15 iterations via orchestrator._adversarial_train()")
+        adversarial_records = [r for r in mm.records if r.source_module == "adversarial_training"]
+        print(f"  Adversarial Records: {len(adversarial_records)}")
+        if adversarial_records:
+            all_cats = []
+            for r in adversarial_records:
+                all_cats.extend(r.metadata.get("flaw_categories", []))
+            cat_counts = {}
+            for c in all_cats:
+                cat_counts[c] = cat_counts.get(c, 0) + 1
+            if cat_counts:
+                print(f"  Flaw Categories:")
+                for cat, count in sorted(cat_counts.items(), key=lambda x: -x[1])[:5]:
+                    print(f"    {cat}: {count}")
+    except ImportError as e:
+        print(f"  Error: {e}")
+
     # Pipeline readiness
     checks.append(("Evaluation reports exist", len(eval_reports) > 0))
     all_pass = True

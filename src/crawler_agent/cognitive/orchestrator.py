@@ -98,6 +98,8 @@ from .production import PerformanceMonitor, RetrainingTrigger, CircuitBreaker, G
 from .self_training import SelfTrainingSynthesizer
 from .contrastive_trainer import ContrastiveTrainer
 from .model_population import ModelPopulation
+from .emergent_curriculum import EmergentCurriculum
+from .adversarial_trainer import AdversarialTrainer
 from ..agents import MultiAgentOrchestrator
 
 
@@ -517,6 +519,16 @@ class CognitiveOrchestrator:
             model_trainer=self.model_trainer,
             modification_memory=self.modification_memory,
             evaluator=self.model_evaluator,
+        )
+
+        # === Emergent Curriculum & Adversarial Training ===
+        self.emergent_curriculum = EmergentCurriculum(
+            backend=self.backend,
+            modification_memory=self.modification_memory,
+        )
+        self.adversarial_trainer = AdversarialTrainer(
+            backend=self.backend,
+            modification_memory=self.modification_memory,
         )
 
         # Initialize crawl orchestrator with light intensity by default
@@ -1009,6 +1021,14 @@ class CognitiveOrchestrator:
                 if self.iteration % 20 == 0 and self.model_population:
                     asyncio.create_task(self._population_compete(result))
 
+                # 26. Emergent curriculum — generate targeted training tasks every 10 iterations
+                if self.iteration % 10 == 0 and self.emergent_curriculum:
+                    asyncio.create_task(self._emergent_curriculum_generate(result))
+
+                # 27. Adversarial training — critique self-attempts every 15 iterations
+                if self.iteration % 15 == 0 and self.adversarial_trainer:
+                    asyncio.create_task(self._adversarial_train(result))
+
         except Exception as e:
             import traceback
             tb = traceback.format_exc()
@@ -1136,6 +1156,46 @@ class CognitiveOrchestrator:
                     }
         except Exception as e:
             self.logger.warning("population_competition_error", error=str(e))
+
+    async def _emergent_curriculum_generate(self, result: dict) -> None:
+        """Background task: analyze weaknesses and generate targeted training tasks."""
+        try:
+            if not self.emergent_curriculum:
+                return
+            if not self.modification_memory.records:
+                return
+
+            self.logger.info("starting_emergent_curriculum")
+            tasks = await self.emergent_curriculum.generate_curriculum()
+
+            if tasks:
+                result["emergent_curriculum"] = {
+                    "tasks_generated": len(tasks),
+                    "weaknesses_addressed": len(set(t.weakness_type for t in tasks)),
+                }
+        except Exception as e:
+            self.logger.warning("emergent_curriculum_error", error=str(e))
+
+    async def _adversarial_train(self, result: dict) -> None:
+        """Background task: generate adversarial training data (attempt + critique + counter-example)."""
+        try:
+            if not self.adversarial_trainer:
+                return
+            if not self.modification_memory.records:
+                return
+
+            self.logger.info("starting_adversarial_training")
+            examples = await self.adversarial_trainer.generate_adversarial_data()
+
+            if examples:
+                result["adversarial_training"] = {
+                    "examples_generated": len(examples),
+                    "flaw_categories": list(set(
+                        cat for ex in examples for cat in ex.flaw_categories
+                    )),
+                }
+        except Exception as e:
+            self.logger.warning("adversarial_training_error", error=str(e))
 
     async def _auto_render_significant_event(self, result: dict) -> None:
         """Auto-render MP4 snippet for significant events."""
@@ -2651,6 +2711,10 @@ class CognitiveOrchestrator:
             parts.append(f"Contrastive Training:\n{self.contrastive_trainer.to_context()}")
         if self.model_population:
             parts.append(f"Model Population:\n{self.model_population.to_context()}")
+        if self.emergent_curriculum:
+            parts.append(f"Emergent Curriculum:\n{self.emergent_curriculum.to_context()}")
+        if self.adversarial_trainer:
+            parts.append(f"Adversarial Training:\n{self.adversarial_trainer.to_context()}")
         if self.rollback_manager:
             rb_stats = self.rollback_manager.get_stats()
             if rb_stats["total_rollbacks"] > 0:
