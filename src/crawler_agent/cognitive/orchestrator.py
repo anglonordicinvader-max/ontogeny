@@ -88,6 +88,14 @@ from .weather import WeatherSystem
 from .locomotion import LocomotionController
 from .manipulation_tasks import ManipulationController
 from .social_sim import SocialSimulator
+from .self_reflection import SelfReflectionEngine
+from .evo_architecture import EvoArchitecture
+from .modification_memory import ModificationMemory
+from .model_trainer import ModelTrainer
+from .custom_model_manager import CustomModelManager
+from .model_evaluation import ModelEvaluator, QualityGate, RollbackManager, ABTestRunner
+from .production import PerformanceMonitor, RetrainingTrigger, CircuitBreaker, GracefulDegradation, MetricType
+from .self_training import SelfTrainingSynthesizer
 from ..agents import MultiAgentOrchestrator
 
 
@@ -254,7 +262,7 @@ class CognitiveOrchestrator:
         self.memory = MemorySystem(self.settings.storage.database_url)
         await self.memory.initialize()
 
-        # Build three-tier hybrid backend: routine + code + reasoning
+        # Build four-tier hybrid backend: routine + code + reasoning + modifier
         routine_backend = LLMBackend(
             api_key=self.settings.llm.api_key or "ollama",
             model=self.settings.llm.model,
@@ -274,17 +282,23 @@ class CognitiveOrchestrator:
                 model=self.settings.heavy_llm.model,
                 api_base=self.settings.heavy_llm.api_base,
             )
+
+        # Modifier backend: uses maldoror when deployed, otherwise falls back to code
+        modifier_backend = None
+
         self.logger.info(
-            "three_tier_llm",
+            "four_tier_llm",
             routine=self.settings.llm.model,
             code=self.settings.code_llm.model if code_backend else "disabled",
             reasoning=self.settings.heavy_llm.model if reasoning_backend else "disabled",
+            modifier="maldoror (on-demand)",
         )
 
         self.backend = HybridBackend(
             routine=routine_backend,
             code=code_backend,
             reasoning=reasoning_backend,
+            modifier=modifier_backend,
         )
 
         self.metacognition = MetaCognition(backend=self.backend)
@@ -445,6 +459,52 @@ class CognitiveOrchestrator:
         self.locomotion = LocomotionController()
         self.manipulation = ManipulationController()
         self.social = SocialSimulator()
+
+        # === Autonomy Modules for AGI Progression ===
+        self.self_reflection = SelfReflectionEngine(backend=self.backend)
+        self.evo_architecture = EvoArchitecture(backend=self.backend)
+        # Note: uncertainty, curiosity, causal_reasoning, world_model, attention
+        # are already initialized above; their new methods are accessed directly.
+
+        # === Maldoror Custom Model Pipeline ===
+        self.modification_memory = ModificationMemory()
+        self.model_trainer = ModelTrainer(
+            modification_memory=self.modification_memory,
+        )
+        self.custom_model_manager = CustomModelManager(
+            model_trainer=self.model_trainer,
+        )
+
+        # === Phase 4: Evaluation & Rollback ===
+        self.model_evaluator: ModelEvaluator | None = None
+        self.quality_gate = QualityGate(min_score=0.5, max_latency_ms=10000)
+        self.rollback_manager: RollbackManager | None = None
+        self.ab_test_runner: ABTestRunner | None = None
+
+        # === Phase 5: Production Readiness ===
+        self.perf_monitor = PerformanceMonitor()
+        self.retrain_trigger = RetrainingTrigger(monitor=self.perf_monitor)
+        self.circuit_breaker = CircuitBreaker()
+        self.graceful = GracefulDegradation(
+            circuit_breaker=self.circuit_breaker,
+            monitor=self.perf_monitor,
+        )
+
+        # Initialize evaluation components (needs backend)
+        self.model_evaluator = ModelEvaluator(
+            base_backend=routine_backend,
+            output_dir="data/maldoror/eval",
+        )
+        self.rollback_manager = RollbackManager(
+            custom_model_manager=self.custom_model_manager,
+        )
+        self.ab_test_runner = ABTestRunner(evaluator=self.model_evaluator)
+
+        # === Self-Training Loop ===
+        self.self_trainer = SelfTrainingSynthesizer(
+            backend=self.backend,
+            modification_memory=self.modification_memory,
+        )
 
         # Initialize crawl orchestrator with light intensity by default
         self.crawl_orchestrator = CrawlOrchestrator(
@@ -850,6 +910,30 @@ class CognitiveOrchestrator:
                             "description": recursive_mod.description,
                             "applied": True,
                         }
+
+                        # === Self-Training Loop: synthesize training data from recursive mod ===
+                        try:
+                            from .modification_memory import ModificationRecord
+                            synth_record = ModificationRecord(
+                                id=recursive_mod.id,
+                                timestamp=datetime.utcnow().isoformat(),
+                                source_module="recursive_modify",
+                                target_file=recursive_mod.file_path,
+                                task_type="code_rewrite",
+                                description=recursive_mod.description,
+                                reasoning=recursive_mod.reasoning,
+                                original_code=recursive_mod.original_code[:1500] if hasattr(recursive_mod, 'original_code') else "",
+                                modified_code=recursive_mod.new_code[:3000] if hasattr(recursive_mod, 'new_code') else "",
+                                success=True,
+                            )
+                            synthesized = await self.self_trainer.synthesize_from_success(synth_record)
+                            if synthesized:
+                                result["self_training"] = {
+                                    "synthesized": len(synthesized),
+                                    "types": [e.synth_type for e in synthesized],
+                                }
+                        except Exception as e:
+                            self.logger.warning("self_training_synthesis_error", error=str(e))
                 except Exception as e:
                     self.logger.warning("recursive_modification_error", error=str(e))
 
@@ -898,6 +982,16 @@ class CognitiveOrchestrator:
                 except Exception as e:
                     self.logger.warning("auto_render_error", error=str(e))
 
+                # 24. Maldoror retraining check — smart trigger (Phase 5)
+                if self.model_trainer and self.modification_memory:
+                    trigger = self.retrain_trigger.should_retrain(
+                        current_iteration=self.iteration,
+                        training_data_ready=self.modification_memory.ready_for_training(min_examples=20),
+                        current_model_version=self.model_trainer.current_version,
+                    )
+                    if trigger["retrain"]:
+                        asyncio.create_task(self._maldoror_retrain(result))
+
         except Exception as e:
             import traceback
             tb = traceback.format_exc()
@@ -912,6 +1006,82 @@ class CognitiveOrchestrator:
             self.execution_log.append(result)
 
         return result
+
+    async def _maldoror_retrain(self, result: dict) -> None:
+        """Background task: ingest, train, evaluate, deploy (with rollback on regression)."""
+        try:
+            ingested = self.modification_memory.ingest_from_training_logs()
+            if ingested > 0:
+                self.logger.info("training_logs_ingested", count=ingested)
+            if not self.modification_memory.ready_for_training(min_examples=20):
+                return
+            self.logger.info("starting_maldoror_training", version=self.model_trainer.current_version)
+            run = await self.model_trainer.train(max_steps=200)
+            if not run.success:
+                self.logger.warning("maldoror_training_failed", error=run.error)
+                self.perf_monitor.record(MetricType.ERROR_RATE, 1.0, model_version=self.model_trainer.current_version)
+                return
+
+            # Record training metrics
+            self.perf_monitor.record(MetricType.LATENCY, run.duration_seconds * 1000, model_version=run.version)
+
+            # Deploy to Ollama
+            deployed = await self.custom_model_manager.deploy(run)
+            if not deployed:
+                return
+
+            # Phase 4: Evaluate before activating
+            if self.model_evaluator and self.model_evaluator.maldoror is None:
+                # Create maldoror backend for evaluation
+                mal_backend = LLMBackend(
+                    api_key=self.settings.llm.api_key or "ollama",
+                    model=deployed.name,
+                    api_base=self.settings.llm.api_base,
+                )
+                self.model_evaluator.maldoror = mal_backend
+
+            if self.model_evaluator and self.model_evaluator.maldoror:
+                report = await self.model_evaluator.compare()
+                gate = await self.quality_gate.check(report)
+
+                # Record evaluation metrics
+                self.perf_monitor.record(MetricType.QUALITY_SCORE, report.maldoror_avg, model_version=run.version)
+                self.perf_monitor.record(MetricType.SUCCESS_RATE, 1.0 if gate["passed"] else 0.0, model_version=run.version)
+
+                result["evaluation"] = {
+                    "verdict": report.verdict,
+                    "improvement_pct": report.improvement_pct,
+                    "base_avg": report.base_avg,
+                    "maldoror_avg": report.maldoror_avg,
+                    "gate_passed": gate["passed"],
+                    "gate_checks": gate["checks"],
+                }
+
+                if not gate["passed"]:
+                    self.logger.warning("quality_gate_failed", checks=gate["checks"])
+                    if self.rollback_manager and await self.rollback_manager.should_rollback(gate):
+                        await self.rollback_manager.rollback(reason=f"quality_gate_failed: {gate['checks']}")
+                        result["rollback"] = True
+                        return
+
+            # Gates passed (or no evaluator) — activate maldoror
+            await self.custom_model_manager.switch_to(deployed.version)
+            modifier_llm = LLMBackend(
+                api_key=self.settings.llm.api_key or "ollama",
+                model=deployed.name,
+                api_base=self.settings.llm.api_base,
+            )
+            self.backend.update_modifier(modifier_llm)
+            self.model_evaluator.maldoror = modifier_llm if self.model_evaluator else None
+            self.logger.info("maldoror_deployed_and_swapped", version=run.version)
+            result["maldoror_training"] = {
+                "version": run.version,
+                "loss": run.loss,
+                "deployed": True,
+                "num_examples": run.num_examples,
+            }
+        except Exception as e:
+            self.logger.warning("maldoror_retrain_error", error=str(e))
 
     async def _auto_render_significant_event(self, result: dict) -> None:
         """Auto-render MP4 snippet for significant events."""
@@ -1660,6 +1830,207 @@ class CognitiveOrchestrator:
             step.result = "No humans detected"
             return {"success": True, "gesture": "none"}
 
+        # === Autonomy Module Actions ===
+
+        elif action == "self_reflect":
+            # Record and reflect on an action
+            action_type = step.parameters.get("action_type", "unknown")
+            description = step.parameters.get("description", "")
+            intended = step.parameters.get("intended_outcome", "")
+            actual = step.parameters.get("actual_outcome", "")
+            success = step.parameters.get("success", True)
+
+            record = await self.self_reflection.record_action(
+                action_type=action_type,
+                description=description,
+                intended_outcome=intended,
+            )
+            reflection = await self.self_reflection.reflect_on_action(
+                action=record,
+                actual_outcome=actual,
+                success=success,
+            )
+            step.status = StepStatus.COMPLETED
+            step.result = f"Reflection: {reflection.lesson_learned[:100]}"
+            return {"success": True, "reflection": reflection.lesson_learned,
+                    "type": reflection.reflection_type.value}
+
+        elif action == "self_reflect_review":
+            # Pre-action review from self-reflection
+            action_type = step.parameters.get("action_type", "unknown")
+            review = await self.self_reflection.pre_action_review(action_type)
+            step.status = StepStatus.COMPLETED
+            step.result = f"Review: {len(review.get('warnings', []))} warnings"
+            return {"success": True, **review}
+
+        elif action == "uncertainty_track":
+            # Track confidence for an action
+            action_type = step.parameters.get("action_type", "unknown")
+            guidance = await self.uncertainty.track_action_confidence(
+                action_id=step.id,
+                action_type=action_type,
+            )
+            step.status = StepStatus.COMPLETED
+            step.result = f"Confidence: {guidance['confidence_level']}"
+            return {"success": True, **guidance}
+
+        elif action == "uncertainty_update":
+            # Update confidence after action
+            action_type = step.parameters.get("action_type", "unknown")
+            outcome_success = step.parameters.get("success", True)
+            surprise = step.parameters.get("surprise", 0.0)
+            await self.uncertainty.update_action_confidence(
+                action_id=step.id,
+                action_type=action_type,
+                outcome_success=outcome_success,
+                outcome_surprise=surprise,
+            )
+            step.status = StepStatus.COMPLETED
+            step.result = "Confidence updated"
+            return {"success": True}
+
+        elif action == "uncertainty_epistemic":
+            # Deep epistemic uncertainty analysis
+            domain = step.parameters.get("domain", "general")
+            known = step.parameters.get("known", [])
+            result = await self.uncertainty.identify_epistemic_gaps(domain, known)
+            step.status = StepStatus.COMPLETED
+            step.result = f"Epistemic analysis: {len(result.get('known', []))} known, {len(result.get('uncertain', []))} uncertain"
+            return {"success": True, **result}
+
+        elif action == "intrinsic_goals":
+            # Generate intrinsic motivation goals
+            capabilities = step.parameters.get("capabilities", {})
+            weaknesses = step.parameters.get("weaknesses", [])
+            goals = await self.curiosity.generate_intrinsic_goals(capabilities, weaknesses)
+            step.status = StepStatus.COMPLETED
+            step.result = f"Generated {len(goals)} intrinsic goals"
+            return {"success": True, "goals": goals[:5]}
+
+        elif action == "drive_state":
+            # Evaluate motivational state
+            state = await self.curiosity.evaluate_drive_state()
+            step.status = StepStatus.COMPLETED
+            step.result = f"Dominant drive: {state['dominant_drive']}"
+            return {"success": True, **state}
+
+        elif action == "competence_gaps":
+            # Analyze competence gaps
+            performance = step.parameters.get("performance", {})
+            gaps = await self.curiosity.assess_competence_gaps(performance)
+            step.status = StepStatus.COMPLETED
+            step.result = f"Found {len(gaps)} competence gaps"
+            return {"success": True, "gaps": gaps}
+
+        elif action == "temporal_causality":
+            # Discover temporal causal relationships
+            events = step.parameters.get("events", [])
+            discovered = await self.causal_reasoning.discover_temporal_causality(events)
+            step.status = StepStatus.COMPLETED
+            step.result = f"Discovered {len(discovered)} causal edges"
+            return {"success": True, "edges": len(discovered)}
+
+        elif action == "plan_interventions":
+            # Plan causal interventions
+            outcome = step.parameters.get("desired_outcome", "")
+            state = step.parameters.get("current_state", {})
+            constraints = step.parameters.get("constraints", [])
+            plan = await self.causal_reasoning.plan_interventions(outcome, state, constraints)
+            step.status = StepStatus.COMPLETED
+            interventions = plan.get("intervention_plan", [])
+            step.result = f"Planned {len(interventions)} interventions"
+            return {"success": True, **plan}
+
+        elif action == "predict_cascade":
+            # Predict cascade effects
+            change = step.parameters.get("change", {})
+            depth = step.parameters.get("depth", 3)
+            result = await self.causal_reasoning.predict_cascade(change, depth)
+            step.status = StepStatus.COMPLETED
+            step.result = f"Cascade: {result['variables_affected']} variables affected"
+            return {"success": True, **result}
+
+        elif action == "world_predict":
+            # Make prediction with world model
+            query = step.parameters.get("query", "")
+            context = step.parameters.get("context", {})
+            result = await self.world_model.predict_and_update(query, context)
+            step.status = StepStatus.COMPLETED
+            step.result = f"Prediction: {result['predicted_probability']:.2f}"
+            return {"success": True, **result}
+
+        elif action == "world_update":
+            # Update world model from outcome
+            pred_id = step.parameters.get("prediction_id", "")
+            outcome = step.parameters.get("outcome", True)
+            obs = step.parameters.get("observation", {})
+            result = await self.world_model.update_from_outcome(pred_id, outcome, obs)
+            step.status = StepStatus.COMPLETED
+            step.result = f"Error: {result.get('prediction_error', 0):.2f}"
+            return {"success": True, **result}
+
+        elif action == "world_simulate":
+            # Internal simulation before action
+            action_name = step.parameters.get("action", "")
+            context = step.parameters.get("context", {})
+            result = await self.world_model.internal_simulation(action_name, context)
+            step.status = StepStatus.COMPLETED
+            step.result = f"Sim confidence: {result.get('simulation_confidence', 0):.2f}"
+            return {"success": True, **result}
+
+        elif action == "evo_evolve":
+            # Evolve architecture
+            tasks = step.parameters.get("tasks", ["general"])
+            if not self.evo_architecture.variants:
+                await self.evo_architecture.initialize_population()
+            variants = await self.evo_architecture.evolve_generation(tasks)
+            step.status = StepStatus.COMPLETED
+            stats = self.evo_architecture.get_stats()
+            step.result = f"Gen {stats['generation']}: best={stats['best_fitness']:.3f}"
+            return {"success": True, **stats}
+
+        elif action == "evo_evaluate":
+            # Evaluate a specific variant
+            variant_id = step.parameters.get("variant_id", "")
+            tasks = step.parameters.get("tasks", ["general"])
+            variant = self.evo_architecture.variants.get(variant_id)
+            if variant:
+                result = await self.evo_architecture.evaluate_variant(variant, tasks)
+                step.status = StepStatus.COMPLETED
+                step.result = f"Fitness: {result.overall_fitness:.3f}"
+                return {"success": True, "fitness": result.overall_fitness}
+            step.status = StepStatus.FAILED
+            step.result = "Variant not found"
+            return {"success": False, "error": "Variant not found"}
+
+        elif action == "attention_allocate":
+            # Allocate compute resources
+            components = step.parameters.get("components", ["attention", "reasoning", "working_memory"])
+            uncertainty = step.parameters.get("uncertainty", {})
+            context = step.parameters.get("context", {})
+            allocation = await self.attention.allocate_compute(
+                available_components=components,
+                task_context=context,
+                uncertainty_data=uncertainty,
+            )
+            step.status = StepStatus.COMPLETED
+            step.result = f"Allocated to {len(allocation)} components"
+            return {"success": True, "allocation": allocation}
+
+        elif action == "attention_adaptive":
+            # Adaptive attention with uncertainty
+            stimulus = step.parameters.get("stimulus", "")
+            uncertainty = step.parameters.get("uncertainty", 0.5)
+            relevance = step.parameters.get("relevance", 0.5)
+            result = await self.attention.adaptive_attention(
+                stimulus=stimulus,
+                uncertainty=uncertainty,
+                task_relevance=relevance,
+            )
+            step.status = StepStatus.COMPLETED
+            step.result = f"Focus: {result['should_focus']}, Score: {result['attention_score']:.2f}"
+            return {"success": True, **result}
+
     async def _check_self_improvement(self, result: dict) -> None:
         """Check if agent should improve itself. Measures before/after and auto-rollbacks."""
         # Analyze recent performance
@@ -1703,6 +2074,29 @@ class CognitiveOrchestrator:
                             "applied": True,
                         }
 
+                        # === Self-Training Loop: synthesize training data from success ===
+                        try:
+                            from .modification_memory import ModificationRecord
+                            synth_record = ModificationRecord(
+                                id=mod.id,
+                                timestamp=datetime.utcnow().isoformat(),
+                                source_module="self_modify",
+                                target_file=mod.config.get("name", "unknown"),
+                                task_type="skill_creation",
+                                description=mod.description,
+                                reasoning=mod.reasoning,
+                                modified_code=mod.code,
+                                success=True,
+                            )
+                            synthesized = await self.self_trainer.synthesize_from_success(synth_record)
+                            if synthesized:
+                                result["self_training"] = {
+                                    "synthesized": len(synthesized),
+                                    "types": [e.synth_type for e in synthesized],
+                                }
+                        except Exception as e:
+                            self.logger.warning("self_training_synthesis_error", error=str(e))
+
         # === REACTIVE: Optimize existing skills when performance is low ===
         elif success_rate < 0.6:
             for skill in existing_skills:
@@ -1738,6 +2132,32 @@ class CognitiveOrchestrator:
                                 "performance_delta": perf_delta,
                                 "applied": True,
                             }
+
+                            # === Self-Training Loop: synthesize training data from success ===
+                            if perf_delta >= 0:
+                                try:
+                                    from .modification_memory import ModificationRecord
+                                    synth_record = ModificationRecord(
+                                        id=mod.id,
+                                        timestamp=datetime.utcnow().isoformat(),
+                                        source_module="self_modify",
+                                        target_file=skill.metadata.get("skill_name", "unknown"),
+                                        task_type="optimization",
+                                        description=mod.description,
+                                        reasoning=mod.reasoning,
+                                        modified_code=mod.code,
+                                        success=True,
+                                        performance_delta=perf_delta,
+                                    )
+                                    synthesized = await self.self_trainer.synthesize_from_success(synth_record)
+                                    if synthesized:
+                                        result["self_training"] = {
+                                            "synthesized": len(synthesized),
+                                            "types": [e.synth_type for e in synthesized],
+                                        }
+                                except Exception as e:
+                                    self.logger.warning("self_training_synthesis_error", error=str(e))
+
                             break
 
         # === RECURSIVE: Improve the improvement process itself ===
@@ -1891,6 +2311,9 @@ class CognitiveOrchestrator:
             "locomotion": self.locomotion.to_context() if self.locomotion else {},
             "manipulation": self.manipulation.to_context() if self.manipulation else {},
             "social": self.social.to_context() if self.social else {},
+            # Autonomy Modules
+            "self_reflection": self.self_reflection.to_context() if self.self_reflection else {},
+            "evo_architecture": self.evo_architecture.to_context() if self.evo_architecture else {},
         }
 
     async def autonomous_loop(self, max_cycles: int | None = None) -> None:
@@ -2133,6 +2556,29 @@ class CognitiveOrchestrator:
             parts.append(f"Attention:\n{self.attention.to_context()}")
         if self.emotional:
             parts.append(f"Emotional State:\n{self.emotional.to_context()}")
+        if self.self_reflection:
+            parts.append(f"Self-Reflection:\n{self.self_reflection.to_context()}")
+        if self.evo_architecture:
+            parts.append(f"Evo Architecture:\n{self.evo_architecture.to_context()}")
+        if self.model_trainer:
+            parts.append(f"Model Trainer:\n{self.model_trainer.to_context()}")
+        if self.custom_model_manager:
+            parts.append(f"Custom Models:\n{self.custom_model_manager.to_context()}")
+        if self.self_trainer:
+            parts.append(f"Self-Training:\n{self.self_trainer.to_context()}")
+        if self.rollback_manager:
+            rb_stats = self.rollback_manager.get_stats()
+            if rb_stats["total_rollbacks"] > 0:
+                parts.append(f"Rollbacks: {rb_stats['total_rollbacks']} total")
+        # Phase 5: Production monitoring
+        if self.perf_monitor:
+            monitor_summary = self.perf_monitor.get_summary()
+            if monitor_summary:
+                parts.append(f"Performance Monitor: {len(monitor_summary)} metrics tracked")
+        if self.circuit_breaker:
+            cb_state = self.circuit_breaker.get_state()
+            if cb_state["state"] != "closed":
+                parts.append(f"Circuit Breaker: {cb_state['state']} (failures: {cb_state['failure_count']})")
         return "\n\n".join(parts)
 
     async def execute_code(
