@@ -188,36 +188,6 @@ Each phase writes to `data/maldoror/` and the results feed back into the next tr
 ### Docker Sandbox
 Isolated code execution in Docker containers with resource limits and automatic cleanup. GPU-accelerated Blender rendering via NVIDIA CUDA.
 
-### Filesystem Access Control & PR Workflow
-
-The agent has **expanded project access** with safeguards:
-
-| Path | Access | Workflow |
-|------|--------|----------|
-| `tests/` | **READ ONLY** | Cannot modify test files |
-| `.env`, `pyproject.toml` | **READ ONLY** | Cannot modify config files |
-| `src/`, `scripts/`, `README.md` | Read/Write | **Requires PR review** |
-| `data/` | Read/Write | Direct write (training data, models) |
-
-When the agent modifies `src/` or `scripts/`:
-1. Creates a feature branch (`agent/<description>`)
-2. Commits the change
-3. Pushes to GitHub
-4. Creates a PR with description and reasoning
-5. Switches back to main
-6. **You review the PR before merging**
-
-```bash
-# View pending agent PRs
-gh pr list --author "@me"
-
-# Review a specific PR
-gh pr view <pr-number>
-
-# Merge after review
-gh pr merge <pr-number>
-```
-
 ## Quick Start
 
 ### Prerequisites
