@@ -1,7 +1,7 @@
 [project]
 name = "crawler-agent"
 version = "0.1.0"
-description = "AI-powered web crawler agent for code platforms and academic sources"
+description = "Proto-AGI cognitive agent framework with 35 web crawlers, multi-agent collaboration, recursive self-modification, four-tier hybrid LLM routing, Blender physics sandbox, sensor simulation, YOLOv8 vision, and a custom fine-tuned model (Maldoror)"
 requires-python = ">=3.11"
 dependencies = [
     # Core
