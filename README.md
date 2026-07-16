@@ -297,7 +297,16 @@ Maldoror fine-tuning runs automatically in Docker GPU when enough training data 
 **First training completed:** 3 epochs, 26 seconds on RTX 3090, loss 2.945. Model deployed to Ollama as `maldoror`.
 
 ```bash
-# Manual training (if needed)
+# End-to-end training pipeline (recommended)
+python scripts/train_maldoror.py --examples 200 --epochs 20
+
+# Train in Docker GPU (if model not cached locally)
+python scripts/train_maldoror.py --examples 200 --epochs 20 --use-docker
+
+# Quick test (skip training, just test deployed model)
+python scripts/train_maldoror.py --test-only
+
+# Manual steps (if needed)
 python -c "
 from src.crawler_agent.cognitive.modification_memory import ModificationMemory
 from src.crawler_agent.cognitive.model_trainer import ModelTrainer
