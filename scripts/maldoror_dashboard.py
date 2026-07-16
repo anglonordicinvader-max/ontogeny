@@ -11,7 +11,7 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-MALDOROR_VERSION = "v0.1.0"
+MALDOROR_VERSION = "v1.0.0"
 
 # ANSI colors
 RED = "\033[91m"
@@ -20,11 +20,7 @@ DIM = "\033[2m"
 RESET = "\033[0m"
 
 MALDOROR_LOGO = f"""{RED}{BOLD}
-__  __ ____ _    ___  ____ ____ ____ ____
-|\\/| |--| |___ |__> [__] |--< [__] |--<
-{RESET}{RED}    +--[{('=' * 48)}]--+
-{RESET}{RED}    | {'  >> RECURSIVE SELF-MODIFICATION <<  ':^{48}} |
-{RESET}{RED}    +--[{('=' * 48)}]--+
+    MALDOROR
 {RESET}{DIM}    {MALDOROR_VERSION:^{60}}{RESET}"""
 
 
