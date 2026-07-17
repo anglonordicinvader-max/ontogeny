@@ -10,11 +10,41 @@ let pythonProcess;
 let blenderProcess;
 let backendPort;
 
-const PYTHON_EXE = path.join(__dirname, '..', 'backend', 'ontogeny-backend.exe');
-const BLENDER_EXE = path.join(__dirname, '..', 'backend', 'blender', 'blender.exe');
+// Lazy-evaluated environment checks - avoid module-load-time issues in ASAR
+function getIsDev() {
+  return !isPackaged;
+}
 
-autoUpdater.autoDownload = true;
-autoUpdater.autoInstallOnAppQuit = true;
+function getIsPortable() {
+  return isPackaged && !fs.existsSync(path.join(process.resourcesPath, 'app-update.yml'));
+}
+
+const isPackaged = !!process.resourcesPath;
+
+const PYTHON_EXE = isPackaged
+  ? path.join(process.resourcesPath, 'backend', 'ontogeny-backend.exe')
+  : path.join(__dirname, '..', 'backend', 'ontogeny-backend.exe');
+const BLENDER_EXE = isPackaged
+  ? path.join(process.resourcesPath, 'backend', 'blender', 'blender.exe')
+  : path.join(__dirname, '..', 'backend', 'blender', 'blender.exe');
+
+// Configure auto-updater based on environment
+function configureAutoUpdater() {
+  const isDev = !isPackaged;
+  const isPortable = isPackaged && !fs.existsSync(path.join(process.resourcesPath, 'app-update.yml'));
+  
+  if (!isDev && !isPortable) {
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+  } else {
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = false;
+    autoUpdater.checkForUpdatesAndNotify = () => Promise.resolve();
+    autoUpdater.checkForUpdates = () => Promise.resolve();
+  }
+}
+
+configureAutoUpdater();
 
 function findAvailablePort() {
   return new Promise((resolve, reject) => {
@@ -93,13 +123,37 @@ function createWindow() {
     }
   });
 
-  const isDev = !fs.existsSync(path.join(__dirname, '..', 'renderer', 'dist', 'index.html'));
+  // Debug: log all renderer console messages to main process
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    console.log(`[Renderer ${level}] ${sourceId}:${line} - ${message}`);
+  });
+
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    console.error(`Failed to load: ${validatedURL} - ${errorCode}: ${errorDescription}`);
+  });
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('Renderer finished loading');
+  });
+
+  mainWindow.webContents.on('render-process-gone', (event, details) => {
+    console.error('Render process gone:', details);
+  });
+
+  mainWindow.webContents.on('unresponsive', () => {
+    console.error('Renderer unresponsive');
+  });
+
+  const isDevLocal = !fs.existsSync(path.join(__dirname, '..', 'renderer', 'dist', 'index.html'));
   
-  if (isDev) {
+  if (isDevLocal) {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'dist', 'index.html'));
+    const indexPath = path.join(__dirname, '..', 'renderer', 'dist', 'index.html');
+    console.log('Loading production index.html from:', indexPath);
+    console.log('File exists:', fs.existsSync(indexPath));
+    mainWindow.loadFile(indexPath);
   }
 
   mainWindow.on('closed', () => {
@@ -108,9 +162,18 @@ function createWindow() {
 }
 
 function setupAutoUpdater() {
-  autoUpdater.on('checking-for-update', () => {
-    console.log('Checking for update...');
-  });
+  const isDevCheck = !isPackaged;
+  const isPortableCheck = isPackaged && !fs.existsSync(path.join(process.resourcesPath, 'app-update.yml'));
+  
+  if (!isDevCheck && !isPortableCheck) {
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+  } else {
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = false;
+    autoUpdater.checkForUpdatesAndNotify = () => Promise.resolve();
+    autoUpdater.checkForUpdates = () => Promise.resolve();
+  }
 
   autoUpdater.on('update-available', (info) => {
     console.log('Update available:', info.version);
@@ -155,7 +218,16 @@ app.whenReady().then(async () => {
   createWindow();
   setupAutoUpdater();
   
-  autoUpdater.checkForUpdatesAndNotify();
+  // Only check for updates in production (packaged, not portable)
+  if (!isPackaged || (isPackaged && !fs.existsSync(path.join(process.resourcesPath, 'app-update.yml')))) {
+    // Skip update check for dev and portable
+  } else {
+    try {
+      await autoUpdater.checkForUpdatesAndNotify();
+    } catch (error) {
+      console.error('Auto-updater check failed (non-fatal):', error.message);
+    }
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -170,6 +242,15 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+// Global error handlers
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
 ipcMain.handle('get-backend-port', () => backendPort);

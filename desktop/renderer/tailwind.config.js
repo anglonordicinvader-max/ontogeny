@@ -4,42 +4,43 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
         surface: {
-          0: '#0a0a0a',
-          1: '#111111',
-          2: '#1a1a1a',
-          3: '#222222',
-          4: '#2a2a2a',
+          0: 'var(--surface-0)',
+          1: 'var(--surface-1)',
+          2: 'var(--surface-2)',
+          3: 'var(--surface-3)',
+          4: 'var(--surface-4)',
         },
         border: {
-          DEFAULT: '#2a2a2a',
-          subtle: '#1f1f1f',
-          emphasis: '#3a3a3a',
+          DEFAULT: 'var(--border)',
+          subtle: 'var(--border-subtle)',
+          emphasis: 'var(--border-emphasis)',
         },
         text: {
-          primary: '#e5e5e5',
-          secondary: '#a0a0a0',
-          tertiary: '#666666',
-          inverse: '#0a0a0a',
+          primary: 'var(--text-primary)',
+          secondary: 'var(--text-secondary)',
+          tertiary: 'var(--text-tertiary)',
+          inverse: 'var(--text-inverse)',
         },
         accent: {
-          DEFAULT: '#3b82f6',
-          hover: '#2563eb',
-          muted: '#1e3a5f',
+          DEFAULT: 'var(--accent)',
+          hover: 'var(--accent-hover)',
+          muted: 'var(--accent-muted)',
         },
         status: {
-          success: '#22c55e',
-          warning: '#eab308',
-          error: '#ef4444',
-          info: '#3b82f6',
-        }
+          success: 'var(--status-success)',
+          warning: 'var(--status-warning)',
+          error: 'var(--status-error)',
+          info: 'var(--status-info)',
+        },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+        sans: ['Geist', 'Geist Sans', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['Geist Mono', 'Geist Mono', 'JetBrains Mono', 'Fira Code', 'monospace'],
       },
       fontSize: {
         '2xs': ['0.625rem', { lineHeight: '0.875rem' }],
@@ -52,13 +53,20 @@ export default {
       },
       animation: {
         'fade-in': 'fadeIn 150ms ease-out',
+        'fade-through': 'fadeThrough 300ms ease-in-out',
         'slide-in': 'slideIn 200ms ease-out',
         'pulse-subtle': 'pulseSubtle 2s ease-in-out infinite',
+        'panel-in': 'panelIn 200ms ease-out',
       },
       keyframes: {
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
+        },
+        fadeThrough: {
+          '0%': { opacity: '1', transform: 'scale(1)' },
+          '50%': { opacity: '0', transform: 'scale(0.98)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
         },
         slideIn: {
           '0%': { opacity: '0', transform: 'translateY(4px)' },
@@ -67,6 +75,10 @@ export default {
         pulseSubtle: {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.7' },
+        },
+        panelIn: {
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
         },
       },
     },

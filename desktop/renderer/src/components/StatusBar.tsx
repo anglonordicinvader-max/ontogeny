@@ -8,7 +8,10 @@ interface StatusBarProps {
 
 export function StatusBar({ status, connected }: StatusBarProps) {
   return (
-    <div className="flex items-center justify-between h-9 px-4 bg-surface-1 border-t border-border">
+    <div
+      className="flex items-center justify-between h-9 px-4 border-t border-border"
+      style={{ background: 'var(--surface-1)' }}
+    >
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <div className={`status-dot ${connected ? 'status-dot-active' : 'status-dot-error'}`} />

@@ -21,6 +21,9 @@ export function useWebSocket() {
         port = parseInt(new URLSearchParams(window.location.search).get('port') || '8765');
       }
 
+      // Wait for backend to be ready before connecting
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
       wsRef.current = ws;
 

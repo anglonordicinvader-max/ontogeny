@@ -9,7 +9,6 @@ import { GoalTree } from './components/GoalTree';
 import { KnowledgeGraph } from './components/KnowledgeGraph';
 import { CrawlerPanel } from './components/CrawlerPanel';
 import { MaldororPanel } from './components/MaldororPanel';
-import { TrainingPanel } from './components/TrainingPanel';
 import { ProductionPanel } from './components/ProductionPanel';
 import { BlenderPanel } from './components/BlenderPanel';
 import { SettingsPanel } from './components/SettingsPanel';
@@ -21,11 +20,27 @@ function App() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const { status, events, connected, send } = useWebSocket();
   const [backendPort, setBackendPort] = useState(8765);
+  const [themeTransitioning, setThemeTransitioning] = useState(false);
 
   useEffect(() => {
     window.electronAPI?.getBackendPort().then((port) => {
       if (port) setBackendPort(port);
     });
+  }, []);
+
+  // Initialize theme from saved settings
+  useEffect(() => {
+    const saved = localStorage.getItem('ontogeny-settings');
+    if (saved) {
+      try {
+        const settings = JSON.parse(saved);
+        const root = document.documentElement;
+        root.classList.toggle('light', settings.theme === 'light');
+        root.classList.toggle('dark', settings.theme !== 'light');
+      } catch {
+        // ignore parse errors
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -44,7 +59,11 @@ function App() {
   }, [send]);
 
   const handleNavigate = useCallback((tab: string) => {
-    setActiveTab(tab);
+    setThemeTransitioning(true);
+    setTimeout(() => {
+      setActiveTab(tab);
+      setTimeout(() => setThemeTransitioning(false), 50);
+    }, 150);
   }, []);
 
   const renderWorkspace = () => {
@@ -63,8 +82,6 @@ function App() {
         return <CrawlerPanel status={status} />;
       case 'maldoror':
         return <MaldororPanel status={status} />;
-      case 'training':
-        return <TrainingPanel status={status} />;
       case 'production':
         return <ProductionPanel status={status} />;
       case 'blender':
@@ -77,11 +94,15 @@ function App() {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-surface-0 overflow-hidden">
+    <div className="h-screen w-screen flex flex-col overflow-hidden" style={{ background: 'var(--surface-0)' }}>
       <TitleBar />
       <div className="flex flex-1 min-h-0">
         <Sidebar activeTab={activeTab} onTabChange={setActiveTab} connected={connected} />
-        <main className="flex-1 min-w-0 overflow-hidden">
+        <main
+          className={`flex-1 min-w-0 overflow-hidden transition-opacity duration-200 ${
+            themeTransitioning ? 'opacity-0' : 'opacity-100'
+          }`}
+        >
           {renderWorkspace()}
         </main>
       </div>
