@@ -79,6 +79,22 @@ export function DemoPanel({ status, send }: DemoPanelProps) {
     fetch(`${base}/api/demo/knowledge-graph`).then(r => r.json()).then((d: { nodes: Record<string, unknown>[]; edges: Record<string, unknown>[] }) => setKnowledgeGraph(d)).catch(() => {});
   }, [demo?.active, demo?.step]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.code === 'Space' && demo?.active && demo.step < demo.totalSteps) {
+        e.preventDefault();
+        advance();
+      }
+      if (e.code === 'KeyR' && e.ctrlKey) {
+        e.preventDefault();
+        reset();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [demo?.active, demo?.step, demo?.totalSteps, advance, reset]);
+
   if (!demo?.active) {
     return (
       <div className="h-full overflow-y-auto p-4 space-y-4 animate-panel-in">
@@ -104,6 +120,9 @@ export function DemoPanel({ status, send }: DemoPanelProps) {
             <div className="text-2xs text-text-tertiary mt-2">
               Controlled demonstration — no live LLM calls, no network requests, no source code modification.
             </div>
+            <div className="text-2xs text-text-tertiary mt-1">
+              Keyboard: Space = next step, Ctrl+R = reset
+            </div>
           </div>
         </Panel>
       </div>
@@ -115,6 +134,11 @@ export function DemoPanel({ status, send }: DemoPanelProps) {
 
   return (
     <div className="h-full overflow-y-auto p-4 space-y-4 animate-panel-in">
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-status-success/10 border border-status-success/20 text-2xs text-status-success">
+        <Play className="w-3 h-3" />
+        <span className="font-medium">Demo Mode Active</span>
+        <span className="text-status-success/60">— guided demonstration, no live LLM calls</span>
+      </div>
       <Panel title="Demo Mode" accentGlow>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -131,10 +155,10 @@ export function DemoPanel({ status, send }: DemoPanelProps) {
             >
               {autoPlay ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
             </button>
-            <button onClick={advance} className="btn-ghost p-1.5" title="Next step" disabled={currentStep >= totalSteps}>
+            <button onClick={advance} className="btn-ghost p-1.5" title="Next step (Space)" disabled={currentStep >= totalSteps}>
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
-            <button onClick={reset} className="btn-ghost p-1.5" title="Reset demo">
+            <button onClick={reset} className="btn-ghost p-1.5" title="Reset (Ctrl+R)">
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
           </div>
