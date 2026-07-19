@@ -205,7 +205,7 @@ Real-time physics simulation with two robot models:
 
 ### Electron Desktop UI
 
-A glassmorphic real-time interface built with Electron + React + TypeScript:
+A native-AI real-time interface built with Electron + React + TypeScript:
 
 - **11 panels** — Activity Timeline, Cognitive State, Memory Explorer, Goal Tree, Knowledge Graph, Knowledge Acquisition, Maldoror Pipeline, Production Metrics, Blender Sandbox, MuJoCo Robotics, Settings
 - **WebSocket real-time updates** — live data streaming from Python backend
