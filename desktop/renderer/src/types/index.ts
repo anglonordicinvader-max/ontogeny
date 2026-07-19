@@ -1,4 +1,6 @@
-export type AgentState = 'idle' | 'thinking' | 'planning' | 'executing' | 'learning' | 'self_modifying' | 'waiting' | 'running' | 'training' | 'error' | 'paused';
+export const APP_VERSION = '0.1.0';
+
+export type AgentState = 'idle' | 'thinking' | 'planning' | 'executing' | 'learning' | 'self_modifying' | 'waiting' | 'running' | 'training' | 'error' | 'paused' | 'demo';
 
 export interface AgentStatus {
   state: AgentState;
@@ -16,6 +18,7 @@ export interface AgentStatus {
   rlAgent?: Record<string, unknown>;
   curiosity?: Record<string, unknown>;
   metacognition?: Record<string, unknown>;
+  demo?: DemoStats;
 }
 
 export interface IntrinsicDrives {
@@ -62,7 +65,7 @@ export interface KnowledgeStats {
 export interface ActivityEvent {
   id: string;
   timestamp: number;
-  type: 'action' | 'learning' | 'modification' | 'error' | 'training' | 'crawl';
+  type: 'action' | 'learning' | 'modification' | 'error' | 'training' | 'acquisition' | 'demo';
   message: string;
   metadata?: Record<string, unknown>;
 }
@@ -106,4 +109,17 @@ export interface MuJoCoStats {
   joints: number;
   fps: number;
   robotModel: string;
+}
+
+export interface DemoStats {
+  active: boolean;
+  step: number;
+  totalSteps: number;
+  stepName: string;
+  goal: string;
+  evidenceCount: number;
+  memoryWrites: number;
+  reflectionSummary: string | null;
+  maldororProposal: string | null;
+  startedAt: number | null;
 }

@@ -7,29 +7,26 @@ interface BlenderPanelProps {
 
 export function BlenderPanel({ backendPort = 8766 }: BlenderPanelProps) {
   const [worldSelectorOpen, setWorldSelectorOpen] = useState(false);
-  const [autonomousEnabled] = useState(true);
 
   return (
     <div className="h-full flex flex-col relative">
       <BlenderEmbed backendPort={backendPort} />
 
-      {autonomousEnabled && (
-        <div className="absolute top-2 left-2 glass-panel rounded-lg p-3 text-xs max-w-xs animate-panel-in">
-          <div className="font-medium mb-2 text-text-primary">Autonomous Control</div>
-          <div className="space-y-1 text-text-secondary">
-            <div>• Mode switching based on agent drives</div>
-            <div>• Emotion synchronization from cognitive state</div>
-            <div>• Autonomous world selection enabled</div>
-            <div>• Real-time agent integration</div>
-          </div>
-          <button
-            onClick={() => setWorldSelectorOpen(!worldSelectorOpen)}
-            className="mt-2 btn-ghost w-full text-left text-xs"
-          >
-            {worldSelectorOpen ? 'Hide' : 'Show'} World Selector
-          </button>
+      <div className="absolute top-2 left-2 glass-panel rounded-lg p-3 text-xs max-w-xs animate-panel-in">
+        <div className="font-medium mb-2 text-text-primary">Autonomous Control</div>
+        <div className="space-y-1 text-text-secondary">
+          <div>• Mode switching based on agent drives</div>
+          <div>• Emotion synchronization from cognitive state</div>
+          <div>• Autonomous world selection enabled</div>
+          <div>• Real-time agent integration</div>
         </div>
-      )}
+        <button
+          onClick={() => setWorldSelectorOpen(!worldSelectorOpen)}
+          className="mt-2 btn-ghost w-full text-left text-xs"
+        >
+          {worldSelectorOpen ? 'Hide' : 'Show'} World Selector
+        </button>
+      </div>
 
       {worldSelectorOpen && (
         <div className="absolute top-20 left-2 glass-panel rounded-lg p-4 text-xs max-w-sm animate-panel-in">

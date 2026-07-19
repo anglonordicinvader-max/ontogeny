@@ -1,4 +1,5 @@
 import { Panel, MetricCard } from './Panel';
+import { cn } from '@/lib/utils';
 import type { AgentStatus } from '@/types';
 
 interface MaldororPanelProps {
@@ -23,15 +24,17 @@ export function MaldororPanel({ status }: MaldororPanelProps) {
         </div>
       </Panel>
 
-      <Panel title="Training">
-        <div className="grid grid-cols-2 gap-3">
-          <MetricCard label="Version" value={maldoror?.version || '—'} />
-          <MetricCard label="Quality Gate" value={maldoror?.qualityGate || 'pending'} />
-          <MetricCard
-            label="Improvement"
-            value={`${(maldoror?.improvementPct || 0).toFixed(1)}%`}
-          />
-          <MetricCard label="Last Loss" value={(maldoror?.lastTrainingLoss || 0).toFixed(4)} />
+      <Panel title="Pipeline" accentGlow>
+        <div className="space-y-2">
+          {['Self-Training', 'Contrastive', 'Population', 'Curriculum', 'Adversarial', 'Architecture'].map((phase, i) => (
+            <div key={phase} className="flex items-center gap-2 text-xs">
+              <div className={cn(
+                'w-1.5 h-1.5 rounded-full',
+                maldoror?.version && maldoror.version !== '—' ? 'bg-status-success' : 'bg-text-tertiary'
+              )} />
+              <span className="text-text-secondary">{`${i + 1}. ${phase}`}</span>
+            </div>
+          ))}
         </div>
       </Panel>
 

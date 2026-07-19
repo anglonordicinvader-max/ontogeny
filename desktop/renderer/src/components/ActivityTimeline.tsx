@@ -1,7 +1,7 @@
 import { Panel } from './Panel';
 import type { ActivityEvent } from '@/types';
 import { cn } from '@/lib/utils';
-import { AlertCircle, Brain, Code, Database, RefreshCw, Zap } from 'lucide-react';
+import { AlertCircle, Brain, Code, Database, Download, RefreshCw, Zap } from 'lucide-react';
 
 interface ActivityTimelineProps {
   events: ActivityEvent[];
@@ -13,7 +13,8 @@ const eventIcons = {
   modification: Code,
   error: AlertCircle,
   training: RefreshCw,
-  crawl: Database,
+  acquisition: Download,
+  demo: Database,
 };
 
 const eventColors = {
@@ -22,7 +23,8 @@ const eventColors = {
   modification: 'text-status-warning',
   error: 'text-status-error',
   training: 'text-status-info',
-  crawl: 'text-text-tertiary',
+  acquisition: 'text-accent',
+  demo: 'text-status-success',
 };
 
 export function ActivityTimeline({ events }: ActivityTimelineProps) {

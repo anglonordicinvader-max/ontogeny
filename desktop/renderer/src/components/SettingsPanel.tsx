@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Panel } from './Panel';
+import { APP_VERSION } from '@/types';
 
 interface Settings {
   backendPort: number;
@@ -206,7 +207,7 @@ export function SettingsPanel() {
 
       <Panel title="About">
         <div className="space-y-2">
-          <div className="text-xs text-text-secondary font-medium">Ontogeny v1.0.0</div>
+          <div className="text-xs text-text-secondary font-medium">Ontogeny v{APP_VERSION}</div>
           <div className="text-2xs text-text-tertiary">Proto-AGI Research Workstation</div>
           <div className="text-2xs text-text-tertiary">License: AGPL-3.0</div>
         </div>
