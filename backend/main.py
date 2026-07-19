@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 sys.path.insert(0, os.path.dirname(__file__))
 from agent_manager import manager
+from demo_fixtures import demo_session
 
 app = FastAPI(title="Ontogeny Backend")
 
@@ -45,7 +46,10 @@ async def broadcast(message: dict):
 
 async def status_broadcast_loop():
     while True:
-        status = manager.get_status()
+        if demo_session.active:
+            status = _demo_full_status()
+        else:
+            status = manager.get_status()
         await broadcast({"type": "status", "payload": status})
         await asyncio.sleep(1)
 
@@ -103,10 +107,19 @@ async def handle_message(message: dict, websocket: WebSocket):
                         "id": str(int(time.time() * 1000)),
                         "timestamp": int(time.time() * 1000),
                         "type": "action",
-                        "message": f"Crawl intensity set to {payload.get('level', 'moderate')}",
+                        "message": f"Acquisition intensity set to {payload.get('level', 'moderate')}",
                     },
                 }
             )
+        elif cmd == "demo_start":
+            result = demo_session.start()
+            await websocket.send_json({"type": "command_result", "payload": result})
+        elif cmd == "demo_advance":
+            result = demo_session.advance()
+            await websocket.send_json({"type": "command_result", "payload": result})
+        elif cmd == "demo_reset":
+            result = demo_session.reset()
+            await websocket.send_json({"type": "command_result", "payload": result})
 
     elif msg_type == "action":
         action = payload.get("action")
@@ -171,6 +184,92 @@ async def get_knowledge():
 @app.get("/api/events")
 async def get_events(limit: int = Query(50)):
     return manager.get_recent_events(limit)
+
+
+@app.post("/api/demo/start")
+async def demo_start():
+    result = demo_session.start()
+    await broadcast({"type": "event", "payload": {
+        "id": str(int(time.time() * 1000)),
+        "timestamp": int(time.time() * 1000),
+        "type": "demo",
+        "message": "Demo Mode started",
+    }})
+    return result
+
+
+@app.post("/api/demo/advance")
+async def demo_advance():
+    result = demo_session.advance()
+    await broadcast({"type": "status", "payload": _demo_full_status()})
+    step_name = result.get("stepName", "")
+    await broadcast({"type": "event", "payload": {
+        "id": str(int(time.time() * 1000)),
+        "timestamp": int(time.time() * 1000),
+        "type": "demo",
+        "message": f"Demo step: {step_name}",
+    }})
+    return result
+
+
+@app.post("/api/demo/reset")
+async def demo_reset():
+    result = demo_session.reset()
+    await broadcast({"type": "event", "payload": {
+        "id": str(int(time.time() * 1000)),
+        "timestamp": int(time.time() * 1000),
+        "type": "demo",
+        "message": "Demo Mode reset",
+    }})
+    return result
+
+
+@app.get("/api/demo/status")
+async def demo_status():
+    return demo_session.get_status()
+
+
+@app.get("/api/demo/goal")
+async def demo_goal():
+    return demo_session.get_goal()
+
+
+@app.get("/api/demo/plan")
+async def demo_plan():
+    return demo_session.get_plan()
+
+
+@app.get("/api/demo/evidence")
+async def demo_evidence():
+    return demo_session.get_evidence()
+
+
+@app.get("/api/demo/memory")
+async def demo_memory():
+    return demo_session.get_memory_writes()
+
+
+@app.get("/api/demo/knowledge-graph")
+async def demo_knowledge_graph():
+    return demo_session.get_knowledge_graph()
+
+
+@app.get("/api/demo/reflection")
+async def demo_reflection():
+    return demo_session.get_reflection()
+
+
+@app.get("/api/demo/maldoror")
+async def demo_maldoror():
+    return demo_session.get_maldoror_proposal()
+
+
+def _demo_full_status() -> dict:
+    base = manager.get_status()
+    base["demo"] = demo_session.get_status()
+    if demo_session.active:
+        base["state"] = "demo"
+    return base
 
 
 if __name__ == "__main__":
