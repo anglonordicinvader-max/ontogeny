@@ -14,7 +14,7 @@ It trains in a Blender physics sandbox with **9 sensor types** (depth, LiDAR, IM
 
 It also has a **MuJoCo robotics sandbox** with two robot models — **TOCABI** (33-DOF humanoid) and **Unitree G1** (29-DOF humanoid) — with real-time joint-state telemetry, standing/walking controllers, and sensor integration.
 
-An **Electron desktop UI** provides a real-time glassmorphic interface with 11 panels: Activity, Cognitive State, Memory, Goals, Knowledge Graph, Knowledge Acquisition, Maldoror, Production, Blender, MuJoCo, and Settings.
+An **Electron desktop UI** provides a real-time native-AI interface with 11 panels: Activity, Cognitive State, Memory, Goals, Knowledge Graph, Knowledge Acquisition, Maldoror, Production, Blender, MuJoCo, and Settings.
 
 ## Architecture
 
