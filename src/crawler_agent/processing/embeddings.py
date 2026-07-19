@@ -23,12 +23,13 @@ class EmbeddingGenerator:
             self.model = SentenceTransformer(model_name)
         elif provider == "openai":
             import openai
+
             self.client = openai.AsyncOpenAI(api_key=api_key or "ollama", base_url=api_base)
             self.model_name = model_name
         else:
             raise ValueError(f"Unknown provider: {provider}")
 
-    async def generate(self, texts: List[str]) -> List[List[float]]:
+    async def generate(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings for texts."""
         if self.provider == "local":
             embeddings = self.model.encode(texts, show_progress_bar=False)
@@ -40,7 +41,7 @@ class EmbeddingGenerator:
             )
             return [item.embedding for item in response.data]
 
-    async def generate_single(self, text: str) -> List[float]:
+    async def generate_single(self, text: str) -> list[float]:
         """Generate embedding for single text."""
         results = await self.generate([text])
         return results[0]

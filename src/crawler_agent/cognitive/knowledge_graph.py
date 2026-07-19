@@ -1,10 +1,10 @@
 """Knowledge Graph for mapping relationships between concepts."""
 
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
-from collections import defaultdict
 
 import networkx as nx
 import structlog
@@ -12,7 +12,7 @@ import structlog
 from .backend import CognitiveBackend
 
 
-class RelationType(str, Enum):
+class RelationType(StrEnum):
     IS_A = "is_a"
     PART_OF = "part_of"
     CAUSES = "causes"
@@ -32,6 +32,7 @@ class RelationType(str, Enum):
 @dataclass
 class Concept:
     """A concept in the knowledge graph."""
+
     id: str
     name: str
     description: str = ""
@@ -46,6 +47,7 @@ class Concept:
 @dataclass
 class Relation:
     """A relationship between concepts."""
+
     source_id: str
     target_id: str
     relation_type: RelationType
@@ -164,12 +166,14 @@ Focus on factual relationships. Be precise."""
                 edge_data = self.graph[node][successor]
                 if relation_type and edge_data.get("relation_type") != relation_type.value:
                     continue
-                neighbors.append({
-                    "concept": successor,
-                    "relation": edge_data.get("relation_type"),
-                    "weight": edge_data.get("weight", 1.0),
-                    "depth": current_depth,
-                })
+                neighbors.append(
+                    {
+                        "concept": successor,
+                        "relation": edge_data.get("relation_type"),
+                        "weight": edge_data.get("weight", 1.0),
+                        "depth": current_depth,
+                    }
+                )
                 _traverse(successor, current_depth + 1)
 
         _traverse(concept_id, 1)
@@ -183,9 +187,7 @@ Focus on factual relationships. Be precise."""
     ) -> list[list[str]]:
         """Find paths between concepts."""
         try:
-            paths = list(nx.all_simple_paths(
-                self.graph, source, target, cutoff=max_length
-            ))
+            paths = list(nx.all_simple_paths(self.graph, source, target, cutoff=max_length))
             return paths[:10]
         except (nx.NetworkXError, nx.NodeNotFound):
             return []
@@ -212,11 +214,7 @@ Focus on factual relationships. Be precise."""
         centrality = nx.degree_centrality(self.graph)
         sorted_concepts = sorted(centrality.items(), key=lambda x: x[1], reverse=True)
 
-        return [
-            self.concepts[cid]
-            for cid, _ in sorted_concepts[:limit]
-            if cid in self.concepts
-        ]
+        return [self.concepts[cid] for cid, _ in sorted_concepts[:limit] if cid in self.concepts]
 
     def decay(self, decay_rate: float = 0.01) -> int:
         """Apply decay to unused concepts."""
@@ -225,7 +223,7 @@ Focus on factual relationships. Be precise."""
 
         for concept_id, concept in list(self.concepts.items()):
             days_since_access = (now - concept.last_accessed).days
-            concept.strength *= (1 - decay_rate * days_since_access)
+            concept.strength *= 1 - decay_rate * days_since_access
 
             if concept.strength < 0.1:
                 self.graph.remove_node(concept_id)
@@ -246,12 +244,14 @@ Focus on factual relationships. Be precise."""
             if query_lower in concept.description.lower():
                 score += 1
             if score > 0:
-                results.append({
-                    "concept": concept.name,
-                    "description": concept.description,
-                    "score": score,
-                    "connections": self.graph.degree(concept_id),
-                })
+                results.append(
+                    {
+                        "concept": concept.name,
+                        "description": concept.description,
+                        "score": score,
+                        "connections": self.graph.degree(concept_id),
+                    }
+                )
 
         results.sort(key=lambda x: x["score"], reverse=True)
         return results[:limit]

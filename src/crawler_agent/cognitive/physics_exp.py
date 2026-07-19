@@ -51,7 +51,7 @@ class ExperimentResult:
     intervention: Intervention
     observed_outcome: str
     supports_hypothesis: bool
-    metadata: Dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
 
 
 class PhysicsExperimenter:
@@ -59,17 +59,17 @@ class PhysicsExperimenter:
 
     def __init__(self):
         self.logger = structlog.get_logger(component="physics_exp")
-        self.hypotheses: Dict[str, Hypothesis] = {}
-        self.experiment_history: List[ExperimentResult] = []
-        self.physics_model: Dict[str, Any] = {
+        self.hypotheses: dict[str, Hypothesis] = {}
+        self.experiment_history: list[ExperimentResult] = []
+        self.physics_model: dict[str, Any] = {
             "gravity": 9.81,
             "friction": 0.3,
             "restitution": 0.5,
             "air_resistance": 0.01,
         }
-        self.intervention_log: List[Dict] = []
+        self.intervention_log: list[dict] = []
 
-    def generate_hypotheses(self, observation: str) -> List[Hypothesis]:
+    def generate_hypotheses(self, observation: str) -> list[Hypothesis]:
         """Generate hypotheses from observations."""
         generated = []
         templates = [
@@ -95,15 +95,28 @@ class PhysicsExperimenter:
     def design_intervention(self, hypothesis: Hypothesis) -> Intervention:
         """Design an intervention to test a hypothesis."""
         if "push" in hypothesis.statement or "force" in hypothesis.statement:
-            return Intervention("applied_force", 5.0, 15.0, "Increase force to test force-velocity relationship")
+            return Intervention(
+                "applied_force", 5.0, 15.0, "Increase force to test force-velocity relationship"
+            )
         elif "drop" in hypothesis.statement or "height" in hypothesis.statement:
-            return Intervention("drop_height", 1.0, 3.0, "Increase height to test height-bounce relationship")
+            return Intervention(
+                "drop_height", 1.0, 3.0, "Increase height to test height-bounce relationship"
+            )
         elif "mass" in hypothesis.statement:
-            return Intervention("object_mass", 1.0, 3.0, "Increase mass to test mass-speed relationship")
+            return Intervention(
+                "object_mass", 1.0, 3.0, "Increase mass to test mass-speed relationship"
+            )
         elif "friction" in hypothesis.statement:
-            return Intervention("surface_friction", 0.3, 0.1, "Reduce friction to test friction-distance relationship")
+            return Intervention(
+                "surface_friction",
+                0.3,
+                0.1,
+                "Reduce friction to test friction-distance relationship",
+            )
         else:
-            return Intervention("angle", 45, 90, "Change angle to test angle-trajectory relationship")
+            return Intervention(
+                "angle", 45, 90, "Change angle to test angle-trajectory relationship"
+            )
 
     def run_experiment(
         self,
@@ -133,12 +146,14 @@ class PhysicsExperimenter:
 
         hypothesis.update(supports)
         self.experiment_history.append(result)
-        self.intervention_log.append({
-            "hypothesis": hypothesis.statement,
-            "intervention": f"{intervention.variable}: {intervention.old_value} -> {intervention.new_value}",
-            "outcome": outcome,
-            "supports": supports,
-        })
+        self.intervention_log.append(
+            {
+                "hypothesis": hypothesis.statement,
+                "intervention": f"{intervention.variable}: {intervention.old_value} -> {intervention.new_value}",
+                "outcome": outcome,
+                "supports": supports,
+            }
+        )
 
         return result
 
@@ -154,12 +169,18 @@ class PhysicsExperimenter:
             if experiment_result.supports_hypothesis:
                 self.physics_model["air_resistance"] *= 0.95
 
-    def get_confident_hypotheses(self, threshold: float = 0.7) -> List[Hypothesis]:
+    def get_confident_hypotheses(self, threshold: float = 0.7) -> list[Hypothesis]:
         """Get hypotheses with high confidence."""
-        return [h for h in self.hypotheses.values() if h.confidence >= threshold and h.total_evidence >= 3]
+        return [
+            h
+            for h in self.hypotheses.values()
+            if h.confidence >= threshold and h.total_evidence >= 3
+        ]
 
     def to_context(self) -> str:
         confident = self.get_confident_hypotheses()
-        return (f"Physics Experimenter: {len(self.hypotheses)} hypotheses "
-                f"({len(confident)} confirmed), {len(self.experiment_history)} experiments, "
-                f"model: {self.physics_model}")
+        return (
+            f"Physics Experimenter: {len(self.hypotheses)} hypotheses "
+            f"({len(confident)} confirmed), {len(self.experiment_history)} experiments, "
+            f"model: {self.physics_model}"
+        )

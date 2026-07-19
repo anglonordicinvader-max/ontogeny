@@ -13,7 +13,7 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 import structlog
@@ -21,16 +21,16 @@ import structlog
 from .backend import CognitiveBackend
 
 
-class ReflectionType(str, Enum):
-    SUCCESS = "success"           # Action achieved goal
-    PARTIAL = "partial"           # Partially achieved goal
-    FAILURE = "failure"           # Action failed
-    SURPRISE = "surprise"         # Outcome unexpected
-    INSIGHT = "insight"           # Learned something new about self
-    PATTERN = "pattern"           # Recognized recurring behavior
+class ReflectionType(StrEnum):
+    SUCCESS = "success"  # Action achieved goal
+    PARTIAL = "partial"  # Partially achieved goal
+    FAILURE = "failure"  # Action failed
+    SURPRISE = "surprise"  # Outcome unexpected
+    INSIGHT = "insight"  # Learned something new about self
+    PATTERN = "pattern"  # Recognized recurring behavior
 
 
-class SeverityLevel(str, Enum):
+class SeverityLevel(StrEnum):
     INFO = "info"
     WARNING = "warning"
     CRITICAL = "critical"
@@ -39,6 +39,7 @@ class SeverityLevel(str, Enum):
 @dataclass
 class ActionRecord:
     """Record of an action taken by the agent."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     action_type: str = ""
     description: str = ""
@@ -53,6 +54,7 @@ class ActionRecord:
 @dataclass
 class Reflection:
     """A reflection on an action's outcome."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     action_id: str = ""
     reflection_type: ReflectionType = ReflectionType.SUCCESS
@@ -71,7 +73,8 @@ class Reflection:
 @dataclass
 class SelfModel:
     """The agent's model of itself."""
-    strengths: dict[str, float] = field(default_factory=dict)   # capability -> proficiency
+
+    strengths: dict[str, float] = field(default_factory=dict)  # capability -> proficiency
     weaknesses: dict[str, float] = field(default_factory=dict)  # capability -> weakness level
     blind_spots: list[str] = field(default_factory=list)
     failure_modes: dict[str, int] = field(default_factory=dict)  # mode -> count
@@ -179,8 +182,9 @@ Reflect:"""
             data = response.parsed_json
             reflection = Reflection(
                 action_id=action.id,
-                reflection_type=ReflectionType(data.get("reflection_type",
-                    "success" if success else "failure")),
+                reflection_type=ReflectionType(
+                    data.get("reflection_type", "success" if success else "failure")
+                ),
                 severity=SeverityLevel(data.get("severity", "info")),
                 what_worked=data.get("what_worked", ""),
                 what_failed=data.get("what_failed", ""),
@@ -221,14 +225,16 @@ Reflect:"""
         if success:
             current = self.self_model.strengths.get(capability, 0.5)
             self.self_model.strengths[capability] = min(1.0, current + 0.05)
-            self.self_model.success_patterns[capability] = \
+            self.self_model.success_patterns[capability] = (
                 self.self_model.success_patterns.get(capability, 0) + 1
+            )
         else:
             current_weak = self.self_model.weaknesses.get(capability, 0.0)
             self.self_model.weaknesses[capability] = min(1.0, current_weak + 0.05)
             failure_mode = reflection.root_cause or "unknown"
-            self.self_model.failure_modes[failure_mode] = \
+            self.self_model.failure_modes[failure_mode] = (
                 self.self_model.failure_modes.get(failure_mode, 0) + 1
+            )
 
         # Track blind spots (high confidence + failure = blind spot)
         if not success and action.confidence_before > 0.7:
@@ -240,15 +246,22 @@ Reflect:"""
 
         self.self_model.total_reflections = self.reflection_count
 
-    async def pre_action_review(self, action_type: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def pre_action_review(
+        self, action_type: str, context: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Review past reflections before taking an action. Returns warnings and suggestions."""
         relevant_reflections = [
-            r for r in self.reflections
+            r
+            for r in self.reflections
             if r.action_id in [a.id for a in self.action_history if a.action_type == action_type]
         ]
 
         if not relevant_reflections:
-            return {"warnings": [], "suggestions": ["No prior experience with this action type"], "confidence": 0.5}
+            return {
+                "warnings": [],
+                "suggestions": ["No prior experience with this action type"],
+                "confidence": 0.5,
+            }
 
         failures = [r for r in relevant_reflections if r.reflection_type == ReflectionType.FAILURE]
         warnings = []
@@ -263,9 +276,11 @@ Reflect:"""
 
         # Check if this is a blind spot
         if action_type in [bs.split(":")[0] for bs in self.self_model.blind_spots]:
-            warnings.append(f"BLIND SPOT: This action type has high-confidence failures")
+            warnings.append("BLIND SPOT: This action type has high-confidence failures")
 
-        avg_confidence = sum(r.confidence_delta for r in relevant_reflections) / len(relevant_reflections)
+        avg_confidence = sum(r.confidence_delta for r in relevant_reflections) / len(
+            relevant_reflections
+        )
 
         return {
             "warnings": warnings,

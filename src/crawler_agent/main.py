@@ -1,4 +1,4 @@
-"""Main entry point for the crawler agent."""
+"""Main entry point for Ontogeny — the autonomous knowledge acquisition and reasoning agent."""
 
 import asyncio
 import sys
@@ -6,12 +6,10 @@ from pathlib import Path
 
 import structlog
 
+from .cli_colors import ONTOGENY_LOGO, RESET, blue, bold, bright_red, cyan, dim, green, red, yellow
+from .cognitive.goals import GoalPriority, GoalSource
 from .cognitive.orchestrator import CognitiveOrchestrator
-from .cognitive.goals import GoalSource, GoalPriority
-from .cli_colors import (
-    ONTOGENY_LOGO, red, green, yellow, blue, cyan, bright_red, bold, dim, RESET
-)
-from .persistence import StatePersistence, AgentState
+from .persistence import AgentState, StatePersistence
 from .utils.proxy import ProxyPool
 
 
@@ -21,6 +19,7 @@ def setup_logging(log_level: str = "INFO") -> None:
     if sys.platform == "win32":
         try:
             import ctypes
+
             kernel32 = ctypes.windll.kernel32
             kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
         except Exception:
@@ -151,7 +150,9 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
                 if goals:
                     print(f"\n{bold(cyan('Active goals:'))}")
                     for g in goals:
-                        print(f"  {yellow('[' + g.priority.value + ']')} {g.description} (progress: {green(f'{g.progress:.0%}')})")
+                        print(
+                            f"  {yellow('[' + g.priority.value + ']')} {g.description} (progress: {green(f'{g.progress:.0%}')})"
+                        )
                 else:
                     print(f"{dim('No active goals')}")
 
@@ -160,17 +161,17 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
                 print(f"\n{bold(cyan('Agent Status'))}")
                 print(f"  State:       {green(status['state'])}")
                 print(f"  Iteration:   {yellow(str(status['iteration']))}")
-                uptime = f'{status["uptime_seconds"]:.0f}s'
+                uptime = f"{status['uptime_seconds']:.0f}s"
                 print(f"  Uptime:      {yellow(uptime)}")
                 print(f"  Goals:       {status['goals']}")
                 print(f"  Drives:      {status['drives']}")
                 print(f"  Crawlers:    {status['crawlers']}")
                 proxy_stats = agent.proxy_pool.get_stats()
-                healthy_color = green if proxy_stats['healthy'] > 0 else red
-                healthy_count = proxy_stats['healthy']
-                total_count = proxy_stats['total']
+                healthy_color = green if proxy_stats["healthy"] > 0 else red
+                healthy_count = proxy_stats["healthy"]
+                total_count = proxy_stats["total"]
                 print(f"  Proxies:     {healthy_color(f'{healthy_count}/{total_count} healthy')}")
-                if status.get('current_plan'):
+                if status.get("current_plan"):
                     print(f"\n{bold('Current Plan:')}\n{status['current_plan']}")
 
             elif command == "memory":
@@ -199,13 +200,15 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
                 proxy_cmd = parts[1].lower()
                 if proxy_cmd == "list":
                     stats = agent.proxy_pool.get_stats()
-                    h_count = stats['healthy']
-                    t_count = stats['total']
+                    h_count = stats["healthy"]
+                    t_count = stats["total"]
                     print(f"\n{bold(cyan(f'Proxy Pool: {green(str(h_count))}/{t_count} healthy'))}")
                     for p in agent.proxy_pool._proxies:
                         status_icon = green("✓") if p.is_healthy else red("✗")
-                        print(f"  {status_icon} {p._host_port} {yellow('[' + p.status.value + ']')} "
-                              f"(success: {p.success_count}, fail: {p.failure_count})")
+                        print(
+                            f"  {status_icon} {p._host_port} {yellow('[' + p.status.value + ']')} "
+                            f"(success: {p.success_count}, fail: {p.failure_count})"
+                        )
                 elif proxy_cmd == "add" and len(parts) >= 3:
                     proxy_url = parts[2]
                     agent.proxy_pool.add_proxy(proxy_url)
@@ -221,6 +224,7 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
                 elif proxy_cmd == "fetch":
                     print(f"{cyan('Fetching free proxies...')}")
                     from ..utils.proxy_fetcher import FreeProxyFetcher
+
                     fetcher = FreeProxyFetcher()
                     proxies = await fetcher.fetch_all(limit=20)
                     for p in proxies:
@@ -231,6 +235,7 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
 
             elif command == "intensity" and len(parts) >= 2:
                 from .cognitive.scheduler import CrawlIntensity
+
                 intensity_map = {
                     "light": CrawlIntensity.LIGHT,
                     "moderate": CrawlIntensity.MODERATE,
@@ -242,7 +247,9 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
                     print(f"{green(f'Intensity set to: {level}')}")
                     stats = agent.crawl_orchestrator.scheduler.get_stats()
                     print(f"  RPM:   {yellow(str(stats['requests_per_minute']))}")
-                    print(f"  Delay: {yellow(str(stats.get('min_delay', '?')))}-{yellow(str(stats.get('max_delay', '?')))}s")
+                    print(
+                        f"  Delay: {yellow(str(stats.get('min_delay', '?')))}-{yellow(str(stats.get('max_delay', '?')))}s"
+                    )
                 else:
                     print(f"{red('Options: light, moderate, heavy')}")
 
@@ -256,11 +263,11 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
                 result = await agent.learn_focused(topic, max_items=5)
                 print(f"\n{bold(cyan('Learning complete:'))}")
                 print(f"  Items processed: {yellow(str(result['items_learned']))}")
-                knowledge_gained = result['knowledge_gained']
+                knowledge_gained = result["knowledge_gained"]
                 print(f"  Knowledge gained: {green(f'{knowledge_gained:.2f}')}")
-                if result['insights']:
+                if result["insights"]:
                     print(f"  {bold('Insights:')}")
-                    for insight in result['insights'][:3]:
+                    for insight in result["insights"][:3]:
                         print(f"    {green('•')} {insight}")
 
             elif command == "dream" and len(parts) >= 2:
@@ -269,17 +276,17 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
                 result = await agent.dream(theme)
                 emotional_tone = result["emotional_tone"]
                 print(f"\n{bold(magenta(f'Dream results ({emotional_tone}):'))}")
-                if result['novel_connections']:
+                if result["novel_connections"]:
                     print(f"  {bold('Novel connections:')}")
-                    for c in result['novel_connections'][:5]:
+                    for c in result["novel_connections"][:5]:
                         print(f"    {green('•')} {c}")
-                if result['insights']:
+                if result["insights"]:
                     print(f"  {bold('Insights:')}")
-                    for i in result['insights'][:3]:
+                    for i in result["insights"][:3]:
                         print(f"    {green('•')} {i}")
-                if result['creative_ideas']:
+                if result["creative_ideas"]:
                     print(f"  {bold('Creative ideas:')}")
-                    for i in result['creative_ideas'][:3]:
+                    for i in result["creative_ideas"][:3]:
                         print(f"    {yellow('•')} {i}")
 
             elif command == "simulate" and len(parts) >= 2:
@@ -288,11 +295,12 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
                 print(f"{cyan(f'Simulating: {action} ({sim_type})...')}")
                 result = await agent.simulate(action, sim_type)
                 confidence = result["confidence"]
-                print(f"\n{bold(cyan(f'Simulation (confidence: {green(f"{confidence:.0%}")}):'))}")
+                conf_str = f"{confidence:.0%}"
+                print(f"\n{bold(cyan(f'Simulation (confidence: {green(conf_str)}):'))}")
                 print(f"  Outcomes: {result['outcomes']}")
-                if result['steps']:
+                if result["steps"]:
                     print(f"  {bold('Steps:')}")
-                    for s in result['steps'][:5]:
+                    for s in result["steps"][:5]:
                         print(f"    {green('•')} {s}")
 
             elif command == "simulate-plan" and len(parts) >= 2:
@@ -301,22 +309,25 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
                 print(f"{cyan(f'Simulating plan with {len(steps)} steps...')}")
                 result = await agent.simulate_plan(steps)
                 confidence = result["confidence"]
-                print(f"\n{bold(cyan(f'Plan simulation (confidence: {green(f"{confidence:.0%}")}):'))}")
+                conf_str = f"{confidence:.0%}"
+                print(
+                    f"\n{bold(cyan(f'Plan simulation (confidence: {green(conf_str)}):'))}"
+                )
                 print(f"  Outcomes: {result['outcomes']}")
-                for detail in result.get('step_details', [])[:5]:
+                for detail in result.get("step_details", [])[:5]:
                     print(f"    {green('•')} {detail.get('description', detail)}")
 
             elif command == "causal" and len(parts) >= 2:
                 query = " ".join(parts[1:])
                 result = await agent.causal_query(query)
                 print(f"\n{bold(cyan(f'Causal query: {query}'))}")
-                if result['causes']:
+                if result["causes"]:
                     print(f"  {bold('Causes:')}")
-                    for c in result['causes'][:5]:
+                    for c in result["causes"][:5]:
                         print(f"    {green('•')} {c}")
-                if result['effects']:
+                if result["effects"]:
                     print(f"  {bold('Effects:')}")
-                    for e in result['effects'][:5]:
+                    for e in result["effects"][:5]:
                         print(f"    {yellow('•')} {e}")
 
             elif command == "intervene" and len(parts) >= 4:
@@ -342,11 +353,15 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
                 results = await agent.query_knowledge(query)
                 print(f"\n{bold(cyan(f'Knowledge results for {yellow(query)}:'))}")
                 for r in results[:10]:
-                    print(f"  {green('•')} {r.get('name', r.get('id', '?'))}: {dim(r.get('description', '')[:80])}")
+                    print(
+                        f"  {green('•')} {r.get('name', r.get('id', '?'))}: {dim(r.get('description', '')[:80])}"
+                    )
 
             elif command == "analogy" and len(parts) >= 4:
                 results = await agent.knowledge_analogy(parts[1], parts[2], parts[3])
-                print(f"\n{bold(cyan(f'{yellow(parts[1])} is to {yellow(parts[2])} as {yellow(parts[3])} is to:'))}")
+                print(
+                    f"\n{bold(cyan(f'{yellow(parts[1])} is to {yellow(parts[2])} as {yellow(parts[3])} is to:'))}"
+                )
                 for r in results[:5]:
                     print(f"  {green('•')} {r}")
 
@@ -364,7 +379,9 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
                 print(f"  Confidence: {green(f'{confidence:.0%}')}")
                 print(f"  Type:       {yellow(result['type'])}")
                 print(f"  Interval:   {result['interval']}")
-                print(f"  Evidence:   {result['evidence_count']} (contradicting: {red(str(result['contradicting']))})")
+                print(
+                    f"  Evidence:   {result['evidence_count']} (contradicting: {red(str(result['contradicting']))})"
+                )
 
             elif command == "compose" and len(parts) >= 2:
                 goal = " ".join(parts[1:])
@@ -395,7 +412,7 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
             elif command == "run-file" and len(parts) >= 2:
                 filepath = parts[1]
                 try:
-                    with open(filepath, "r") as f:
+                    with open(filepath) as f:
                         code = f.read()
                     print(f"{cyan(f'Executing {filepath} in sandbox...')}")
                     result = await agent.execute_code(code)
@@ -444,16 +461,28 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
                     agents = agent.multi_agent.registry.list_agents()
                     print(f"\n{bold(cyan('Registered Agents:'))}")
                     for a in agents:
-                        print(f"  {yellow('[' + a['role'] + ']')} {a['name']} - {green(a['state'])}")
-                        if a['capabilities']:
+                        print(
+                            f"  {yellow('[' + a['role'] + ']')} {a['name']} - {green(a['state'])}"
+                        )
+                        if a["capabilities"]:
                             print(f"    {dim(', '.join(a['capabilities'][:5]))}")
                 else:
                     print(f"{red('Multi-agent system not available')}")
 
             elif command == "task" and len(parts) >= 2:
                 if agent.multi_agent:
-                    valid_agents = ["Researcher", "Coder", "Analyst", "Planner", "Critic",
-                                   "DataCleaner", "Summarizer", "Optimizer", "Explorer", "Synthesizer"]
+                    valid_agents = [
+                        "Researcher",
+                        "Coder",
+                        "Analyst",
+                        "Planner",
+                        "Critic",
+                        "DataCleaner",
+                        "Summarizer",
+                        "Optimizer",
+                        "Explorer",
+                        "Synthesizer",
+                    ]
                     if len(parts) >= 3 and parts[1] in valid_agents:
                         agent_name = parts[1]
                         task_desc = " ".join(parts[2:])
@@ -509,7 +538,9 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
                         stages_count = result.get("stages", 0)
                         print(f"\n{green(f'Pipeline complete ({stages_count} stages)')}")
                         for i, r in enumerate(result.get("results", [])):
-                            print(f"  {yellow(f'Stage {i+1}:')} {r.get('agent', '?')} - {dim(str(r.get('result', ''))[:80])}")
+                            print(
+                                f"  {yellow(f'Stage {i + 1}:')} {r.get('agent', '?')} - {dim(str(r.get('result', ''))[:80])}"
+                            )
                 else:
                     print(f"{red('Invalid pipeline format. Use: agent1:task1;agent2:task2')}")
 
@@ -521,12 +552,17 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
 
             elif command == "save":
                 state = AgentState(
-                    iteration=agent._iteration if hasattr(agent, '_iteration') else 0,
-                    start_time=agent._start_time.isoformat() if hasattr(agent, '_start_time') and agent._start_time else "",
+                    iteration=agent._iteration if hasattr(agent, "_iteration") else 0,
+                    start_time=agent._start_time.isoformat()
+                    if hasattr(agent, "_start_time") and agent._start_time
+                    else "",
                 )
-                if hasattr(agent, 'goals'):
+                if hasattr(agent, "goals"):
                     goals = await agent.goals.get_active_goals()
-                    state.goals = [{"id": g.id, "description": g.description, "progress": g.progress} for g in goals]
+                    state.goals = [
+                        {"id": g.id, "description": g.description, "progress": g.progress}
+                        for g in goals
+                    ]
                 await persistence.save(state)
                 await persistence.save_backup(state)
                 print(f"{green('State saved successfully')}")
@@ -566,7 +602,9 @@ async def demo_mode(agent: CognitiveOrchestrator) -> None:
     # 1. Set identity
     print(f"{yellow('1.')} Setting identity...")
     await agent.memory.identity.set_value("name", "DemoAgent")
-    await agent.memory.identity.set_value("capabilities", ["crawling", "learning", "self-improvement"])
+    await agent.memory.identity.set_value(
+        "capabilities", ["crawling", "learning", "self-improvement"]
+    )
 
     # 2. Create and pursue a goal
     print(f"{yellow('2.')} Creating learning goal...")
@@ -611,7 +649,7 @@ async def demo_mode(agent: CognitiveOrchestrator) -> None:
 def main() -> None:
     """Main entry point."""
     setup_logging()
-    logger = structlog.get_logger()
+    structlog.get_logger()
 
     agent = CognitiveOrchestrator()
     persistence = StatePersistence()

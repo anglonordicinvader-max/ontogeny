@@ -1,14 +1,14 @@
 """GitHub crawler using API v3."""
 
 import asyncio
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import httpx
 import structlog
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from .base import BaseCrawler, CrawlerConfig, CrawlResult, ContentType
 from ..utils.rate_limiter import SlidingWindowRateLimiter
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class GitHubCrawler(BaseCrawler):
@@ -66,9 +66,7 @@ class GitHubCrawler(BaseCrawler):
             async for result in self._crawl_code(url, depth):
                 yield result
 
-    async def _crawl_repos(
-        self, owner: str, depth: int
-    ) -> AsyncIterator[CrawlResult]:
+    async def _crawl_repos(self, owner: str, depth: int) -> AsyncIterator[CrawlResult]:
         """Crawl repositories for an owner."""
         await self.rate_limiter_api.wait_and_acquire()
 

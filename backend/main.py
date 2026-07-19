@@ -1,15 +1,16 @@
+import argparse
 import asyncio
 import json
+import os
 import socket
-import argparse
+import sys
 import time
 from typing import Set
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-import sys
-import os
 sys.path.insert(0, os.path.dirname(__file__))
 from agent_manager import manager
 
@@ -23,7 +24,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-connected_clients: Set[WebSocket] = set()
+connected_clients: set[WebSocket] = set()
 
 
 def find_available_port() -> int:
@@ -95,21 +96,31 @@ async def handle_message(message: dict, websocket: WebSocket):
             result = await manager.run_single_cycle()
             await websocket.send_json({"type": "command_result", "payload": result})
         elif cmd == "set_intensity":
-            await broadcast({"type": "event", "payload": {
-                "id": str(int(time.time() * 1000)),
-                "timestamp": int(time.time() * 1000),
-                "type": "action",
-                "message": f"Crawl intensity set to {payload.get('level', 'moderate')}",
-            }})
+            await broadcast(
+                {
+                    "type": "event",
+                    "payload": {
+                        "id": str(int(time.time() * 1000)),
+                        "timestamp": int(time.time() * 1000),
+                        "type": "action",
+                        "message": f"Crawl intensity set to {payload.get('level', 'moderate')}",
+                    },
+                }
+            )
 
     elif msg_type == "action":
         action = payload.get("action")
-        await broadcast({"type": "event", "payload": {
-            "id": str(int(time.time() * 1000)),
-            "timestamp": int(time.time() * 1000),
-            "type": "action",
-            "message": f"Action triggered: {action}",
-        }})
+        await broadcast(
+            {
+                "type": "event",
+                "payload": {
+                    "id": str(int(time.time() * 1000)),
+                    "timestamp": int(time.time() * 1000),
+                    "type": "action",
+                    "message": f"Action triggered: {action}",
+                },
+            }
+        )
 
 
 class AskRequest(BaseModel):
@@ -171,4 +182,5 @@ if __name__ == "__main__":
     print(f"Starting Ontogeny backend on port {port}")
 
     import uvicorn
+
     uvicorn.run(app, host="127.0.0.1", port=port)

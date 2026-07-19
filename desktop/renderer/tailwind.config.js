@@ -14,6 +14,7 @@ export default {
           2: 'var(--surface-2)',
           3: 'var(--surface-3)',
           4: 'var(--surface-4)',
+          elevated: 'var(--surface-elevated)',
         },
         border: {
           DEFAULT: 'var(--border)',
@@ -55,7 +56,6 @@ export default {
         'fade-in': 'fadeIn 150ms ease-out',
         'fade-through': 'fadeThrough 300ms ease-in-out',
         'slide-in': 'slideIn 200ms ease-out',
-        'pulse-subtle': 'pulseSubtle 2s ease-in-out infinite',
         'panel-in': 'panelIn 200ms ease-out',
       },
       keyframes: {
@@ -71,10 +71,6 @@ export default {
         slideIn: {
           '0%': { opacity: '0', transform: 'translateY(4px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
-        pulseSubtle: {
-          '0%, 100%': { opacity: '1' },
-          '50%': { opacity: '0.7' },
         },
         panelIn: {
           '0%': { opacity: '0', transform: 'translateY(8px)' },

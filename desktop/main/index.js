@@ -8,6 +8,7 @@ const { autoUpdater } = require('electron-updater');
 let mainWindow;
 let pythonProcess;
 let blenderProcess;
+let mujocoProcess;
 let backendPort;
 
 // Lazy-evaluated environment checks - avoid module-load-time issues in ASAR
@@ -26,7 +27,11 @@ const PYTHON_EXE = isPackaged
   : path.join(__dirname, '..', 'backend', 'ontogeny-backend.exe');
 const BLENDER_EXE = isPackaged
   ? path.join(process.resourcesPath, 'backend', 'blender', 'blender.exe')
-  : path.join(__dirname, '..', 'backend', 'blender', 'blender.exe');
+  : 'C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe';
+
+const MUJOCO_SCRIPT = isPackaged
+  ? path.join(process.resourcesPath, 'backend', 'mujoco_simulation.py')
+  : path.join(__dirname, '..', '..', 'backend', 'mujoco_simulation.py');
 
 // Configure auto-updater based on environment
 function configureAutoUpdater() {
@@ -91,8 +96,8 @@ async function startBlender() {
   if (fs.existsSync(BLENDER_EXE)) {
     blenderProcess = spawn(BLENDER_EXE, [
       '--background',
-      '--python', path.join(__dirname, '..', '..', 'backend', 'blender_server.py'),
-      '--', '--port', backendPort
+      '--python', path.join(__dirname, '..', '..', 'backend', 'blender_simulation.py'),
+      '--', '--port', String(backendPort + 1)
     ], {
       stdio: ['pipe', 'pipe', 'pipe']
     });
@@ -103,6 +108,28 @@ async function startBlender() {
 
     blenderProcess.stderr.on('data', (data) => {
       console.error(`Blender Error: ${data}`);
+    });
+  }
+}
+
+async function startMuJoCo() {
+  if (fs.existsSync(MUJOCO_SCRIPT)) {
+    const pythonExe = fs.existsSync(PYTHON_EXE) ? PYTHON_EXE : 'python';
+    const modelArg = process.env.MUJOCO_MODEL || 'tocabi';
+    mujocoProcess = spawn(pythonExe, [
+      MUJOCO_SCRIPT,
+      '--port', String(backendPort + 2),
+      '--model', modelArg
+    ], {
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    mujocoProcess.stdout.on('data', (data) => {
+      console.log(`MuJoCo: ${data}`);
+    });
+
+    mujocoProcess.stderr.on('data', (data) => {
+      console.error(`MuJoCo Error: ${data}`);
     });
   }
 }
@@ -144,9 +171,9 @@ function createWindow() {
     console.error('Renderer unresponsive');
   });
 
-  const isDevLocal = !fs.existsSync(path.join(__dirname, '..', 'renderer', 'dist', 'index.html'));
+  const useDev = process.env.NODE_ENV === 'development' || process.argv.includes('--dev');
   
-  if (isDevLocal) {
+  if (useDev) {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
@@ -162,19 +189,6 @@ function createWindow() {
 }
 
 function setupAutoUpdater() {
-  const isDevCheck = !isPackaged;
-  const isPortableCheck = isPackaged && !fs.existsSync(path.join(process.resourcesPath, 'app-update.yml'));
-  
-  if (!isDevCheck && !isPortableCheck) {
-    autoUpdater.autoDownload = true;
-    autoUpdater.autoInstallOnAppQuit = true;
-  } else {
-    autoUpdater.autoDownload = false;
-    autoUpdater.autoInstallOnAppQuit = false;
-    autoUpdater.checkForUpdatesAndNotify = () => Promise.resolve();
-    autoUpdater.checkForUpdates = () => Promise.resolve();
-  }
-
   autoUpdater.on('update-available', (info) => {
     console.log('Update available:', info.version);
     dialog.showMessageBox(mainWindow, {
@@ -213,8 +227,15 @@ function setupAutoUpdater() {
 }
 
 app.whenReady().then(async () => {
-  await startPythonBackend();
+  const simulate = process.argv.includes('--simulate');
+  if (simulate) {
+    backendPort = 8765;
+    console.log('[SIM] Simulation mode — using port 8765, skipping Python backend');
+  } else {
+    await startPythonBackend();
+  }
   await startBlender();
+  await startMuJoCo();
   createWindow();
   setupAutoUpdater();
   
@@ -239,6 +260,7 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   if (pythonProcess) pythonProcess.kill();
   if (blenderProcess) blenderProcess.kill();
+  if (mujocoProcess) mujocoProcess.kill();
   if (process.platform !== 'darwin') {
     app.quit();
   }

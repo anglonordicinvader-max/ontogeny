@@ -21,27 +21,27 @@ class DetectedObject:
     id: str
     label: str
     confidence: float
-    bbox: List[float] = field(default_factory=list)
-    attributes: Dict[str, Any] = field(default_factory=dict)
+    bbox: list[float] = field(default_factory=list)
+    attributes: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class SceneFrame:
     timestamp: float
-    objects: List[DetectedObject] = field(default_factory=list)
-    text: List[str] = field(default_factory=list)
-    actions: List[str] = field(default_factory=list)
+    objects: list[DetectedObject] = field(default_factory=list)
+    text: list[str] = field(default_factory=list)
+    actions: list[str] = field(default_factory=list)
     description: str = ""
 
 
 @dataclass
 class VideoAnalysis:
     video_id: str
-    frames: List[SceneFrame] = field(default_factory=list)
+    frames: list[SceneFrame] = field(default_factory=list)
     summary: str = ""
-    objects_detected: List[str] = field(default_factory=list)
-    actions_recognized: List[str] = field(default_factory=list)
-    text_extracted: List[str] = field(default_factory=list)
+    objects_detected: list[str] = field(default_factory=list)
+    actions_recognized: list[str] = field(default_factory=list)
+    text_extracted: list[str] = field(default_factory=list)
     duration: float = 0.0
 
 
@@ -50,7 +50,7 @@ class SceneUnderstanding:
 
     def __init__(self):
         self.logger = structlog.get_logger(component="scene_understanding")
-        self.analysis_history: List[VideoAnalysis] = []
+        self.analysis_history: list[VideoAnalysis] = []
 
     def analyze_frame(
         self,
@@ -65,12 +65,14 @@ class SceneUnderstanding:
         if isinstance(frame_data, dict):
             if "objects" in frame_data:
                 for obj in frame_data["objects"]:
-                    objects.append(DetectedObject(
-                        id=obj.get("id", ""),
-                        label=obj.get("label", "unknown"),
-                        confidence=obj.get("confidence", 0.5),
-                        bbox=obj.get("bbox", []),
-                    ))
+                    objects.append(
+                        DetectedObject(
+                            id=obj.get("id", ""),
+                            label=obj.get("label", "unknown"),
+                            confidence=obj.get("confidence", 0.5),
+                            bbox=obj.get("bbox", []),
+                        )
+                    )
 
             if "text" in frame_data:
                 text = frame_data["text"]
@@ -89,8 +91,8 @@ class SceneUnderstanding:
     def analyze_video(
         self,
         video_id: str,
-        frames: List[Any],
-        frame_times: Optional[List[float]] = None,
+        frames: list[Any],
+        frame_times: list[float] | None = None,
     ) -> VideoAnalysis:
         """Analyze multiple video frames."""
         if frame_times is None:
@@ -126,7 +128,7 @@ class SceneUnderstanding:
         self,
         frame_a: SceneFrame,
         frame_b: SceneFrame,
-    ) -> Dict:
+    ) -> dict:
         """Detect changes between two frames."""
         objects_a = {obj.label for obj in frame_a.objects}
         objects_b = {obj.label for obj in frame_b.objects}
@@ -140,7 +142,9 @@ class SceneUnderstanding:
 
     def summarize_video(self, analysis: VideoAnalysis) -> str:
         """Generate a summary of video analysis."""
-        lines = [f"Video {analysis.video_id}: {len(analysis.frames)} frames, {analysis.duration:.1f}s"]
+        lines = [
+            f"Video {analysis.video_id}: {len(analysis.frames)} frames, {analysis.duration:.1f}s"
+        ]
         if analysis.objects_detected:
             lines.append(f"Objects: {', '.join(analysis.objects_detected[:5])}")
         if analysis.actions_recognized:

@@ -6,17 +6,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.crawler_agent.cognitive.model_evaluation import ModelEvaluator
 from src.crawler_agent.cognitive.model_population import (
     ModelPopulation,
     VariantConfig,
     VariantResult,
 )
+from src.crawler_agent.cognitive.model_trainer import ModelTrainer, TrainingRun
 from src.crawler_agent.cognitive.modification_memory import (
     ModificationMemory,
     ModificationRecord,
 )
-from src.crawler_agent.cognitive.model_trainer import ModelTrainer, TrainingRun
-from src.crawler_agent.cognitive.model_evaluation import ModelEvaluator
 
 
 @pytest.fixture
@@ -31,17 +31,23 @@ def memory(tmp_storage):
     mm = ModificationMemory(storage_path=str(tmp_storage))
     # Add some records for testing
     for i in range(15):
-        mm.record(ModificationRecord(
-            id=f"rec-{i}",
-            timestamp="2026-01-01T00:00:00",
-            source_module="self_modify" if i < 10 else "self_training",
-            target_file="orchestrator.py" if i % 2 == 0 else "planner.py",
-            task_type="code_rewrite" if i % 3 == 0 else "optimization" if i % 3 == 1 else "bug_fix",
-            description=f"Test modification {i}",
-            modified_code=f"# Modified code for test {i}\nimport os",
-            success=i < 12,  # 12 successful, 3 failed
-            quality_score=0.5 + (i * 0.03),
-        ))
+        mm.record(
+            ModificationRecord(
+                id=f"rec-{i}",
+                timestamp="2026-01-01T00:00:00",
+                source_module="self_modify" if i < 10 else "self_training",
+                target_file="orchestrator.py" if i % 2 == 0 else "planner.py",
+                task_type="code_rewrite"
+                if i % 3 == 0
+                else "optimization"
+                if i % 3 == 1
+                else "bug_fix",
+                description=f"Test modification {i}",
+                modified_code=f"# Modified code for test {i}\nimport os",
+                success=i < 12,  # 12 successful, 3 failed
+                quality_score=0.5 + (i * 0.03),
+            )
+        )
     return mm
 
 
@@ -51,13 +57,15 @@ def mock_trainer():
     trainer = AsyncMock(spec=ModelTrainer)
     trainer.output_dir = Path("/tmp/test_maldoror")
     trainer.current_version = "v0"
-    trainer.train = AsyncMock(return_value=TrainingRun(
-        version="v0",
-        success=True,
-        adapter_path="/tmp/test_maldoror/v0",
-        num_examples=15,
-        loss=0.5,
-    ))
+    trainer.train = AsyncMock(
+        return_value=TrainingRun(
+            version="v0",
+            success=True,
+            adapter_path="/tmp/test_maldoror/v0",
+            num_examples=15,
+            loss=0.5,
+        )
+    )
     return trainer
 
 

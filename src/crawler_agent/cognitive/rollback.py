@@ -22,12 +22,12 @@ class Version:
     version_id: str
     module: str
     timestamp: datetime = field(default_factory=datetime.utcnow)
-    changes: List[str] = field(default_factory=list)
+    changes: list[str] = field(default_factory=list)
     health_before: float = 1.0
     health_after: float = 1.0
     rolled_back: bool = False
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "version_id": self.version_id,
             "module": self.module,
@@ -47,9 +47,9 @@ class RollbackManager:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.logger = structlog.get_logger(component="rollback")
 
-        self.versions: List[Version] = []
-        self.backups: Dict[str, str] = {}
-        self.health_history: List[Dict] = []
+        self.versions: list[Version] = []
+        self.backups: dict[str, str] = {}
+        self.health_history: list[dict] = []
 
         self._load()
 
@@ -75,19 +75,25 @@ class RollbackManager:
 
     def _save(self):
         versions_file = self.data_dir / "versions.json"
-        versions_file.write_text(json.dumps({
-            "versions": [v.to_dict() for v in self.versions[-200:]],
-        }, indent=2))
+        versions_file.write_text(
+            json.dumps(
+                {
+                    "versions": [v.to_dict() for v in self.versions[-200:]],
+                },
+                indent=2,
+            )
+        )
 
     def create_version(
         self,
         module: str,
-        changes: List[str],
+        changes: list[str],
         content: str,
         health_before: float = 1.0,
     ) -> Version:
         """Create a new version before modification."""
         import uuid
+
         version = Version(
             version_id=str(uuid.uuid4())[:8],
             module=module,
@@ -115,7 +121,7 @@ class RollbackManager:
                 return drop > threshold
         return False
 
-    def rollback(self, version_id: str) -> Optional[str]:
+    def rollback(self, version_id: str) -> str | None:
         """Rollback to a previous version."""
         for v in self.versions:
             if v.version_id == version_id:
@@ -124,7 +130,7 @@ class RollbackManager:
                 return self.backups.get(version_id)
         return None
 
-    def get_version_history(self, module: Optional[str] = None, limit: int = 10) -> List[Version]:
+    def get_version_history(self, module: str | None = None, limit: int = 10) -> list[Version]:
         """Get version history."""
         versions = self.versions
         if module:

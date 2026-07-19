@@ -1,11 +1,11 @@
 """npm registry crawler."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import httpx
 import structlog
 
-from .base import BaseCrawler, CrawlerConfig, CrawlResult, ContentType
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class NpmCrawler(BaseCrawler):
@@ -48,10 +48,14 @@ class NpmCrawler(BaseCrawler):
                     content=data.get("description", ""),
                     metadata={
                         "version": latest_version,
-                        "author": data.get("author", {}).get("name") if isinstance(data.get("author"), dict) else data.get("author"),
+                        "author": data.get("author", {}).get("name")
+                        if isinstance(data.get("author"), dict)
+                        else data.get("author"),
                         "license": latest.get("license"),
                         "homepage": data.get("homepage"),
-                        "repository": data.get("repository", {}).get("url") if isinstance(data.get("repository"), dict) else data.get("repository"),
+                        "repository": data.get("repository", {}).get("url")
+                        if isinstance(data.get("repository"), dict)
+                        else data.get("repository"),
                         "keywords": data.get("keywords", [])[:10],
                         "dependencies": list(latest.get("dependencies", {}).keys())[:20],
                         "maintainers": [m.get("name") for m in data.get("maintainers", [])[:5]],

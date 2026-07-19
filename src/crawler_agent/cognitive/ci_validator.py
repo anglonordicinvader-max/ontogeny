@@ -16,6 +16,7 @@ import aiohttp
 @dataclass
 class CIResult:
     """Result of a CI run."""
+
     run_id: str
     status: str  # queued, in_progress, completed
     conclusion: str | None  # success, failure, cancelled
@@ -31,6 +32,7 @@ class CIResult:
 @dataclass
 class PatchValidationJob:
     """A patch validation job for CI."""
+
     id: str
     patch_content: str
     target_file: str
@@ -54,10 +56,14 @@ class GitHubActionsValidator:
         self.token = token or os.environ.get("GITHUB_TOKEN")
         self.workflow_file = workflow_file
         self.base_url = "https://api.github.com"
-        self.headers = {
-            "Authorization": f"Bearer {self.token}",
-            "Accept": "application/vnd.github+json",
-        } if self.token else {}
+        self.headers = (
+            {
+                "Authorization": f"Bearer {self.token}",
+                "Accept": "application/vnd.github+json",
+            }
+            if self.token
+            else {}
+        )
 
     async def validate_patch(
         self,
@@ -131,14 +137,16 @@ class GitHubActionsValidator:
 
         # Apply patch (simplified - real implementation would use proper patch library)
         # For now, just replace if patch looks like full file
-        new_content = patch if "+++" not in patch else self._apply_unified_diff(current_content, patch)
+        new_content = (
+            patch if "+++" not in patch else self._apply_unified_diff(current_content, patch)
+        )
 
         # Commit new content
         async with aiohttp.ClientSession(headers=self.headers) as session:
             async with session.put(
                 f"{self.base_url}/repos/{self.repo_owner}/{self.repo_name}/contents/{target_file}",
                 json={
-                    "message": f"Apply patch for validation",
+                    "message": "Apply patch for validation",
                     "content": base64.b64encode(new_content.encode()).decode(),
                     "sha": file_sha,
                     "branch": branch_name,
@@ -149,7 +157,7 @@ class GitHubActionsValidator:
     def _apply_unified_diff(self, original: str, patch: str) -> str:
         """Apply unified diff to original content."""
         # Simplified - would use `patch` library in production
-        lines = original.splitlines(keepends=True)
+        original.splitlines(keepends=True)
         # This is a placeholder - real implementation needed
         return original
 

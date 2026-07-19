@@ -10,7 +10,7 @@ Stores as JSONL for easy export to fine-tuning pipelines.
 
 import json
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -21,20 +21,21 @@ import structlog
 @dataclass
 class ModificationRecord:
     """A single training record from a self-modification."""
+
     id: str = ""
     timestamp: str = ""
-    source_module: str = ""       # recursive_modify, self_modify, etc.
-    target_file: str = ""         # e.g. "orchestrator.py"
-    task_type: str = ""           # code_rewrite, skill_creation, optimization, bug_fix
+    source_module: str = ""  # recursive_modify, self_modify, etc.
+    target_file: str = ""  # e.g. "orchestrator.py"
+    task_type: str = ""  # code_rewrite, skill_creation, optimization, bug_fix
     description: str = ""
     reasoning: str = ""
-    original_code: str = ""       # first N lines of original
-    modified_code: str = ""       # the replacement code
-    diff: str = ""                # unified diff
+    original_code: str = ""  # first N lines of original
+    modified_code: str = ""  # the replacement code
+    diff: str = ""  # unified diff
     success: bool = False
     performance_delta: float = 0.0
     benchmark_score: float = 0.0  # from benchmark_runner
-    quality_score: float = 0.0    # computed quality rating
+    quality_score: float = 0.0  # computed quality rating
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -64,10 +65,13 @@ class ModificationMemory:
                     continue
                 try:
                     data = json.loads(line)
-                    record = ModificationRecord(**{
-                        k: v for k, v in data.items()
-                        if k in ModificationRecord.__dataclass_fields__
-                    })
+                    record = ModificationRecord(
+                        **{
+                            k: v
+                            for k, v in data.items()
+                            if k in ModificationRecord.__dataclass_fields__
+                        }
+                    )
                     self.records.append(record)
                 except Exception as e:
                     self.logger.debug("record_parse_failed", error=str(e))
@@ -189,7 +193,8 @@ class ModificationMemory:
     ) -> list[ModificationRecord]:
         """Get successful records filtered by type and quality."""
         return [
-            r for r in self.records
+            r
+            for r in self.records
             if r.success
             and r.quality_score >= min_quality
             and (task_type is None or r.task_type == task_type)
@@ -201,9 +206,9 @@ class ModificationMemory:
     ) -> list[ModificationRecord]:
         """Get failed records for contrastive training."""
         return [
-            r for r in self.records
-            if not r.success
-            and (task_type is None or r.task_type == task_type)
+            r
+            for r in self.records
+            if not r.success and (task_type is None or r.task_type == task_type)
         ]
 
     def get_contrastive_pairs(
@@ -338,9 +343,7 @@ class ModificationMemory:
 
         successful = [r for r in self.records if r.success]
         failed = [r for r in self.records if not r.success]
-        avg_quality = (
-            sum(r.quality_score for r in successful) / max(len(successful), 1)
-        )
+        avg_quality = sum(r.quality_score for r in successful) / max(len(successful), 1)
 
         return {
             "total_records": len(self.records),
@@ -350,7 +353,9 @@ class ModificationMemory:
             "task_types": task_types,
             "ready_for_training": self.ready_for_training(),
             "sources": {
-                "recursive_modify": sum(1 for r in self.records if r.source_module == "recursive_modify"),
+                "recursive_modify": sum(
+                    1 for r in self.records if r.source_module == "recursive_modify"
+                ),
                 "self_modify": sum(1 for r in self.records if r.source_module == "self_modify"),
                 "self_training": sum(1 for r in self.records if r.source_module == "self_training"),
             },

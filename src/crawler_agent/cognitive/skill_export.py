@@ -7,8 +7,8 @@ Provides:
 - Skill versioning and compatibility checks
 """
 
-import json
 import hashlib
+import json
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -21,19 +21,20 @@ import structlog
 @dataclass
 class SkillManifest:
     """Manifest for a portable skill package."""
+
     name: str
     version: str = "1.0.0"
     description: str = ""
     author: str = "Ontogeny Agent"
     category: str = "general"
-    tags: List[str] = field(default_factory=list)
-    dependencies: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
     python_version: str = "3.11"
     min_agent_version: str = "1.0.0"
     created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
     hash: str = ""
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "name": self.name,
             "version": self.version,
@@ -49,13 +50,14 @@ class SkillManifest:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict) -> "SkillManifest":
+    def from_dict(cls, data: dict) -> "SkillManifest":
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
 @dataclass
 class PortableSkill:
     """A skill packaged for portability."""
+
     manifest: SkillManifest
     code: str
     tests: str = ""
@@ -65,36 +67,38 @@ class PortableSkill:
     def to_module(self) -> str:
         """Generate a complete Python module."""
         lines = [
-            f'"""',
-            f'{self.manifest.name} v{self.manifest.version}',
-            f'',
-            f'{self.manifest.description}',
-            f'',
-            f'Author: {self.manifest.author}',
-            f'Category: {self.manifest.category}',
-            f'Tags: {", ".join(self.manifest.tags)}',
-            f'"""',
-            f'',
+            '"""',
+            f"{self.manifest.name} v{self.manifest.version}",
+            "",
+            f"{self.manifest.description}",
+            "",
+            f"Author: {self.manifest.author}",
+            f"Category: {self.manifest.category}",
+            f"Tags: {', '.join(self.manifest.tags)}",
+            '"""',
+            "",
             f'__version__ = "{self.manifest.version}"',
             f'__author__ = "{self.manifest.author}"',
-            f'',
-            f'# Dependencies: {", ".join(self.manifest.dependencies) if self.manifest.dependencies else "none"}',
-            f'',
+            "",
+            f"# Dependencies: {', '.join(self.manifest.dependencies) if self.manifest.dependencies else 'none'}",
+            "",
             self.code,
         ]
         if self.tests:
-            lines.extend([
-                f'',
-                f'if __name__ == "__main__":',
-                f'    # Run tests',
-                f'    import sys',
-                f'    sys.exit(0 if __test__() else 1)',
-                f'',
-                self.tests,
-            ])
+            lines.extend(
+                [
+                    "",
+                    'if __name__ == "__main__":',
+                    "    # Run tests",
+                    "    import sys",
+                    "    sys.exit(0 if __test__() else 1)",
+                    "",
+                    self.tests,
+                ]
+            )
         return "\n".join(lines)
 
-    def to_package(self) -> Dict[str, str]:
+    def to_package(self) -> dict[str, str]:
         """Generate a complete skill package."""
         files = {
             "manifest.json": json.dumps(self.manifest.to_dict(), indent=2),
@@ -124,8 +128,8 @@ class SkillExporter:
         description: str,
         code: str,
         category: str = "general",
-        tags: List[str] = None,
-        dependencies: List[str] = None,
+        tags: list[str] = None,
+        dependencies: list[str] = None,
         tests: str = "",
         examples: str = "",
         version: str = "1.0.0",
@@ -161,7 +165,7 @@ class SkillExporter:
         self.logger.info("skill_exported", name=name, version=version, path=str(skill_dir))
         return portable
 
-    def export_from_library(self, skill_library, skill_id: str) -> Optional[PortableSkill]:
+    def export_from_library(self, skill_library, skill_id: str) -> PortableSkill | None:
         """Export a skill from the skill library."""
         skill = skill_library.get_skill(skill_id)
         if not skill:
@@ -178,7 +182,7 @@ class SkillExporter:
             version=f"1.0.{skill.version}",
         )
 
-    def import_skill(self, skill_path: str) -> Optional[PortableSkill]:
+    def import_skill(self, skill_path: str) -> PortableSkill | None:
         """Import a skill from a directory."""
         skill_dir = Path(skill_path)
         if not skill_dir.exists():
@@ -238,13 +242,14 @@ class SkillExporter:
             self.logger.warning("skill_import_failed", error=str(e))
             return None
 
-    def import_to_library(self, skill_library, skill_path: str) -> Optional[str]:
+    def import_to_library(self, skill_library, skill_path: str) -> str | None:
         """Import a portable skill into the skill library."""
         portable = self.import_skill(skill_path)
         if not portable:
             return None
 
         from .skill_library import Skill
+
         skill = Skill(
             id=f"imported_{portable.manifest.name}_{int(time.time())}",
             name=portable.manifest.name,
@@ -257,10 +262,12 @@ class SkillExporter:
         )
 
         skill_id = skill_library.add_skill(skill)
-        self.logger.info("skill_imported_to_library", skill_id=skill_id, name=portable.manifest.name)
+        self.logger.info(
+            "skill_imported_to_library", skill_id=skill_id, name=portable.manifest.name
+        )
         return skill_id
 
-    def list_exported(self) -> List[Dict]:
+    def list_exported(self) -> list[dict]:
         """List all exported skills."""
         skills = []
         for skill_dir in self.output_dir.iterdir():
@@ -269,12 +276,14 @@ class SkillExporter:
                 if manifest_file.exists():
                     try:
                         manifest_data = json.loads(manifest_file.read_text())
-                        skills.append({
-                            "name": manifest_data.get("name", skill_dir.name),
-                            "version": manifest_data.get("version", "unknown"),
-                            "description": manifest_data.get("description", ""),
-                            "path": str(skill_dir),
-                        })
+                        skills.append(
+                            {
+                                "name": manifest_data.get("name", skill_dir.name),
+                                "version": manifest_data.get("version", "unknown"),
+                                "description": manifest_data.get("description", ""),
+                                "path": str(skill_dir),
+                            }
+                        )
                     except Exception:
                         pass
         return skills
@@ -286,20 +295,20 @@ class SkillExporter:
         category: str = "general",
     ) -> PortableSkill:
         """Create a skill template for new skills."""
-        template_code = f'''"""{{name}} skill."""
+        template_code = '''"""{name} skill."""
 
 
 def execute(context: dict) -> dict:
     """Execute the skill.
-    
+
     Args:
         context: Execution context with input data
-        
+
     Returns:
         dict: Execution result
     """
     # TODO: Implement skill logic
-    return {{"success": True, "output": "Not implemented"}}
+    return {"success": True, "output": "Not implemented"}
 
 
 def validate_input(context: dict) -> bool:
@@ -310,7 +319,7 @@ def validate_input(context: dict) -> bool:
 # Test function
 def __test__() -> bool:
     """Test the skill."""
-    result = execute({{"test": True}})
+    result = execute({"test": True})
     return result.get("success", False)
 '''
 

@@ -17,10 +17,11 @@ Features:
 import asyncio
 import json
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable, Awaitable
 from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 import docker
 import structlog
@@ -53,6 +54,7 @@ class ExportFormat(Enum):
 @dataclass
 class PhysicsConfig:
     """Physics engine configuration."""
+
     substeps: int = 1
     solver_iterations: int = 20
     time_scale: float = 1.0
@@ -70,6 +72,7 @@ class PhysicsConfig:
 @dataclass
 class SensorConfig:
     """Sensor simulation configuration."""
+
     type: str  # camera, lidar, contact, imu, depth
     position: tuple = (0, 0, 0)
     rotation: tuple = (0, 0, 0)
@@ -83,6 +86,7 @@ class SensorConfig:
 @dataclass
 class DomainRandomizationConfig:
     """Domain randomization configuration."""
+
     randomize_lighting: bool = True
     randomize_textures: bool = True
     randomize_physics_params: bool = True
@@ -97,6 +101,7 @@ class DomainRandomizationConfig:
 @dataclass
 class ProceduralConfig:
     """Procedural generation configuration."""
+
     generate_terrain: bool = False
     terrain_size: tuple = (100, 100)
     terrain_octaves: int = 6
@@ -112,15 +117,17 @@ class ProceduralConfig:
 @dataclass
 class RobotConfig:
     """URDF robot configuration."""
+
     urdf_path: str = ""
     base_position: tuple = (0, 0, 0)
     base_rotation: tuple = (0, 0, 0)
-    joint_drives: Dict[str, Dict] = field(default_factory=dict)
+    joint_drives: dict[str, dict] = field(default_factory=dict)
 
 
 @dataclass
 class ObjectSpec:
     """Object specification for simulation."""
+
     type: str = "cube"
     position: tuple = (0, 0, 5)
     rotation: tuple = (0, 0, 0)
@@ -132,15 +139,16 @@ class ObjectSpec:
     soft_body: bool = False
     cloth: bool = False
     fluid: bool = False
-    urdf_path: Optional[str] = None
-    joint_config: Optional[Dict] = None
+    urdf_path: str | None = None
+    joint_config: dict | None = None
 
 
 @dataclass
 class SimulationSpec:
     """Specification for a physics simulation."""
+
     type: SimulationType = SimulationType.RIGID_BODY
-    objects: List[ObjectSpec] = field(default_factory=list)
+    objects: list[ObjectSpec] = field(default_factory=list)
     duration: float = 5.0
     fps: int = 60
     gravity: tuple = (0, 0, -9.81)
@@ -151,17 +159,17 @@ class SimulationSpec:
     render_engine: str = "CYCLES"
     render_samples: int = 128
     output_path: str = "/workspace/output"
-    load_blend: Optional[str] = None
-    save_blend: Optional[str] = None
-    exports: List[ExportFormat] = field(default_factory=list)
-    sensors: List[SensorConfig] = field(default_factory=list)
-    domain_randomization: Optional[DomainRandomizationConfig] = None
-    procedural: Optional[ProceduralConfig] = None
-    urdf_path: Optional[str] = None
-    robot_joints: Optional[Dict] = None
+    load_blend: str | None = None
+    save_blend: str | None = None
+    exports: list[ExportFormat] = field(default_factory=list)
+    sensors: list[SensorConfig] = field(default_factory=list)
+    domain_randomization: DomainRandomizationConfig | None = None
+    procedural: ProceduralConfig | None = None
+    urdf_path: str | None = None
+    robot_joints: dict | None = None
     # Emotion visualization - "sphere" (abstract, proto-AGI internal) or "anatomy" (humanoid robot body with face)
-    emotion_config: Optional[Dict] = None
-    emotion_visualizer: Optional[str] = "sphere"  # "sphere" | "anatomy" | "both"
+    emotion_config: dict | None = None
+    emotion_visualizer: str | None = "sphere"  # "sphere" | "anatomy" | "both"
     # Video/Animation support
     render_animation: bool = False
     frame_start: int = 1
@@ -169,7 +177,7 @@ class SimulationSpec:
     video_format: str = "FFMPEG"
     video_codec: str = "H264"
     video_bitrate: int = 8000
-    video_output_path: Optional[str] = None
+    video_output_path: str | None = None
     # Snippet mode - short clips of notable moments
     snippet_mode: bool = False
     snippet_duration: float = 3.0  # seconds per snippet
@@ -179,22 +187,24 @@ class SimulationSpec:
 @dataclass
 class SimulationResult:
     """Result of a simulation run."""
+
     success: bool
     output: Any = None
-    error: Optional[str] = None
-    frames: List[Dict] = field(default_factory=list)
-    sensor_data: Dict = field(default_factory=dict)
-    render_path: Optional[str] = None
-    video_path: Optional[str] = None
-    blend_path: Optional[str] = None
-    export_paths: Dict = field(default_factory=dict)
+    error: str | None = None
+    frames: list[dict] = field(default_factory=list)
+    sensor_data: dict = field(default_factory=dict)
+    render_path: str | None = None
+    video_path: str | None = None
+    blend_path: str | None = None
+    export_paths: dict = field(default_factory=dict)
     execution_time_ms: float = 0.0
-    stats: Dict = field(default_factory=dict)
+    stats: dict = field(default_factory=dict)
 
 
 @dataclass
 class VideoBudget:
     """Tracks video rendering budget to prevent large files."""
+
     max_total_seconds: float = 60.0  # max total video seconds per session
     max_clip_seconds: float = 5.0  # max seconds per clip
     max_clips: int = 20  # max number of clips
@@ -218,7 +228,7 @@ class VideoBudget:
         self.total_seconds_rendered += duration_seconds
         self.clips_rendered += 1
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         return {
             "total_seconds_rendered": self.total_seconds_rendered,
             "clips_rendered": self.clips_rendered,
@@ -235,7 +245,7 @@ class BlenderSandbox:
         image: str = "ontogeny-blender",
         docker_client=None,
         timeout: int = 300,
-        data_dir: str = "data/blender"
+        data_dir: str = "data/blender",
     ):
         self.image = image
         self.docker = docker_client or docker.from_env()
@@ -277,7 +287,11 @@ class BlenderSandbox:
             if result.get("success"):
                 # Record video budget usage
                 if spec.render_animation and result.get("video_path"):
-                    snippet_duration = spec.snippet_duration if spec.snippet_mode else (spec.frame_end - spec.frame_start) / spec.fps
+                    snippet_duration = (
+                        spec.snippet_duration
+                        if spec.snippet_mode
+                        else (spec.frame_end - spec.frame_start) / spec.fps
+                    )
                     self.video_budget.record_render(snippet_duration)
 
                 return SimulationResult(
@@ -290,26 +304,24 @@ class BlenderSandbox:
                     blend_path=result.get("blend_path"),
                     export_paths=result.get("export_paths", {}),
                     execution_time_ms=exec_time,
-                    stats=result.get("stats", {})
+                    stats=result.get("stats", {}),
                 )
             else:
                 return SimulationResult(
                     success=False,
                     error=result.get("error", "Unknown error"),
-                    execution_time_ms=exec_time
+                    execution_time_ms=exec_time,
                 )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return SimulationResult(
                 success=False,
                 error=f"Simulation timed out after {self.timeout}s",
-                execution_time_ms=(time.perf_counter() - start) * 1000
+                execution_time_ms=(time.perf_counter() - start) * 1000,
             )
         except Exception as e:
             return SimulationResult(
-                success=False,
-                error=str(e),
-                execution_time_ms=(time.perf_counter() - start) * 1000
+                success=False, error=str(e), execution_time_ms=(time.perf_counter() - start) * 1000
             )
 
     async def run_render(self, spec: SimulationSpec) -> SimulationResult:
@@ -317,7 +329,7 @@ class BlenderSandbox:
         spec.render = True
         return await self.run_simulation(spec)
 
-    async def run_custom_script(self, script: str, timeout: Optional[int] = None) -> Dict:
+    async def run_custom_script(self, script: str, timeout: int | None = None) -> dict:
         """Run arbitrary Blender Python script."""
         return await self._run_blender_script(script, timeout=timeout or self.timeout)
 
@@ -325,8 +337,8 @@ class BlenderSandbox:
         self,
         blend_path: str,
         steps: int = 1,
-        callback: Optional[Callable[[Dict], Awaitable[None]]] = None
-    ) -> Dict:
+        callback: Callable[[dict], Awaitable[None]] | None = None,
+    ) -> dict:
         """Step physics in an existing .blend file with optional callback."""
         script = f"""
 import bpy
@@ -338,7 +350,7 @@ for i in range({steps}):
     bpy.context.scene.frame_set(bpy.context.scene.frame_current + 1)
     # Step physics
     bpy.ops.ptcache.bake_all(bake=False)  # Single step
-    
+
     # Callback with frame data
     frame_data = {{
         "frame": bpy.context.scene.frame_current,
@@ -352,7 +364,7 @@ for i in range({steps}):
                 "rotation": list(obj.rotation_euler),
                 "velocity": list(obj.rigid_body.linear_velocity) if hasattr(obj, 'rigid_body') and obj.rigid_body else [0,0,0]
             }}
-    
+
     print("STEP_RESULT:" + json.dumps(frame_data))
 """
         result = await self._run_blender_script(script)
@@ -360,7 +372,6 @@ for i in range({steps}):
 
     def _build_object_script(self, obj: ObjectSpec, i: int) -> str:
         """Generate Blender Python code for a single object."""
-        otype = obj.type
         loc = obj.position
         rot = obj.rotation
         scale = obj.scale
@@ -370,19 +381,19 @@ for i in range({steps}):
         restitution = obj.restitution
 
         if obj.type == "cube":
-            prim = f'bpy.ops.mesh.primitive_cube_add(location={loc})'
+            prim = f"bpy.ops.mesh.primitive_cube_add(location={loc})"
         elif obj.type == "sphere":
-            prim = f'bpy.ops.mesh.primitive_uv_sphere_add(location={loc})'
+            prim = f"bpy.ops.mesh.primitive_uv_sphere_add(location={loc})"
         elif obj.type == "plane":
-            prim = f'bpy.ops.mesh.primitive_plane_add(location={loc}, scale=(50, 50, 1))'
+            prim = f"bpy.ops.mesh.primitive_plane_add(location={loc}, scale=(50, 50, 1))"
         elif obj.type == "cylinder":
-            prim = f'bpy.ops.mesh.primitive_cylinder_add(location={loc})'
+            prim = f"bpy.ops.mesh.primitive_cylinder_add(location={loc})"
         elif obj.type == "cone":
-            prim = f'bpy.ops.mesh.primitive_cone_add(location={loc})'
+            prim = f"bpy.ops.mesh.primitive_cone_add(location={loc})"
         elif obj.type == "torus":
-            prim = f'bpy.ops.mesh.primitive_torus_add(location={loc})'
+            prim = f"bpy.ops.mesh.primitive_torus_add(location={loc})"
         else:
-            prim = f'bpy.ops.mesh.primitive_cube_add(location={loc})'
+            prim = f"bpy.ops.mesh.primitive_cube_add(location={loc})"
 
         friction = obj.friction
         restitution = obj.restitution
@@ -395,7 +406,7 @@ obj.name = "SimObj_{i}"
 obj.rotation_euler = {rot}
 obj.scale = {scale}
 bpy.ops.rigidbody.object_add()
-obj.rigid_body.type = {'PASSIVE' if passive else 'ACTIVE'}
+obj.rigid_body.type = {"PASSIVE" if passive else "ACTIVE"}
 obj.rigid_body.mass = {mass}
 obj.rigid_body.collision_shape = 'BOX'
 obj.rigid_body.friction = {friction}
@@ -414,7 +425,7 @@ obj.modifiers["Softbody"].settings.friction = {friction}
 
         # Cloth
         if obj.cloth:
-            code += f"""
+            code += """
 # Cloth
 bpy.ops.object.modifier_add(type='CLOTH')
 obj.modifiers["Cloth"].settings.quality = 5
@@ -424,7 +435,7 @@ obj.modifiers["Cloth"].settings.damping = 0.1
 
         # Fluid
         if obj.fluid:
-            code += f"""
+            code += """
 # Fluid
 bpy.ops.object.modifier_add(type='FLUID')
 obj.modifiers["Fluid"].fluid_type = 'DOMAIN'
@@ -455,7 +466,9 @@ obj.modifiers["Fluid"].domain_settings.viscosity = 0.01
         visualizer = spec.emotion_visualizer or "sphere"
 
         if visualizer == "anatomy":
-            return self._build_tocabi_anatomy_code(mood, valence, arousal, intensity, base_color, spec)
+            return self._build_tocabi_anatomy_code(
+                mood, valence, arousal, intensity, base_color, spec
+            )
         else:
             # Original sphere visualization (abstract proto-AGI internal state)
             return f"""
@@ -519,12 +532,16 @@ world.node_tree.links.new(bg_emission.outputs['Emission'], bg_output.inputs['Sur
 """
         return emotion_code
 
-    def _build_tocabi_anatomy_code(self, mood, valence, arousal, intensity, base_color, spec) -> str:
+    def _build_tocabi_anatomy_code(
+        self, mood, valence, arousal, intensity, base_color, spec
+    ) -> str:
         """Generate TOCABI humanoid robot anatomy visualization with emotion-driven animation.
 
         Adds: facial expressions, idle breathing, body posture, hand tremors, dynamic lighting.
         """
-        tocabi_dir = Path(__file__).parent.parent.parent.parent / "data" / "blender" / "models" / "tocabi"
+        tocabi_dir = (
+            Path(__file__).parent.parent.parent.parent / "data" / "blender" / "models" / "tocabi"
+        )
         meshes_dir = tocabi_dir / "combined" / "meshes"
 
         stl_files = []
@@ -985,7 +1002,7 @@ for i in range({config.clutter_count}):
 """
         return code
 
-    def _build_sensor_code(self, sensors: List[SensorConfig]) -> str:
+    def _build_sensor_code(self, sensors: list[SensorConfig]) -> str:
         """Generate sensor placement in scene."""
         code = "\n# Sensors\n"
         for i, sensor in enumerate(sensors):
@@ -1021,7 +1038,7 @@ for angle in range(0, 360, 10):
 """
         return code
 
-    def _build_urdf_code(self, urdf_path: str, joint_config: Dict = None) -> str:
+    def _build_urdf_code(self, urdf_path: str, joint_config: dict = None) -> str:
         """Generate URDF robot import."""
         code = f"""
 # URDF Robot Import
@@ -1031,7 +1048,7 @@ urdf_path = "{urdf_path}"
 try:
     tree = ET.parse(urdf_path)
     root = tree.getroot()
-    
+
     for link in root.findall('.//link'):
         link_name = link.get('name')
         visual = link.find('visual')
@@ -1043,18 +1060,18 @@ try:
                     mesh_file = mesh.get('filename')
                     if mesh_file:
                         bpy.ops.import_scene.obj(filepath=mesh_file)
-                        
+
     for joint in root.findall('.//joint'):
         joint_name = joint.get('name')
         joint_type = joint.get('type')
         parent = joint.find('parent').get('link') if joint.find('parent') is not None else None
         child = joint.find('child').get('link') if joint.find('child') is not None else None
-        
+
         origin = joint.find('origin')
         if origin is not None:
             xyz = origin.get('xyz', '0 0 0').split()
             rpy = origin.get('rpy', '0 0 0').split()
-            
+
 except Exception as e:
     print(f"URDF import failed: {{e}}")
 """
@@ -1068,9 +1085,9 @@ joint_config = {json.dumps(joint_config)}
     def _build_simulation_script(self, spec: SimulationSpec) -> str:
         """Build complete Blender Python script for simulation."""
         script_parts = []
-        
+
         # Header
-        script_parts.append("""
+        script_parts.append(f"""
 import bpy
 import json
 import os
@@ -1082,23 +1099,16 @@ bpy.ops.wm.read_factory_settings(use_empty=False)
 
 # Set up scene
 scene = bpy.context.scene
-scene.render.engine = '{render_engine}'
-scene.render.resolution_x = {res_x}
-scene.render.resolution_y = {res_y}
+scene.render.engine = '{spec.render_engine}'
+scene.render.resolution_x = {spec.render_resolution[0]}
+scene.render.resolution_y = {spec.render_resolution[1]}
 scene.render.resolution_percentage = 100
-scene.cycles.samples = {render_samples}
-scene.frame_start = {frame_start}
-scene.frame_end = {frame_end}
-scene.frame_set({frame_start})
-""".format(
-            render_engine=spec.render_engine,
-            res_x=spec.render_resolution[0],
-            res_y=spec.render_resolution[1],
-            render_samples=spec.render_samples,
-            frame_start=spec.frame_start,
-            frame_end=spec.frame_end
-        ))
-        
+scene.cycles.samples = {spec.render_samples}
+scene.frame_start = {spec.frame_start}
+scene.frame_end = {spec.frame_end}
+scene.frame_set({spec.frame_start})
+""")
+
         # Ground plane
         if spec.ground:
             script_parts.append("""
@@ -1112,11 +1122,11 @@ ground.rigid_body.type = 'PASSIVE'
 ground.rigid_body.friction = 0.8
 ground.rigid_body.collision_shape = 'BOX'
 """)
-        
+
         # Add objects
         for i, obj in enumerate(spec.objects):
             script_parts.append(self._build_object_script(obj, i))
-        
+
         # Add emotion visualization
         if spec.emotion_config and spec.emotion_visualizer:
             script_parts.append(self._build_emotion_code(spec))
@@ -1135,19 +1145,14 @@ ground.rigid_body.collision_shape = 'BOX'
 
         # Physics settings
         if spec.type != SimulationType.RENDER:
-            script_parts.append("""
+            script_parts.append(f"""
 # Physics settings
-scene.rigidbody_world.point_cache.frame_start = {frame_start}
-scene.rigidbody_world.point_cache.frame_end = {frame_end}
-scene.rigidbody_world.settings.substeps_per_frame = {substeps}
-scene.rigidbody_world.settings.solver_iterations = {solver_iterations}
-""".format(
-                frame_start=spec.frame_start,
-                frame_end=spec.frame_end,
-                substeps=spec.physics.substeps,
-                solver_iterations=spec.physics.solver_iterations
-            ))
-        
+scene.rigidbody_world.point_cache.frame_start = {spec.frame_start}
+scene.rigidbody_world.point_cache.frame_end = {spec.frame_end}
+scene.rigidbody_world.settings.substeps_per_frame = {spec.physics.substeps}
+scene.rigidbody_world.settings.solver_iterations = {spec.physics.solver_iterations}
+""")
+
         # Add camera
         script_parts.append("""
 # Camera
@@ -1157,7 +1162,7 @@ camera.name = "MainCamera"
 camera.rotation_euler = (math.radians(65), 0, math.radians(45))
 scene.camera = camera
 """)
-        
+
         # Lighting
         script_parts.append("""
 # Lighting
@@ -1166,16 +1171,16 @@ sun = bpy.context.active_object
 sun.name = "SunLight"
 sun.data.energy = 3.0
 """)
-        
+
         # Render output settings
         if spec.render or spec.render_animation:
-            script_parts.append("""
+            script_parts.append(f"""
 # Render output
-scene.render.filepath = '{output_path}/render_'
+scene.render.filepath = '{spec.output_path}/render_'
 scene.render.image_settings.file_format = 'PNG'
 scene.render.image_settings.color_mode = 'RGBA'
-""".format(output_path=spec.output_path))
-        
+""")
+
         # FFmpeg MP4 animation settings
         if spec.render_animation:
             video_path = spec.video_output_path or f"{spec.output_path}/animation.mp4"
@@ -1187,13 +1192,13 @@ scene.render.image_settings.color_mode = 'RGBA'
                 mid_frame = spec.frame_start + (spec.frame_end - spec.frame_start) // 2
                 snippet_start = max(spec.frame_start, mid_frame - snippet_frames // 2)
                 snippet_end = min(spec.frame_end, snippet_start + snippet_frames)
-                script_parts.append("""
+                script_parts.append(f"""
 # FFmpeg snippet mode - short clip of notable moment
 scene.render.image_settings.file_format = 'FFMPEG'
 scene.render.ffmpeg.format = 'MPEG4'
 scene.render.ffmpeg.codec = 'H264'
 scene.render.ffmpeg.constant_rate_factor = 'PERC_LOSSLESS'
-scene.render.ffmpeg.ffmpeg_bitrate = {bitrate}
+scene.render.ffmpeg.ffmpeg_bitrate = {spec.video_bitrate}
 scene.frame_start = {snippet_start}
 scene.frame_end = {snippet_end}
 
@@ -1202,63 +1207,48 @@ bpy.ops.render.render(animation=True, write_still=False)
 
 # Save video path
 video_path = "{video_path}"
-""".format(
-                    bitrate=spec.video_bitrate,
-                    snippet_start=snippet_start,
-                    snippet_end=snippet_end,
-                    video_path=video_path
-                ))
+""")
             else:
-                script_parts.append("""
+                script_parts.append(f"""
 # FFmpeg animation output
 scene.render.image_settings.file_format = 'FFMPEG'
 scene.render.ffmpeg.format = 'MPEG4'
 scene.render.ffmpeg.codec = 'H264'
 scene.render.ffmpeg.constant_rate_factor = 'PERC_LOSSLESS'
-scene.render.ffmpeg.ffmpeg_bitrate = {bitrate}
-scene.frame_start = {frame_start}
-scene.frame_end = {frame_end}
+scene.render.ffmpeg.ffmpeg_bitrate = {spec.video_bitrate}
+scene.frame_start = {spec.frame_start}
+scene.frame_end = {spec.frame_end}
 
 # Render animation
 bpy.ops.render.render(animation=True, write_still=False)
 
 # Save video path
 video_path = "{video_path}"
-""".format(
-                    bitrate=spec.video_bitrate,
-                    frame_start=spec.frame_start,
-                    frame_end=spec.frame_end,
-                    video_path=video_path
-                ))
+""")
         elif spec.render:
             script_parts.append("""
 # Render single frame
 bpy.ops.render.render(write_still=True)
 """)
-        
+
         # Domain randomization
         if spec.domain_randomization:
             dr = spec.domain_randomization
-            script_parts.append("""
+            script_parts.append(f"""
 # Domain randomization
 import random
-if {randomize_lighting}:
+if {dr.randomize_lighting}:
     for light in bpy.data.objects:
         if light.type == 'LIGHT':
-            light.data.energy *= random.uniform(1.0 - {lighting_var}, 1.0 + {lighting_var})
-            light.data.color = tuple(c * random.uniform(1.0 - {lighting_var}, 1.0 + {lighting_var}) for c in light.data.color)
-if {randomize_physics}:
+            light.data.energy *= random.uniform(1.0 - {dr.lighting_variance}, 1.0 + {dr.lighting_variance})
+            light.data.color = tuple(c * random.uniform(1.0 - {dr.lighting_variance}, 1.0 + {dr.lighting_variance}) for c in light.data.color)
+if {dr.randomize_physics_params}:
     for obj in bpy.data.objects:
         if hasattr(obj, 'rigid_body') and obj.rigid_body:
-            obj.rigid_body.mass *= random.uniform(1.0 - {physics_var}, 1.0 + {physics_var})
-            obj.rigid_body.friction = max(0, min(1, obj.rigid_body.friction + random.uniform(-{physics_var}, {physics_var})))
-""".format(
-                randomize_lighting=dr.randomize_lighting,
-                lighting_var=dr.lighting_variance,
-                randomize_physics=dr.randomize_physics_params,
-                physics_var=dr.physics_variance
-            ))
-        
+            obj.rigid_body.mass *= random.uniform(1.0 - {dr.physics_variance}, 1.0 + {dr.physics_variance})
+            obj.rigid_body.friction = max(0, min(1, obj.rigid_body.friction + random.uniform(-{dr.physics_variance}, {dr.physics_variance})))
+""")
+
         # Export settings
         if spec.exports:
             script_parts.append("""
@@ -1266,21 +1256,26 @@ if {randomize_physics}:
 export_paths = {}
 """)
             for fmt in spec.exports:
-                ext = fmt.value if hasattr(fmt, 'value') else str(fmt)
-                script_parts.append("""
-export_paths['{ext}'] = "{output_path}/export.{ext}"
-""".format(ext=ext, output_path=spec.output_path))
-        
+                ext = fmt.value if hasattr(fmt, "value") else str(fmt)
+                script_parts.append(f"""
+export_paths['{ext}'] = "{spec.output_path}/export.{ext}"
+""")
+
         # Save blend file
         if spec.save_blend:
-            blend_path = spec.save_blend if isinstance(spec.save_blend, str) else f"{spec.output_path}/scene.blend"
-            script_parts.append("""
+            blend_path = (
+                spec.save_blend
+                if isinstance(spec.save_blend, str)
+                else f"{spec.output_path}/scene.blend"
+            )
+            script_parts.append(f"""
 # Save blend file
 bpy.ops.wm.save_as_mainfile(filepath="{blend_path}")
-""".format(blend_path=blend_path))
-        
+""")
+
         # Output result
-        script_parts.append("""
+        script_parts.append(
+            """
 # Output result
 result = {
     "success": True,
@@ -1297,20 +1292,33 @@ result = {
 }
 print("SIMULATION_RESULT:" + json.dumps(result))
 """.format(
-            render_path=f"{spec.output_path}/render_0001.png",
-            video_path=f'"{spec.video_output_path}"' if spec.render_animation and spec.video_output_path else "None",
-            blend_path=spec.save_blend if isinstance(spec.save_blend, str) else f"{spec.output_path}/scene.blend",
-            export_paths="{}" if not spec.exports else str({fmt.value if hasattr(fmt, 'value') else str(fmt): f"{spec.output_path}/export.{fmt.value if hasattr(fmt, 'value') else str(fmt)}" for fmt in spec.exports})
-        ))
-        
+                render_path=f"{spec.output_path}/render_0001.png",
+                video_path=f'"{spec.video_output_path}"'
+                if spec.render_animation and spec.video_output_path
+                else "None",
+                blend_path=spec.save_blend
+                if isinstance(spec.save_blend, str)
+                else f"{spec.output_path}/scene.blend",
+                export_paths="{}"
+                if not spec.exports
+                else str(
+                    {
+                        fmt.value
+                        if hasattr(fmt, "value")
+                        else str(
+                            fmt
+                        ): f"{spec.output_path}/export.{fmt.value if hasattr(fmt, 'value') else str(fmt)}"
+                        for fmt in spec.exports
+                    }
+                ),
+            )
+        )
+
         return "\n".join(script_parts)
 
     async def _run_blender_script(
-        self,
-        script: str,
-        spec: Optional[SimulationSpec] = None,
-        timeout: Optional[int] = None
-    ) -> Dict:
+        self, script: str, spec: SimulationSpec | None = None, timeout: int | None = None
+    ) -> dict:
         """Execute Blender script in Docker container."""
         script_id = int(time.time() * 1000)
         script_path = f"/workspace/script_{script_id}.py"
@@ -1319,30 +1327,30 @@ print("SIMULATION_RESULT:" + json.dumps(result))
         host_script_path.write_text(script)
 
         try:
-            host_dir = str(self.data_dir.absolute()).replace('\\', '/')
-            container_dir = '/workspace'
+            host_dir = str(self.data_dir.absolute()).replace("\\", "/")
+            container_dir = "/workspace"
 
             container = self.docker.containers.run(
                 self.image,
                 command=[script_path],
-                volumes={host_dir: {'bind': container_dir, 'mode': 'rw'}},
+                volumes={host_dir: {"bind": container_dir, "mode": "rw"}},
                 working_dir=container_dir,
                 detach=True,
                 remove=False,
-                user='root',
+                user="root",
             )
 
             try:
-                result = await asyncio.wait_for(
+                await asyncio.wait_for(
                     asyncio.to_thread(container.wait, timeout=timeout or self.timeout),
-                    timeout=timeout or self.timeout
+                    timeout=timeout or self.timeout,
                 )
-                logs = container.logs(stdout=True, stderr=True).decode('utf-8', errors='replace')
+                logs = container.logs(stdout=True, stderr=True).decode("utf-8", errors="replace")
                 container.remove()
 
                 return self._parse_output(logs)
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 container.kill()
                 container.remove()
                 return {"success": False, "error": "Timeout"}
@@ -1350,12 +1358,12 @@ print("SIMULATION_RESULT:" + json.dumps(result))
         finally:
             host_script_path.unlink(missing_ok=True)
 
-    def _parse_output(self, logs: str) -> Dict:
+    def _parse_output(self, logs: str) -> dict:
         """Parse Blender output for SIMULATION_RESULT."""
-        for line in logs.split('\n'):
+        for line in logs.split("\n"):
             if line.startswith("SIMULATION_RESULT:"):
                 try:
-                    return json.loads(line[len("SIMULATION_RESULT:"):])
+                    return json.loads(line[len("SIMULATION_RESULT:") :])
                 except json.JSONDecodeError:
                     pass
         return {"success": False, "error": "No valid result in output", "raw": logs[-2000:]}
@@ -1371,8 +1379,7 @@ print("TEST_OK")
 
 
 async def create_blender_sandbox(
-    image: str = "ontogeny-blender",
-    data_dir: str = "data/blender"
+    image: str = "ontogeny-blender", data_dir: str = "data/blender"
 ) -> BlenderSandbox:
     """Factory for creating BlenderSandbox."""
     return BlenderSandbox(image=image, data_dir=data_dir)

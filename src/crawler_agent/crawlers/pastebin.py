@@ -1,14 +1,14 @@
 """Pastebin crawler."""
 
 import asyncio
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 from datetime import datetime
 
 import httpx
 import structlog
 from bs4 import BeautifulSoup
 
-from .base import BaseCrawler, CrawlerConfig, CrawlResult, ContentType
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class PastebinCrawler(BaseCrawler):
@@ -58,7 +58,9 @@ class PastebinCrawler(BaseCrawler):
             response = await client.get(raw_url, follow_redirects=True)
 
             if response.status_code != 200:
-                self.logger.warning("paste_fetch_failed", key=paste_key, status=response.status_code)
+                self.logger.warning(
+                    "paste_fetch_failed", key=paste_key, status=response.status_code
+                )
                 return
 
             content = response.text

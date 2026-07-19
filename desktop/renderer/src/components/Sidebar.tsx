@@ -5,7 +5,6 @@ import {
   Brain,
   Database,
   GitBranch,
-  Layout,
   Monitor,
   Settings,
   Target,
@@ -14,11 +13,14 @@ import {
   Eye,
   PanelLeftClose,
   PanelLeftOpen,
+  Search,
+  Box,
 } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
+  onSearchOpen: () => void;
   connected: boolean;
 }
 
@@ -28,40 +30,48 @@ const tabs = [
   { id: 'memory', label: 'Memory', icon: Database },
   { id: 'goals', label: 'Goals', icon: Target },
   { id: 'knowledge', label: 'Knowledge', icon: GitBranch },
-  { id: 'crawlers', label: 'Crawlers', icon: Workflow },
+  { id: 'crawlers', label: 'Knowledge', icon: Workflow },
   { id: 'maldoror', label: 'Maldoror', icon: Cpu },
   { id: 'production', label: 'Production', icon: Monitor },
-  { id: 'blender', label: 'Sandbox', icon: Eye },
+  { id: 'blender', label: 'Blender', icon: Eye },
+  { id: 'mujoco', label: 'MuJoCo', icon: Box },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
-export function Sidebar({ activeTab, onTabChange, connected }: SidebarProps) {
+export function Sidebar({ activeTab, onTabChange, onSearchOpen, connected }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
     <aside
       className={cn(
-        'flex flex-col h-full border-r border-border transition-all duration-200 ease-out',
+        'flex flex-col h-full border-r transition-all duration-200 ease-out',
         collapsed ? 'w-14' : 'w-52'
       )}
-      style={{ background: 'var(--surface-1)' }}
+      style={{ background: 'var(--sidebar-bg)', borderColor: 'var(--sidebar-border)' }}
     >
-      <div className="flex items-center justify-between px-3 py-3 border-b border-border">
+      <div className="flex items-center justify-between px-3 py-3 border-b" style={{ borderColor: 'var(--sidebar-border)' }}>
         {!collapsed && (
-          <div className="flex items-center gap-2">
-            <Layout className="w-4 h-4 text-accent" />
-            <span className="text-xs font-semibold text-text-secondary tracking-wide">NAVIGATE</span>
-          </div>
+          <button
+            onClick={onSearchOpen}
+            className="flex items-center gap-2 flex-1 px-2 py-1.5 text-xs rounded-md transition-colors hover:bg-white/[0.04]"
+            style={{ color: 'var(--sidebar-text-muted)' }}
+            aria-label="Open search"
+          >
+            <Search className="w-3.5 h-3.5" />
+            <span>Search</span>
+            <span className="ml-auto text-[10px] opacity-40" style={{ fontFamily: "'Geist Mono', monospace" }}>⌘K</span>
+          </button>
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="btn-ghost p-1.5 rounded-md"
+          className="p-1.5 rounded-md transition-colors hover:bg-white/[0.06]"
+          style={{ color: 'var(--sidebar-text-muted)' }}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? (
-            <PanelLeftOpen className="w-4 h-4 text-text-secondary" />
+            <PanelLeftOpen className="w-4 h-4" />
           ) : (
-            <PanelLeftClose className="w-4 h-4 text-text-secondary" />
+            <PanelLeftClose className="w-4 h-4" />
           )}
         </button>
       </div>
@@ -89,11 +99,11 @@ export function Sidebar({ activeTab, onTabChange, connected }: SidebarProps) {
         })}
       </nav>
 
-      <div className="px-3 py-3 border-t border-border">
+      <div className="px-3 py-3 border-t" style={{ borderColor: 'var(--sidebar-border)' }}>
         <div className="flex items-center gap-2">
           <div className={cn('status-dot', connected ? 'status-dot-active' : 'status-dot-error')} />
           {!collapsed && (
-            <span className="text-2xs text-text-tertiary">
+            <span className="text-2xs" style={{ color: 'var(--sidebar-text-muted)' }}>
               {connected ? 'Connected' : 'Disconnected'}
             </span>
           )}

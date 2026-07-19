@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 @dataclass
 class TokenBucket:
     """Token bucket rate limiter."""
+
     rate: float  # tokens per second
     capacity: int  # burst capacity
     tokens: float = field(init=False)
@@ -45,6 +46,7 @@ class TokenBucket:
 @dataclass
 class SlidingWindowRateLimiter:
     """Sliding window rate limiter for API compliance."""
+
     max_requests: int
     window_seconds: float
     _requests: deque = field(default_factory=deque)

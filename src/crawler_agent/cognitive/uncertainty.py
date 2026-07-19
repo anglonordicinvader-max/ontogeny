@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 import structlog
@@ -10,25 +10,26 @@ import structlog
 from .backend import CognitiveBackend
 
 
-class UncertaintyType(str, Enum):
-    EPISTEMIC = "epistemic"      # Knowledge uncertainty (reducible)
-    ALEATORIC = "aleatoric"      # Data uncertainty (irreducible)
-    MODEL = "model"              # Model uncertainty
-    LABEL = "label"              # Annotation uncertainty
-    STRUCTURAL = "structural"    # Model structure uncertainty
+class UncertaintyType(StrEnum):
+    EPISTEMIC = "epistemic"  # Knowledge uncertainty (reducible)
+    ALEATORIC = "aleatoric"  # Data uncertainty (irreducible)
+    MODEL = "model"  # Model uncertainty
+    LABEL = "label"  # Annotation uncertainty
+    STRUCTURAL = "structural"  # Model structure uncertainty
 
 
-class ConfidenceLevel(str, Enum):
-    VERY_LOW = "very_low"    # 0-20%
-    LOW = "low"              # 20-40%
-    MEDIUM = "medium"        # 40-60%
-    HIGH = "high"            # 60-80%
+class ConfidenceLevel(StrEnum):
+    VERY_LOW = "very_low"  # 0-20%
+    LOW = "low"  # 20-40%
+    MEDIUM = "medium"  # 40-60%
+    HIGH = "high"  # 60-80%
     VERY_HIGH = "very_high"  # 80-100%
 
 
 @dataclass
 class UncertaintyEstimate:
     """Estimate of uncertainty for a claim/prediction."""
+
     id: str
     claim: str
     uncertainty_type: UncertaintyType
@@ -44,6 +45,7 @@ class UncertaintyEstimate:
 @dataclass
 class CalibrationRecord:
     """Record for calibration tracking."""
+
     predicted_confidence: float
     actual_outcome: bool
     claim: str
@@ -224,11 +226,13 @@ Decompose uncertainty:"""
         actual_outcome: bool,
     ) -> None:
         """Record a calibration outcome."""
-        self.calibration_records.append(CalibrationRecord(
-            predicted_confidence=predicted_confidence,
-            actual_outcome=actual_outcome,
-            claim=claim,
-        ))
+        self.calibration_records.append(
+            CalibrationRecord(
+                predicted_confidence=predicted_confidence,
+                actual_outcome=actual_outcome,
+                claim=claim,
+            )
+        )
 
     def get_calibration_score(self) -> float:
         """Calculate overall calibration score."""
@@ -289,8 +293,7 @@ Decompose uncertainty:"""
 
         # Estimate confidence for this action type based on history
         relevant = [
-            e for e in self.estimates.values()
-            if e.metadata.get("action_type") == action_type
+            e for e in self.estimates.values() if e.metadata.get("action_type") == action_type
         ]
 
         if relevant:
@@ -337,7 +340,7 @@ Decompose uncertainty:"""
         """Update confidence tracking after action completion."""
         # Create a new estimate for this action's outcome
         confidence = 0.8 if outcome_success else 0.3
-        confidence *= (1 - outcome_surprise * 0.3)  # Surprises reduce confidence
+        confidence *= 1 - outcome_surprise * 0.3  # Surprises reduce confidence
 
         estimate = UncertaintyEstimate(
             id=f"action_{action_id[:8]}",
@@ -370,29 +373,32 @@ Decompose uncertainty:"""
 
         # Check if we have enough evidence
         relevant = [
-            e for e in self.estimates.values()
-            if e.metadata.get("action_type") == action_type
+            e for e in self.estimates.values() if e.metadata.get("action_type") == action_type
         ]
 
         if len(relevant) < 3:
-            gaps.append({
-                "gap": "limited_history",
-                "description": f"Only {len(relevant)} prior attempts for this action type",
-                "priority": "high",
-                "how_to_fill": "Execute more instances of this action",
-            })
+            gaps.append(
+                {
+                    "gap": "limited_history",
+                    "description": f"Only {len(relevant)} prior attempts for this action type",
+                    "priority": "high",
+                    "how_to_fill": "Execute more instances of this action",
+                }
+            )
 
         # Check for high epistemic uncertainty
         epistemic = [e for e in relevant if e.uncertainty_type == UncertaintyType.EPISTEMIC]
         if epistemic:
             avg_epistemic = sum(e.mean_confidence for e in epistemic) / len(epistemic)
             if avg_epistemic < 0.4:
-                gaps.append({
-                    "gap": "high_epistemic_uncertainty",
-                    "description": "Low knowledge about this action domain",
-                    "priority": "medium",
-                    "how_to_fill": "Research similar actions and outcomes",
-                })
+                gaps.append(
+                    {
+                        "gap": "high_epistemic_uncertainty",
+                        "description": "Low knowledge about this action domain",
+                        "priority": "medium",
+                        "how_to_fill": "Research similar actions and outcomes",
+                    }
+                )
 
         return gaps
 
@@ -408,8 +414,7 @@ Decompose uncertainty:"""
         for opt in options:
             action_type = opt.get("action_type", "unknown")
             relevant = [
-                e for e in self.estimates.values()
-                if e.metadata.get("action_type") == action_type
+                e for e in self.estimates.values() if e.metadata.get("action_type") == action_type
             ]
 
             if relevant:
@@ -426,8 +431,7 @@ Decompose uncertainty:"""
     def get_action_confidence_summary(self, action_type: str) -> str:
         """Get human-readable confidence summary for an action type."""
         relevant = [
-            e for e in self.estimates.values()
-            if e.metadata.get("action_type") == action_type
+            e for e in self.estimates.values() if e.metadata.get("action_type") == action_type
         ]
 
         if not relevant:
@@ -539,7 +543,8 @@ Calculate information value:"""
     def get_stats(self) -> dict[str, Any]:
         return {
             "total_estimates": len(self.estimates),
-            "avg_confidence": sum(e.mean_confidence for e in self.estimates.values()) / max(len(self.estimates), 1),
+            "avg_confidence": sum(e.mean_confidence for e in self.estimates.values())
+            / max(len(self.estimates), 1),
             "calibration_records": len(self.calibration_records),
             "calibration_score": self.get_calibration_score(),
             "by_type": {

@@ -1,15 +1,15 @@
 """Auto-fetch and refresh proxies from multiple sources."""
 
 import asyncio
+from collections.abc import AsyncIterator
 from datetime import datetime
 from pathlib import Path
-from typing import AsyncIterator
 
 import httpx
 import structlog
 from bs4 import BeautifulSoup
 
-from .proxy import ProxyPool, Proxy
+from .proxy import Proxy, ProxyPool
 
 
 class FreeProxyFetcher:
@@ -62,7 +62,7 @@ class FreeProxyFetcher:
                 soup = BeautifulSoup(response.text, "lxml")
                 table = soup.find("table", class_="table")
                 if table:
-                    for row in table.find_all("tr")[1:limit+1]:
+                    for row in table.find_all("tr")[1 : limit + 1]:
                         cols = row.find_all("td")
                         if len(cols) >= 7:
                             ip = cols[0].text.strip()
@@ -92,7 +92,7 @@ class FreeProxyFetcher:
                     timeout=15,
                 )
                 if response.status_code == 200:
-                    for line in response.text.strip().split("\n")[:limit//2]:
+                    for line in response.text.strip().split("\n")[: limit // 2]:
                         line = line.strip()
                         if line and ":" in line:
                             proxies.append(f"http://{line}")
@@ -109,7 +109,7 @@ class FreeProxyFetcher:
                     timeout=15,
                 )
                 if response.status_code == 200:
-                    for line in response.text.strip().split("\n")[:limit//2]:
+                    for line in response.text.strip().split("\n")[: limit // 2]:
                         line = line.strip()
                         if line and ":" in line:
                             proxies.append(f"socks5://{line}")
@@ -141,7 +141,13 @@ class FreeProxyFetcher:
                         port = proxy.get("port")
                         protocols = proxy.get("protocols", [])
                         if ip and port:
-                            proto = "socks5" if "socks5" in protocols else "https" if "https" in protocols else "http"
+                            proto = (
+                                "socks5"
+                                if "socks5" in protocols
+                                else "https"
+                                if "https" in protocols
+                                else "http"
+                            )
                             proxies.append(f"{proto}://{ip}:{port}")
             except Exception as e:
                 self.logger.warning("geonode_failed", error=str(e))
@@ -161,7 +167,7 @@ class FreeProxyFetcher:
                     soup = BeautifulSoup(response.text, "lxml")
                     table = soup.find("table", class_="proxy-table")
                     if table:
-                        for row in table.find_all("tr")[1:limit+1]:
+                        for row in table.find_all("tr")[1 : limit + 1]:
                             cols = row.find_all("td")
                             if cols:
                                 text = cols[0].text.strip()
@@ -371,9 +377,7 @@ class ProxyProvider:
         proxies = []
         for i in range(count):
             session_id = f"session_{i}"
-            proxies.append(
-                f"http://{username}-session-{session_id}:{password}@{host}:{port}"
-            )
+            proxies.append(f"http://{username}-session-{session_id}:{password}@{host}:{port}")
         return proxies
 
     async def _smartproxy(self, count: int) -> list[str]:
@@ -386,9 +390,7 @@ class ProxyProvider:
         proxies = []
         for i in range(count):
             session_id = f"session_{i}"
-            proxies.append(
-                f"http://{username}-session-{session_id}:{password}@{host}:{port}"
-            )
+            proxies.append(f"http://{username}-session-{session_id}:{password}@{host}:{port}")
         return proxies
 
     async def _oxylabs(self, count: int) -> list[str]:
@@ -401,9 +403,7 @@ class ProxyProvider:
         proxies = []
         for i in range(count):
             session_id = f"session_{i}"
-            proxies.append(
-                f"http://{username}-session-{session_id}:{password}@{host}:{port}"
-            )
+            proxies.append(f"http://{username}-session-{session_id}:{password}@{host}:{port}")
         return proxies
 
     async def _proxyrack(self, count: int) -> list[str]:
@@ -436,9 +436,7 @@ class ProxyRefresher:
         self.min_proxies = min_proxies
         self.refresh_interval = refresh_interval
         self.fetch_free = fetch_free
-        self.providers = [
-            ProxyProvider(**p) for p in (providers or [])
-        ]
+        self.providers = [ProxyProvider(**p) for p in (providers or [])]
         self.free_fetcher = FreeProxyFetcher() if fetch_free else None
         self.logger = structlog.get_logger()
         self._running = False
@@ -561,6 +559,7 @@ class RotatingProxyManager:
     def get_client(self, **kwargs):
         """Get a proxy-aware HTTP client."""
         from .proxy import ProxyAwareClient
+
         return ProxyAwareClient(pool=self.pool, **kwargs)
 
     def get_stats(self) -> dict:

@@ -20,21 +20,18 @@ import structlog
 class TrackedObject:
     id: str
     label: str
-    position: List[float] = field(default_factory=lambda: [0, 0, 0])
-    velocity: List[float] = field(default_factory=lambda: [0, 0, 0])
+    position: list[float] = field(default_factory=lambda: [0, 0, 0])
+    velocity: list[float] = field(default_factory=lambda: [0, 0, 0])
     last_seen: datetime = field(default_factory=datetime.utcnow)
     first_seen: datetime = field(default_factory=datetime.utcnow)
     times_seen: int = 1
     occluded: bool = False
-    occlusion_start: Optional[datetime] = None
+    occlusion_start: datetime | None = None
     confidence: float = 1.0
 
-    def predict_position(self, dt: float) -> List[float]:
+    def predict_position(self, dt: float) -> list[float]:
         """Predict position after dt seconds."""
-        return [
-            self.position[i] + self.velocity[i] * dt
-            for i in range(3)
-        ]
+        return [self.position[i] + self.velocity[i] * dt for i in range(3)]
 
 
 class ObjectPermanence:
@@ -42,14 +39,14 @@ class ObjectPermanence:
 
     def __init__(self):
         self.logger = structlog.get_logger(component="object_permanence")
-        self.objects: Dict[str, TrackedObject] = {}
-        self.disappeared: List[TrackedObject] = []
+        self.objects: dict[str, TrackedObject] = {}
+        self.disappeared: list[TrackedObject] = []
 
     def update(
         self,
-        detected_objects: List[Dict],
-        timestamp: Optional[datetime] = None,
-    ) -> Dict[str, str]:
+        detected_objects: list[dict],
+        timestamp: datetime | None = None,
+    ) -> dict[str, str]:
         """Update tracking with newly detected objects."""
         ts = timestamp or datetime.utcnow()
         detected_ids = set()
@@ -66,10 +63,7 @@ class ObjectPermanence:
 
                 dt = (ts - obj.last_seen).total_seconds()
                 if dt > 0:
-                    obj.velocity = [
-                        (new_pos[i] - old_pos[i]) / dt
-                        for i in range(3)
-                    ]
+                    obj.velocity = [(new_pos[i] - old_pos[i]) / dt for i in range(3)]
 
                 obj.position = new_pos
                 obj.last_seen = ts
@@ -106,15 +100,15 @@ class ObjectPermanence:
 
         return updates
 
-    def get_visible(self) -> List[TrackedObject]:
+    def get_visible(self) -> list[TrackedObject]:
         """Get currently visible objects."""
         return [obj for obj in self.objects.values() if not obj.occluded]
 
-    def get_hidden(self) -> List[TrackedObject]:
+    def get_hidden(self) -> list[TrackedObject]:
         """Get currently hidden (occluded) objects."""
         return [obj for obj in self.objects.values() if obj.occluded]
 
-    def predict_hidden_positions(self, dt: float = 1.0) -> Dict[str, List[float]]:
+    def predict_hidden_positions(self, dt: float = 1.0) -> dict[str, list[float]]:
         """Predict positions of hidden objects."""
         predictions = {}
         for obj in self.get_hidden():
@@ -123,9 +117,9 @@ class ObjectPermanence:
 
     def reidentify(
         self,
-        detected: Dict,
+        detected: dict,
         threshold: float = 0.5,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Re-identify a detected object as a previously seen object."""
         det_pos = detected.get("position", [0, 0, 0])
         det_label = detected.get("label", "")
@@ -137,7 +131,7 @@ class ObjectPermanence:
             if not obj.occluded:
                 continue
 
-            pos_dist = math.sqrt(sum((det_pos[i] - obj.position[i])**2 for i in range(3)))
+            pos_dist = math.sqrt(sum((det_pos[i] - obj.position[i]) ** 2 for i in range(3)))
             label_match = 1.0 if det_label == obj.label else 0.0
 
             score = label_match * 0.6 + max(0, 1.0 - pos_dist) * 0.4

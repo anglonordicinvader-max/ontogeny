@@ -21,6 +21,7 @@ from .modification_memory import ModificationMemory, ModificationRecord
 @dataclass
 class SynthesizedExample:
     """A single synthesized training example."""
+
     id: str = ""
     source_record_id: str = ""
     synth_type: str = ""  # variation, inverse, reasoning, generalization
@@ -130,7 +131,7 @@ class SelfTrainingSynthesizer:
             "You are a code modification expert. Given a successful code modification, "
             "generate 2-3 alternative approaches that could also solve the same problem. "
             "Each variation should be a valid, working alternative. "
-            "Return JSON: {\"variations\": [{\"approach\": \"description\", \"code\": \"python code\", \"quality\": 0.0-1.0}]}"
+            'Return JSON: {"variations": [{"approach": "description", "code": "python code", "quality": 0.0-1.0}]}'
         )
 
         prompt = f"""A successful modification was made:
@@ -161,7 +162,7 @@ Generate 2-3 alternative approaches to solve this same problem. Each should be a
         parsed = response.parsed_json
         variations = parsed.get("variations", [])
 
-        for i, var in enumerate(variations[:self.max_variations]):
+        for i, var in enumerate(variations[: self.max_variations]):
             code = var.get("code", "")
             if not code or len(code) < 20:
                 continue
@@ -171,15 +172,17 @@ Generate 2-3 alternative approaches to solve this same problem. Each should be a
             if self._is_substantially_different(code, record.modified_code):
                 quality = min(1.0, quality + 0.1)
 
-            examples.append(SynthesizedExample(
-                id=str(uuid.uuid4()),
-                source_record_id=record.id,
-                synth_type="variation",
-                instruction=self._build_variation_instruction(record, var.get("approach", "")),
-                output=f"```python\n{code[:3000]}\n```",
-                quality_score=quality,
-                metadata={"approach": var.get("approach", ""), "variation_index": i},
-            ))
+            examples.append(
+                SynthesizedExample(
+                    id=str(uuid.uuid4()),
+                    source_record_id=record.id,
+                    synth_type="variation",
+                    instruction=self._build_variation_instruction(record, var.get("approach", "")),
+                    output=f"```python\n{code[:3000]}\n```",
+                    quality_score=quality,
+                    metadata={"approach": var.get("approach", ""), "variation_index": i},
+                )
+            )
 
         return examples
 
@@ -192,7 +195,7 @@ Generate 2-3 alternative approaches to solve this same problem. Each should be a
             "You are a code modification expert. Given a successful code modification, "
             "generate a common mistake or anti-pattern that a less experienced developer might make "
             "when trying to solve the same problem. This is used as a negative training example. "
-            "Return JSON: {\"mistake\": \"description\", \"bad_code\": \"python code\", \"why_wrong\": \"explanation\"}"
+            'Return JSON: {"mistake": "description", "bad_code": "python code", "why_wrong": "explanation"}'
         )
 
         prompt = f"""A successful modification was made to fix: {record.description}
@@ -252,13 +255,13 @@ Generate a common mistake or anti-pattern that someone might make when trying to
         system_prompt = (
             "You are a code analysis expert. Given a successful code modification, "
             "explain the step-by-step reasoning for why this modification is correct and effective. "
-            "Return JSON: {\"chain\": [\"step 1\", \"step 2\", ...], \"key_insight\": \"main insight\"}"
+            'Return JSON: {"chain": ["step 1", "step 2", ...], "key_insight": "main insight"}'
         )
 
         prompt = f"""A successful modification was made:
 
 Description: {record.description}
-Reasoning: {record.reasoning or 'Not provided'}
+Reasoning: {record.reasoning or "Not provided"}
 Original code (first 500 chars):
 ```python
 {record.original_code[:500]}
@@ -294,8 +297,8 @@ Explain the step-by-step reasoning for why this modification works."""
         )
 
         output = (
-            f"Here's the step-by-step reasoning:\n\n"
-            + "\n".join(f"{i+1}. {step}" for i, step in enumerate(chain))
+            "Here's the step-by-step reasoning:\n\n"
+            + "\n".join(f"{i + 1}. {step}" for i, step in enumerate(chain))
             + f"\n\nKey insight: {key_insight}"
         )
 
@@ -317,8 +320,8 @@ Explain the step-by-step reasoning for why this modification works."""
         system_prompt = (
             "You are a software architecture expert. Given a successful code modification, "
             "extract a generalizable pattern that could be applied to similar problems. "
-            "Return JSON: {\"pattern_name\": \"name\", \"description\": \"when to use\", "
-            "\"template\": \"generic code template\", \"applicable_when\": [\"condition 1\", ...]}"
+            'Return JSON: {"pattern_name": "name", "description": "when to use", '
+            '"template": "generic code template", "applicable_when": ["condition 1", ...]}'
         )
 
         prompt = f"""A successful modification was made:
@@ -382,7 +385,7 @@ Extract a generalizable pattern from this modification. What's the reusable temp
     ) -> str:
         """Build instruction for a variation example."""
         parts = [
-            f"Improve the following Python code using an alternative approach.",
+            "Improve the following Python code using an alternative approach.",
             f"Target file: {record.target_file}",
             f"Task: {record.description}",
             f"Approach: {approach}",

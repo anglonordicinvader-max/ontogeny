@@ -14,6 +14,7 @@ from .backend import CognitiveBackend
 @dataclass
 class BenchmarkTask:
     """A single benchmark task."""
+
     id: str
     category: str  # coding, reasoning, planning, etc.
     prompt: str
@@ -25,6 +26,7 @@ class BenchmarkTask:
 @dataclass
 class BenchmarkResult:
     """Result of running a benchmark task."""
+
     task_id: str
     success: bool
     score: float  # 0-1
@@ -37,6 +39,7 @@ class BenchmarkResult:
 @dataclass
 class BenchmarkSuite:
     """Collection of benchmark tasks."""
+
     name: str
     tasks: list[BenchmarkTask] = field(default_factory=list)
     version: str = "1.0"
@@ -76,6 +79,7 @@ class CodeTaskEvaluator(TaskEvaluator):
     ) -> float:
         # Extract code from output
         import re
+
         code_match = re.search(r"```python\n(.*?)\n```", output, re.DOTALL)
         if not code_match:
             return 0.0
@@ -83,9 +87,7 @@ class CodeTaskEvaluator(TaskEvaluator):
 
         # Run in sandbox
         try:
-            result = await self.sandbox.execute_command(
-                f"python -c {code!r}"
-            )
+            result = await self.sandbox.execute_command(f"python -c {code!r}")
             return 1.0 if result.get("success") else 0.0
         except Exception:
             return 0.0
@@ -106,7 +108,7 @@ class ReasoningTaskEvaluator(TaskEvaluator):
         prompt = f"""Evaluate the quality of this reasoning output.
 
 Task: {task.prompt}
-Criteria: {', '.join(task.evaluation_criteria)}
+Criteria: {", ".join(task.evaluation_criteria)}
 
 Output:
 {output}
@@ -144,7 +146,7 @@ Goal: {task.prompt}
 Plan:
 {output}
 
-Criteria: {', '.join(task.evaluation_criteria)}
+Criteria: {", ".join(task.evaluation_criteria)}
 
 Score 0-1 for:
 - Completeness (all steps needed?)
@@ -188,74 +190,106 @@ class BenchmarkHarness:
         """Create default benchmark suites."""
         # Coding benchmarks
         coding = BenchmarkSuite("coding_v1")
-        coding.add_task(BenchmarkTask(
-            id="code_fibonacci",
-            category="coding",
-            prompt="Write a Python function fibonacci(n) that returns the nth Fibonacci number efficiently.",
-            evaluation_criteria=["correctness", "efficiency", "handles edge cases"],
-        ))
-        coding.add_task(BenchmarkTask(
-            id="code_binary_search",
-            category="coding",
-            prompt="Implement binary search on a sorted list. Return index or -1.",
-            evaluation_criteria=["correctness", "O(log n)", "edge cases"],
-        ))
-        coding.add_task(BenchmarkTask(
-            id="code_serialize_tree",
-            category="coding",
-            prompt="Write code to serialize and deserialize a binary tree.",
-            evaluation_criteria=["correctness", "handles None", "round-trip"],
-        ))
-        coding.add_task(BenchmarkTask(
-            id="code_lru_cache",
-            category="coding",
-            prompt="Implement an LRU cache with get/put in O(1).",
-            evaluation_criteria=["O(1) operations", "eviction works", "thread-safe optional"],
-        ))
-        coding.add_task(BenchmarkTask(
-            id="code_async_fetcher",
-            category="coding",
-            prompt="Write an async function that fetches URLs concurrently with a semaphore limit.",
-            evaluation_criteria=["concurrency limit", "error handling", "returns results"],
-        ))
+        coding.add_task(
+            BenchmarkTask(
+                id="code_fibonacci",
+                category="coding",
+                prompt="Write a Python function fibonacci(n) that returns the nth Fibonacci number efficiently.",
+                evaluation_criteria=["correctness", "efficiency", "handles edge cases"],
+            )
+        )
+        coding.add_task(
+            BenchmarkTask(
+                id="code_binary_search",
+                category="coding",
+                prompt="Implement binary search on a sorted list. Return index or -1.",
+                evaluation_criteria=["correctness", "O(log n)", "edge cases"],
+            )
+        )
+        coding.add_task(
+            BenchmarkTask(
+                id="code_serialize_tree",
+                category="coding",
+                prompt="Write code to serialize and deserialize a binary tree.",
+                evaluation_criteria=["correctness", "handles None", "round-trip"],
+            )
+        )
+        coding.add_task(
+            BenchmarkTask(
+                id="code_lru_cache",
+                category="coding",
+                prompt="Implement an LRU cache with get/put in O(1).",
+                evaluation_criteria=["O(1) operations", "eviction works", "thread-safe optional"],
+            )
+        )
+        coding.add_task(
+            BenchmarkTask(
+                id="code_async_fetcher",
+                category="coding",
+                prompt="Write an async function that fetches URLs concurrently with a semaphore limit.",
+                evaluation_criteria=["concurrency limit", "error handling", "returns results"],
+            )
+        )
         self.suites["coding"] = coding
 
         # Reasoning benchmarks
         reasoning = BenchmarkSuite("reasoning_v1")
-        reasoning.add_task(BenchmarkTask(
-            id="reason_syllogism",
-            category="reasoning",
-            prompt="All humans are mortal. Socrates is human. Is Socrates mortal? Explain.",
-            evaluation_criteria=["valid deduction", "clear explanation"],
-        ))
-        reasoning.add_task(BenchmarkTask(
-            id="reason_counterfactual",
-            category="reasoning",
-            prompt="If gravity stopped for 5 seconds, what would happen to Earth's atmosphere?",
-            evaluation_criteria=["physics accuracy", "causal chain", "specifics"],
-        ))
-        reasoning.add_task(BenchmarkTask(
-            id="reason_probability",
-            category="reasoning",
-            prompt="A test for a rare disease (1 in 1000) has 99% accuracy. You test positive. What's the probability you have it?",
-            evaluation_criteria=["Bayes theorem", "correct calculation", "explains base rate"],
-        ))
+        reasoning.add_task(
+            BenchmarkTask(
+                id="reason_syllogism",
+                category="reasoning",
+                prompt="All humans are mortal. Socrates is human. Is Socrates mortal? Explain.",
+                evaluation_criteria=["valid deduction", "clear explanation"],
+            )
+        )
+        reasoning.add_task(
+            BenchmarkTask(
+                id="reason_counterfactual",
+                category="reasoning",
+                prompt="If gravity stopped for 5 seconds, what would happen to Earth's atmosphere?",
+                evaluation_criteria=["physics accuracy", "causal chain", "specifics"],
+            )
+        )
+        reasoning.add_task(
+            BenchmarkTask(
+                id="reason_probability",
+                category="reasoning",
+                prompt="A test for a rare disease (1 in 1000) has 99% accuracy. You test positive. What's the probability you have it?",
+                evaluation_criteria=["Bayes theorem", "correct calculation", "explains base rate"],
+            )
+        )
         self.suites["reasoning"] = reasoning
 
         # Planning benchmarks
         planning = BenchmarkSuite("planning_v1")
-        planning.add_task(BenchmarkTask(
-            id="plan_web_scraper",
-            category="planning",
-            prompt="Plan: Build a web scraper that respects robots.txt, handles rate limits, and stores results in SQLite.",
-            evaluation_criteria=["robots.txt", "rate limiting", "SQLite schema", "error handling", "modularity"],
-        ))
-        planning.add_task(BenchmarkTask(
-            id="plan_ml_pipeline",
-            category="planning",
-            prompt="Plan: End-to-end ML pipeline: data ingestion -> validation -> training -> evaluation -> deployment.",
-            evaluation_criteria=["stages", "validation", "monitoring", "rollback", "automation"],
-        ))
+        planning.add_task(
+            BenchmarkTask(
+                id="plan_web_scraper",
+                category="planning",
+                prompt="Plan: Build a web scraper that respects robots.txt, handles rate limits, and stores results in SQLite.",
+                evaluation_criteria=[
+                    "robots.txt",
+                    "rate limiting",
+                    "SQLite schema",
+                    "error handling",
+                    "modularity",
+                ],
+            )
+        )
+        planning.add_task(
+            BenchmarkTask(
+                id="plan_ml_pipeline",
+                category="planning",
+                prompt="Plan: End-to-end ML pipeline: data ingestion -> validation -> training -> evaluation -> deployment.",
+                evaluation_criteria=[
+                    "stages",
+                    "validation",
+                    "monitoring",
+                    "rollback",
+                    "automation",
+                ],
+            )
+        )
         self.suites["planning"] = planning
 
     def register_suite(self, suite: BenchmarkSuite) -> None:
@@ -320,6 +354,7 @@ class BenchmarkHarness:
 
     async def _save_results(self, suite_name: str, results: list[BenchmarkResult]) -> None:
         import datetime
+
         timestamp = datetime.datetime.utcnow().isoformat()
         data = {
             "suite": suite_name,
@@ -339,7 +374,9 @@ class BenchmarkHarness:
                 "total": len(results),
                 "passed": sum(1 for r in results if r.success),
                 "avg_score": sum(r.score for r in results) / len(results) if results else 0,
-                "avg_latency_ms": sum(r.latency_ms for r in results) / len(results) if results else 0,
+                "avg_latency_ms": sum(r.latency_ms for r in results) / len(results)
+                if results
+                else 0,
             },
         }
         filepath = self.results_dir / f"{suite_name}_{timestamp.replace(':', '-')}.json"

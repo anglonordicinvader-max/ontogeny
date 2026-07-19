@@ -1,12 +1,12 @@
 """Discord crawler using bot API and webhooks."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 from datetime import datetime
 
 import httpx
 import structlog
 
-from .base import BaseCrawler, CrawlerConfig, CrawlResult, ContentType
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class DiscordCrawler(BaseCrawler):

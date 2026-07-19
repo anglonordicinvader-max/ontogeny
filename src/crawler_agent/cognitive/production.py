@@ -4,24 +4,25 @@ Tracks model performance over time, detects drift, triggers retraining
 based on quality degradation (not just iteration count), and provides
 circuit breaker / graceful degradation for the maldoror pipeline.
 """
+
 import asyncio
 import json
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Any
 
 import structlog
 
-
 # ---------------------------------------------------------------------------
 # Monitoring
 # ---------------------------------------------------------------------------
 
-class MetricType(str, Enum):
+
+class MetricType(StrEnum):
     LATENCY = "latency"
     SUCCESS_RATE = "success_rate"
     QUALITY_SCORE = "quality_score"
@@ -82,15 +83,19 @@ class PerformanceMonitor:
         key = f"{metric_type.value}_{model_version}" if model_version else metric_type.value
         if key not in self.metrics:
             self.metrics[key] = deque(maxlen=self.window_size)
-        self.metrics[key].append(MetricPoint(
-            timestamp=time.time(),
-            metric_type=metric_type,
-            value=value,
-            model_version=model_version,
-            metadata=metadata or {},
-        ))
+        self.metrics[key].append(
+            MetricPoint(
+                timestamp=time.time(),
+                metric_type=metric_type,
+                value=value,
+                model_version=model_version,
+                metadata=metadata or {},
+            )
+        )
 
-    def get_recent(self, metric_type: MetricType, model_version: str = "", n: int = 10) -> list[MetricPoint]:
+    def get_recent(
+        self, metric_type: MetricType, model_version: str = "", n: int = 10
+    ) -> list[MetricPoint]:
         """Get recent metric points."""
         key = f"{metric_type.value}_{model_version}" if model_version else metric_type.value
         points = self.metrics.get(key, deque())
@@ -161,6 +166,7 @@ class PerformanceMonitor:
 # Smart Retraining Triggers
 # ---------------------------------------------------------------------------
 
+
 class RetrainingTrigger:
     """Determines when retraining should happen based on quality signals."""
 
@@ -199,17 +205,13 @@ class RetrainingTrigger:
 
         # 3. Quality degradation
         if current_model_version:
-            quality = self.monitor.get_average(
-                MetricType.QUALITY_SCORE, current_model_version
-            )
+            quality = self.monitor.get_average(MetricType.QUALITY_SCORE, current_model_version)
             if 0 < quality < self.quality_threshold:
                 reasons.append(f"quality_degradation:{quality:.2f}")
 
         # 4. High error rate
         if current_model_version:
-            error_rate = self.monitor.get_average(
-                MetricType.ERROR_RATE, current_model_version
-            )
+            error_rate = self.monitor.get_average(MetricType.ERROR_RATE, current_model_version)
             if error_rate > self.error_rate_threshold:
                 reasons.append(f"high_error_rate:{error_rate:.2f}")
 
@@ -226,9 +228,7 @@ class RetrainingTrigger:
 
         # 6. High latency
         if current_model_version:
-            latency = self.monitor.get_average(
-                MetricType.LATENCY, current_model_version
-            )
+            latency = self.monitor.get_average(MetricType.LATENCY, current_model_version)
             if latency > 10000:  # 10 seconds
                 reasons.append(f"high_latency:{latency:.0f}ms")
 
@@ -252,9 +252,10 @@ class RetrainingTrigger:
 # Circuit Breaker
 # ---------------------------------------------------------------------------
 
-class CircuitState(str, Enum):
-    CLOSED = "closed"      # Normal operation
-    OPEN = "open"          # Failing, reject calls
+
+class CircuitState(StrEnum):
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Failing, reject calls
     HALF_OPEN = "half_open"  # Testing if recovered
 
 
@@ -326,6 +327,7 @@ class CircuitBreaker:
 # Graceful Degradation
 # ---------------------------------------------------------------------------
 
+
 class GracefulDegradation:
     """Handles failures in the maldoror pipeline with fallback strategies."""
 
@@ -351,12 +353,16 @@ class GracefulDegradation:
         try:
             result = await primary_fn()
             self.circuit.record_success()
-            self.monitor.record(MetricType.SUCCESS_RATE, 1.0, metadata={"operation": operation_name})
+            self.monitor.record(
+                MetricType.SUCCESS_RATE, 1.0, metadata={"operation": operation_name}
+            )
             return result
         except Exception as e:
             self.circuit.record_failure()
             self.monitor.record(MetricType.ERROR_RATE, 1.0, metadata={"operation": operation_name})
-            self.logger.warning("primary_failed_falling_back", operation=operation_name, error=str(e))
+            self.logger.warning(
+                "primary_failed_falling_back", operation=operation_name, error=str(e)
+            )
             self.fallback_count += 1
             return await fallback_fn()
 

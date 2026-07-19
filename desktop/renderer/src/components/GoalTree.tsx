@@ -11,7 +11,7 @@ export function GoalTree({ status }: GoalTreeProps) {
 
   return (
     <div className="h-full overflow-y-auto p-4 space-y-4">
-      <Panel title="Active Goal">
+      <Panel title="Active Goal" accentGlow>
         {activeGoal ? (
           <div className="p-3 bg-surface-2 rounded-md">
             <p className="text-sm text-text-primary">{activeGoal}</p>
@@ -23,7 +23,7 @@ export function GoalTree({ status }: GoalTreeProps) {
         )}
       </Panel>
 
-      <Panel title="Goal Progress">
+      <Panel title="Goal Progress" accentGlow>
         <div className="space-y-3">
           <MetricCard
             label="Curiosity Drive"

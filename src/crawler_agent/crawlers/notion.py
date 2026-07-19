@@ -1,12 +1,12 @@
 """Notion crawler using official API."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 from datetime import datetime
 
 import httpx
 import structlog
 
-from .base import BaseCrawler, CrawlerConfig, CrawlResult, ContentType
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class NotionCrawler(BaseCrawler):
@@ -21,10 +21,14 @@ class NotionCrawler(BaseCrawler):
         super().__init__("notion", config, **kwargs)
         self.api_key = api_key
         self.api_url = "https://api.notion.com/v1"
-        self.headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Notion-Version": "2022-06-28",
-        } if api_key else {}
+        self.headers = (
+            {
+                "Authorization": f"Bearer {api_key}",
+                "Notion-Version": "2022-06-28",
+            }
+            if api_key
+            else {}
+        )
 
     async def _setup(self) -> None:
         if self.api_key:
@@ -87,9 +91,7 @@ class NotionCrawler(BaseCrawler):
                     "created_time": page.get("created_time"),
                     "last_edited_time": page.get("last_edited_time"),
                     "created_by": page.get("created_by", {}).get("id"),
-                    "properties": {
-                        k: v.get("type") for k, v in page.get("properties", {}).items()
-                    },
+                    "properties": {k: v.get("type") for k, v in page.get("properties", {}).items()},
                 },
                 source="notion",
             )

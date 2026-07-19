@@ -21,20 +21,22 @@ import structlog
 class IdentityCore:
     name: str = "Ontogeny"
     purpose: str = "Proto-AGI cognitive agent"
-    values: List[str] = field(default_factory=lambda: ["curiosity", "self-improvement", "autonomy"])
-    personality: Dict[str, float] = field(default_factory=lambda: {
-        "curiosity": 0.8,
-        "caution": 0.5,
-        "creativity": 0.7,
-        "persistence": 0.9,
-        "social": 0.3,
-    })
+    values: list[str] = field(default_factory=lambda: ["curiosity", "self-improvement", "autonomy"])
+    personality: dict[str, float] = field(
+        default_factory=lambda: {
+            "curiosity": 0.8,
+            "caution": 0.5,
+            "creativity": 0.7,
+            "persistence": 0.9,
+            "social": 0.3,
+        }
+    )
     created_at: datetime = field(default_factory=datetime.utcnow)
     total_cycles: int = 0
     total_goals_completed: int = 0
     total_self_modifications: int = 0
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "name": self.name,
             "purpose": self.purpose,
@@ -53,10 +55,10 @@ class EmotionalState:
     arousal: float = 0.5  # 0 to 1
     dominance: float = 0.5  # 0 to 1
     current_mood: str = "neutral"
-    mood_history: List[str] = field(default_factory=list)
+    mood_history: list[str] = field(default_factory=list)
     last_updated: datetime = field(default_factory=datetime.utcnow)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "valence": self.valence,
             "arousal": self.arousal,
@@ -71,15 +73,15 @@ class SessionContext:
     session_id: str
     started_at: datetime = field(default_factory=datetime.utcnow)
     last_active: datetime = field(default_factory=datetime.utcnow)
-    current_goals: List[str] = field(default_factory=list)
-    active_tasks: List[str] = field(default_factory=list)
-    recent_learnings: List[str] = field(default_factory=list)
-    pending_experiments: List[str] = field(default_factory=list)
+    current_goals: list[str] = field(default_factory=list)
+    active_tasks: list[str] = field(default_factory=list)
+    recent_learnings: list[str] = field(default_factory=list)
+    pending_experiments: list[str] = field(default_factory=list)
     mood: EmotionalState = field(default_factory=EmotionalState)
-    working_memory_snapshot: List[Dict] = field(default_factory=list)
+    working_memory_snapshot: list[dict] = field(default_factory=list)
     knowledge_graph_summary: str = ""
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "session_id": self.session_id,
             "started_at": self.started_at.isoformat(),
@@ -100,9 +102,9 @@ class PersistentIdentity:
         self.logger = structlog.get_logger(component="persistent_identity")
 
         self.core = IdentityCore()
-        self.current_session: Optional[SessionContext] = None
-        self.session_history: List[Dict] = []
-        self.milestones: List[Dict] = []
+        self.current_session: SessionContext | None = None
+        self.session_history: list[dict] = []
+        self.milestones: list[dict] = []
 
         self._load()
 
@@ -159,9 +161,14 @@ class PersistentIdentity:
             session_file.write_text(json.dumps(self.current_session.to_dict(), indent=2))
 
         milestones_file = self.data_dir / "milestones.json"
-        milestones_file.write_text(json.dumps({
-            "milestones": self.milestones[-100:],
-        }, indent=2))
+        milestones_file.write_text(
+            json.dumps(
+                {
+                    "milestones": self.milestones[-100:],
+                },
+                indent=2,
+            )
+        )
 
     def start_session(self) -> SessionContext:
         """Start a new session, restoring previous context."""
@@ -169,6 +176,7 @@ class PersistentIdentity:
             self.session_history.append(self.current_session.to_dict())
 
         import uuid
+
         session_id = str(uuid.uuid4())[:8]
         self.current_session = SessionContext(session_id=session_id)
         self._save()
@@ -189,12 +197,14 @@ class PersistentIdentity:
 
     def add_milestone(self, title: str, description: str):
         """Record a milestone."""
-        self.milestones.append({
-            "title": title,
-            "description": description,
-            "timestamp": datetime.utcnow().isoformat(),
-            "cycle": self.core.total_cycles,
-        })
+        self.milestones.append(
+            {
+                "title": title,
+                "description": description,
+                "timestamp": datetime.utcnow().isoformat(),
+                "cycle": self.core.total_cycles,
+            }
+        )
         self._save()
 
     def update_mood(self, valence: float, arousal: float, dominance: float):
@@ -218,11 +228,13 @@ class PersistentIdentity:
             self.current_session.mood.current_mood = mood
             self.current_session.mood.mood_history.append(mood)
             if len(self.current_session.mood.mood_history) > 20:
-                self.current_session.mood.mood_history = self.current_session.mood.mood_history[-20:]
+                self.current_session.mood.mood_history = self.current_session.mood.mood_history[
+                    -20:
+                ]
 
         self._save()
 
-    def set_goals(self, goals: List[str]):
+    def set_goals(self, goals: list[str]):
         """Set current goals."""
         if self.current_session:
             self.current_session.current_goals = goals

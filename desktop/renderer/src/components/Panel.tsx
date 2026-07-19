@@ -7,16 +7,17 @@ interface PanelProps {
   className?: string;
   actions?: ReactNode;
   mono?: boolean;
+  accentGlow?: boolean;
 }
 
-export function Panel({ title, children, className, actions, mono }: PanelProps) {
+export function Panel({ title, children, className, actions, mono, accentGlow }: PanelProps) {
   return (
-    <div className={cn('panel flex flex-col', className)}>
-      <div className="panel-header">
+    <div className={cn('panel flex flex-col', accentGlow && 'panel-accent-glow', className)}>
+      <div className="panel-header relative z-10">
         <span className={cn('panel-title', mono && 'font-mono')}>{title}</span>
         {actions && <div className="flex items-center gap-1">{actions}</div>}
       </div>
-      <div className="panel-content flex-1 overflow-y-auto">{children}</div>
+      <div className="panel-content flex-1 overflow-y-auto relative z-10">{children}</div>
     </div>
   );
 }
@@ -82,11 +83,15 @@ interface ProgressBarProps {
 
 export function ProgressBar({ value, max = 100, className, showLabel }: ProgressBarProps) {
   const percentage = Math.min((value / max) * 100, 100);
+  const isActive = percentage > 0;
   return (
     <div className={cn('flex items-center gap-2', className)}>
-      <div className="flex-1 h-1.5 bg-surface-3 rounded-full overflow-hidden">
+      <div className="flex-1 h-1.5 bg-surface-3 rounded-full overflow-hidden relative">
         <div
-          className="h-full bg-accent rounded-full transition-all duration-300"
+          className={cn(
+            'h-full bg-accent rounded-full transition-all duration-300',
+            isActive && 'shadow-[0_0_12px_2px_var(--bloom-color)]'
+          )}
           style={{ width: `${percentage}%` }}
         />
       </div>

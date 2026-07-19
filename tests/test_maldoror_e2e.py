@@ -11,6 +11,7 @@ Tests the full lifecycle:
 
 Run: python -m pytest tests/test_maldoror_e2e.py -v --timeout=300
 """
+
 import asyncio
 import json
 import os
@@ -24,10 +25,10 @@ import pytest
 Path("data/maldoror").mkdir(parents=True, exist_ok=True)
 Path("data/modification_memory").mkdir(parents=True, exist_ok=True)
 
-from src.crawler_agent.cognitive.modification_memory import ModificationMemory
-from src.crawler_agent.cognitive.model_trainer import ModelTrainer
-from src.crawler_agent.cognitive.custom_model_manager import CustomModelManager, ModelState
 from src.crawler_agent.cognitive.backend import HybridBackend, LLMBackend
+from src.crawler_agent.cognitive.custom_model_manager import CustomModelManager, ModelState
+from src.crawler_agent.cognitive.model_trainer import ModelTrainer
+from src.crawler_agent.cognitive.modification_memory import ModificationMemory
 
 
 class TestModificationMemory:
@@ -136,8 +137,10 @@ class TestCustomModelManager:
 
         # Manually add a model state
         state = ModelState(
-            name="maldoror:test", version="v0",
-            adapter_path="data/maldoror/v0", active=True,
+            name="maldoror:test",
+            version="v0",
+            adapter_path="data/maldoror/v0",
+            active=True,
         )
         mgr.models.append(state)
         mgr._save_state()

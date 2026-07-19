@@ -1,13 +1,12 @@
 """Utility modules."""
 
-from .rate_limiter import TokenBucket, SlidingWindowRateLimiter
 from .proxy import (
-    ProxyPool,
-    ProxyAwareClient,
+    AnonymityLayer,
     Proxy,
+    ProxyAwareClient,
+    ProxyPool,
     ProxyProtocol,
     ProxyStatus,
-    AnonymityLayer,
 )
 from .proxy_fetcher import (
     FreeProxyFetcher,
@@ -15,6 +14,7 @@ from .proxy_fetcher import (
     ProxyRefresher,
     RotatingProxyManager,
 )
+from .rate_limiter import SlidingWindowRateLimiter, TokenBucket
 
 __all__ = [
     "TokenBucket",

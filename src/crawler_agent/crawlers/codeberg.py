@@ -1,12 +1,12 @@
 """Codeberg/Gitea crawler using Gitea API."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 from datetime import datetime
 
 import httpx
 import structlog
 
-from .base import BaseCrawler, CrawlerConfig, CrawlResult, ContentType
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class GiteaCrawler(BaseCrawler):
@@ -50,7 +50,9 @@ class GiteaCrawler(BaseCrawler):
     async def _get_repo(self, owner: str, repo: str) -> AsyncIterator[CrawlResult]:
         await self.rate_limiter.wait_and_acquire()
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{self.api_url}/repos/{owner}/{repo}", headers=self.headers)
+            response = await client.get(
+                f"{self.api_url}/repos/{owner}/{repo}", headers=self.headers
+            )
             response.raise_for_status()
             data = response.json()
             yield CrawlResult(
@@ -130,6 +132,7 @@ class GiteaCrawler(BaseCrawler):
 
 class CodebergCrawler(GiteaCrawler):
     """Crawler specifically for Codeberg."""
+
     def __init__(self, token: str = "", config: CrawlerConfig | None = None, **kwargs):
         super().__init__(
             instance_url="https://codeberg.org",
@@ -142,6 +145,7 @@ class CodebergCrawler(GiteaCrawler):
 
 class GiteaDotComCrawler(GiteaCrawler):
     """Crawler for Gitea.com."""
+
     def __init__(self, token: str = "", config: CrawlerConfig | None = None, **kwargs):
         super().__init__(
             instance_url="https://gitea.com",

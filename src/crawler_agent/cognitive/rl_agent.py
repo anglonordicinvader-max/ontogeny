@@ -17,6 +17,7 @@ import structlog
 @dataclass
 class State:
     """Current state of the agent."""
+
     context: dict[str, Any] = field(default_factory=dict)
     recent_actions: list[str] = field(default_factory=list)
     recent_rewards: list[float] = field(default_factory=list)
@@ -31,6 +32,7 @@ class State:
 @dataclass
 class Action:
     """An action the agent can take."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     name: str = ""
     action_type: str = ""  # crawl, learn, plan, analyze, etc.
@@ -41,6 +43,7 @@ class Action:
 @dataclass
 class Experience:
     """A recorded experience for learning."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     state: str = ""
     action: str = ""
@@ -91,7 +94,9 @@ class RLAgent:
             Action(name="crawl_deep", action_type="crawl", parameters={"depth": "deep"}),
             Action(name="search", action_type="search"),
             Action(name="learn_focused", action_type="learn", parameters={"mode": "focused"}),
-            Action(name="learn_exploratory", action_type="learn", parameters={"mode": "exploratory"}),
+            Action(
+                name="learn_exploratory", action_type="learn", parameters={"mode": "exploratory"}
+            ),
             Action(name="plan", action_type="plan"),
             Action(name="analyze", action_type="analyze"),
             Action(name="synthesize", action_type="synthesize"),
@@ -197,8 +202,7 @@ class RLAgent:
         """Get action preferences for a state."""
         state_key = state.to_key()
         q_values = [
-            (action, self.q_table[(state_key, action.id)])
-            for action in self.actions.values()
+            (action, self.q_table[(state_key, action.id)]) for action in self.actions.values()
         ]
         q_values.sort(key=lambda x: x[1], reverse=True)
         return q_values
@@ -210,8 +214,7 @@ class RLAgent:
     def _exploit(self, state_key: str) -> Action:
         """Select the best known action."""
         q_values = [
-            (action, self.q_table[(state_key, action.id)])
-            for action in self.actions.values()
+            (action, self.q_table[(state_key, action.id)]) for action in self.actions.values()
         ]
         q_values.sort(key=lambda x: x[1], reverse=True)
 
@@ -230,6 +233,6 @@ class RLAgent:
             f"  Total Reward: {stats['total_reward']:.2f}",
             f"  Exploration Rate: {stats['epsilon']:.2%}",
         ]
-        if stats['best_action']:
+        if stats["best_action"]:
             lines.append(f"  Best Action: {stats['best_action']}")
         return "\n".join(lines)

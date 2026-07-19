@@ -1,12 +1,12 @@
 """Internet Archive crawler (archive.org, Wayback Machine)."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 from datetime import datetime
 
 import httpx
 import structlog
 
-from .base import BaseCrawler, CrawlerConfig, CrawlResult, ContentType
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class InternetArchiveCrawler(BaseCrawler):
@@ -75,8 +75,7 @@ class InternetArchiveCrawler(BaseCrawler):
 
             # Find text/book files
             text_files = [
-                f for f in files
-                if f.get("name", "").endswith((".txt", ".pdf", ".epub", ".djvu"))
+                f for f in files if f.get("name", "").endswith((".txt", ".pdf", ".epub", ".djvu"))
             ]
 
             # Try to get full text if available
@@ -118,7 +117,7 @@ class InternetArchiveCrawler(BaseCrawler):
         # Extract original URL from wayback URL
         # Format: https://web.archive.org/web/{timestamp}/{original_url}
         parts = url.replace("https://web.archive.org/web/", "").split("/", 1)
-        timestamp = parts[0] if len(parts) > 1 else "*"
+        parts[0] if len(parts) > 1 else "*"
         original_url = parts[1] if len(parts) > 1 else parts[0]
 
         try:
@@ -172,7 +171,15 @@ class InternetArchiveCrawler(BaseCrawler):
         """Search Internet Archive using advanced search API."""
         params = {
             "q": query,
-            "fl[]": ["identifier", "title", "description", "mediatype", "creator", "date", "downloads"],
+            "fl[]": [
+                "identifier",
+                "title",
+                "description",
+                "mediatype",
+                "creator",
+                "date",
+                "downloads",
+            ],
             "rows": limit,
             "page": 1,
             "output": "json",
@@ -209,48 +216,34 @@ class InternetArchiveCrawler(BaseCrawler):
         except Exception as e:
             self.logger.warning("ia_search_failed", query=query, error=str(e))
 
-    async def search_books(
-        self, query: str, limit: int = 10
-    ) -> AsyncIterator[CrawlResult]:
+    async def search_books(self, query: str, limit: int = 10) -> AsyncIterator[CrawlResult]:
         """Search for books/text items specifically."""
         async for result in self.search(query, limit=limit, media_type="texts"):
             yield result
 
-    async def search_audio(
-        self, query: str, limit: int = 10
-    ) -> AsyncIterator[CrawlResult]:
+    async def search_audio(self, query: str, limit: int = 10) -> AsyncIterator[CrawlResult]:
         """Search for audio items."""
         async for result in self.search(query, limit=limit, media_type="audio"):
             yield result
 
-    async def search_video(
-        self, query: str, limit: int = 10
-    ) -> AsyncIterator[CrawlResult]:
+    async def search_video(self, query: str, limit: int = 10) -> AsyncIterator[CrawlResult]:
         """Search for video items."""
         async for result in self.search(query, limit=limit, media_type="movies"):
             yield result
 
-    async def search_software(
-        self, query: str, limit: int = 10
-    ) -> AsyncIterator[CrawlResult]:
+    async def search_software(self, query: str, limit: int = 10) -> AsyncIterator[CrawlResult]:
         """Search for software items."""
         async for result in self.search(query, limit=limit, media_type="software"):
             yield result
 
-    async def search_images(
-        self, query: str, limit: int = 10
-    ) -> AsyncIterator[CrawlResult]:
+    async def search_images(self, query: str, limit: int = 10) -> AsyncIterator[CrawlResult]:
         """Search for image items."""
         async for result in self.search(query, limit=limit, media_type="image"):
             yield result
 
-    async def get_wayback_snapshots(
-        self, url: str, limit: int = 10
-    ) -> AsyncIterator[CrawlResult]:
+    async def get_wayback_snapshots(self, url: str, limit: int = 10) -> AsyncIterator[CrawlResult]:
         """Get all Wayback Machine snapshots for a URL."""
-        async for result in self._crawl_wayback(
-            f"https://web.archive.org/web/*/{url}"
-        ):
+        async for result in self._crawl_wayback(f"https://web.archive.org/web/*/{url}"):
             yield result
 
     async def discover_urls(self, seed_url: str) -> AsyncIterator[str]:

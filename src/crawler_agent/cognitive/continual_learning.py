@@ -45,10 +45,10 @@ class ContinualLearner:
         self.logger = structlog.get_logger(component="continual_learning")
 
         self.buffer_size = buffer_size
-        self.experience_buffer: List[Experience] = []
-        self.skills: Dict[str, Skill] = {}
-        self.fisher_information: Dict[str, float] = {}
-        self.old_params: Dict[str, float] = {}
+        self.experience_buffer: list[Experience] = []
+        self.skills: dict[str, Skill] = {}
+        self.fisher_information: dict[str, float] = {}
+        self.old_params: dict[str, float] = {}
 
         self._load()
 
@@ -79,43 +79,62 @@ class ContinualLearner:
 
     def _save(self):
         buffer_file = self.data_dir / "buffer.json"
-        buffer_file.write_text(json.dumps({
-            "buffer": [
-                {"task": e.task, "action": e.action, "outcome": e.outcome,
-                 "reward": e.reward, "importance": e.importance, "timestamp": e.timestamp}
-                for e in self.experience_buffer[-self.buffer_size:]
-            ],
-        }, indent=2))
+        buffer_file.write_text(
+            json.dumps(
+                {
+                    "buffer": [
+                        {
+                            "task": e.task,
+                            "action": e.action,
+                            "outcome": e.outcome,
+                            "reward": e.reward,
+                            "importance": e.importance,
+                            "timestamp": e.timestamp,
+                        }
+                        for e in self.experience_buffer[-self.buffer_size :]
+                    ],
+                },
+                indent=2,
+            )
+        )
 
         skills_file = self.data_dir / "skills.json"
-        skills_file.write_text(json.dumps({
-            "skills": {
-                name: {
-                    "mastery": s.mastery,
-                    "importance": s.importance,
-                    "consolidated": s.consolidated,
-                    "times_practiced": s.times_practiced,
-                }
-                for name, s in self.skills.items()
-            },
-        }, indent=2))
+        skills_file.write_text(
+            json.dumps(
+                {
+                    "skills": {
+                        name: {
+                            "mastery": s.mastery,
+                            "importance": s.importance,
+                            "consolidated": s.consolidated,
+                            "times_practiced": s.times_practiced,
+                        }
+                        for name, s in self.skills.items()
+                    },
+                },
+                indent=2,
+            )
+        )
 
     def store_experience(self, task: str, action: str, outcome: str, reward: float):
         """Store experience with priority based on reward."""
         importance = abs(reward) + 0.1
         exp = Experience(
-            task=task, action=action, outcome=outcome,
-            reward=reward, importance=importance,
+            task=task,
+            action=action,
+            outcome=outcome,
+            reward=reward,
+            importance=importance,
         )
         self.experience_buffer.append(exp)
 
         if len(self.experience_buffer) > self.buffer_size:
             self.experience_buffer.sort(key=lambda e: e.importance, reverse=True)
-            self.experience_buffer = self.experience_buffer[:self.buffer_size]
+            self.experience_buffer = self.experience_buffer[: self.buffer_size]
 
         self._save()
 
-    def sample_replay(self, batch_size: int = 10) -> List[Experience]:
+    def sample_replay(self, batch_size: int = 10) -> list[Experience]:
         """Sample experiences for replay, prioritized by importance."""
         if not self.experience_buffer:
             return []
@@ -123,7 +142,9 @@ class ContinualLearner:
         weights = [e.importance for e in self.experience_buffer]
         total = sum(weights)
         if total == 0:
-            return random.sample(self.experience_buffer, min(batch_size, len(self.experience_buffer)))
+            return random.sample(
+                self.experience_buffer, min(batch_size, len(self.experience_buffer))
+            )
 
         probs = [w / total for w in weights]
         indices = random.choices(range(len(self.experience_buffer)), weights=probs, k=batch_size)
@@ -175,22 +196,24 @@ class ContinualLearner:
 
         if skill.consolidated:
             fisher = self.fisher_information.get(skill_name, 1.0)
-            delta *= (1.0 / (1.0 + fisher))
+            delta *= 1.0 / (1.0 + fisher)
 
         skill.mastery = max(0.0, min(1.0, skill.mastery + delta))
         self._save()
 
-    def get_weak_skills(self, threshold: float = 0.5) -> List[str]:
+    def get_weak_skills(self, threshold: float = 0.5) -> list[str]:
         """Get skills below mastery threshold."""
         return [name for name, skill in self.skills.items() if skill.mastery < threshold]
 
-    def get_consolidated_skills(self) -> List[str]:
+    def get_consolidated_skills(self) -> list[str]:
         """Get all consolidated skills."""
         return [name for name, skill in self.skills.items() if skill.consolidated]
 
     def to_context(self) -> str:
         weak = self.get_weak_skills()
         consolidated = self.get_consolidated_skills()
-        return (f"Continual Learning: {len(self.skills)} skills "
-                f"({len(consolidated)} consolidated, {len(weak)} weak), "
-                f"buffer: {len(self.experience_buffer)} experiences")
+        return (
+            f"Continual Learning: {len(self.skills)} skills "
+            f"({len(consolidated)} consolidated, {len(weak)} weak), "
+            f"buffer: {len(self.experience_buffer)} experiences"
+        )

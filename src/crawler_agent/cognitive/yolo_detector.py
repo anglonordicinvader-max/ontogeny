@@ -21,15 +21,15 @@ class DetectedObject:
     class_name: str
     class_id: int
     confidence: float
-    bbox: List[float]  # [x1, y1, x2, y2] normalized 0-1
-    center: List[float]  # [cx, cy] normalized 0-1
+    bbox: list[float]  # [x1, y1, x2, y2] normalized 0-1
+    center: list[float]  # [cx, cy] normalized 0-1
     area: float  # normalized area
     depth: float = -1.0  # meters if depth available
-    world_position: List[float] = field(default_factory=list)  # 3D position if available
+    world_position: list[float] = field(default_factory=list)  # 3D position if available
     tracking_id: int = -1
     frame_id: int = 0
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "class": self.class_name,
@@ -46,65 +46,153 @@ class DetectedObject:
 
 @dataclass
 class DetectionResult:
-    objects: List[DetectedObject]
+    objects: list[DetectedObject]
     frame_id: int
     inference_time_ms: float
-    image_size: Tuple[int, int]
+    image_size: tuple[int, int]
     model_name: str = "yolov8s"
 
     @property
     def count(self) -> int:
         return len(self.objects)
 
-    def filter_by_class(self, class_name: str) -> List[DetectedObject]:
+    def filter_by_class(self, class_name: str) -> list[DetectedObject]:
         return [obj for obj in self.objects if obj.class_name == class_name]
 
-    def filter_by_confidence(self, min_confidence: float) -> List[DetectedObject]:
+    def filter_by_confidence(self, min_confidence: float) -> list[DetectedObject]:
         return [obj for obj in self.objects if obj.confidence >= min_confidence]
 
-    def get_closest(self) -> Optional[DetectedObject]:
+    def get_closest(self) -> DetectedObject | None:
         if not self.objects:
             return None
-        return min(self.objects, key=lambda o: o.depth if o.depth > 0 else float('inf'))
+        return min(self.objects, key=lambda o: o.depth if o.depth > 0 else float("inf"))
 
-    def get_by_tracking_id(self, tracking_id: int) -> List[DetectedObject]:
+    def get_by_tracking_id(self, tracking_id: int) -> list[DetectedObject]:
         return [obj for obj in self.objects if obj.tracking_id == tracking_id]
 
 
 # COCO dataset classes (80 objects)
 COCO_CLASSES = {
-    0: "person", 1: "bicycle", 2: "car", 3: "motorcycle", 4: "airplane",
-    5: "bus", 6: "train", 7: "truck", 8: "boat", 9: "traffic light",
-    10: "fire hydrant", 11: "stop sign", 12: "parking meter", 13: "bench",
-    14: "bird", 15: "cat", 16: "dog", 17: "horse", 18: "sheep",
-    19: "cow", 20: "elephant", 21: "bear", 22: "zebra", 23: "giraffe",
-    24: "backpack", 25: "umbrella", 26: "handbag", 27: "tie", 28: "suitcase",
-    29: "frisbee", 30: "skis", 31: "snowboard", 32: "sports ball", 33: "kite",
-    34: "baseball bat", 35: "baseball glove", 36: "skateboard", 37: "surfboard",
-    38: "tennis racket", 39: "bottle", 40: "wine glass", 41: "cup", 42: "fork",
-    43: "knife", 44: "spoon", 45: "bowl", 46: "banana", 47: "apple",
-    48: "sandwich", 49: "orange", 50: "broccoli", 51: "carrot", 52: "hot dog",
-    53: "pizza", 54: "donut", 55: "cake", 56: "chair", 57: "couch",
-    58: "potted plant", 59: "bed", 60: "dining table", 61: "toilet",
-    62: "tv", 63: "laptop", 64: "mouse", 65: "remote", 66: "keyboard",
-    67: "cell phone", 68: "microwave", 69: "oven", 70: "toaster",
-    71: "sink", 72: "refrigerator", 73: "book", 74: "clock", 75: "vase",
-    76: "scissors", 77: "teddy bear", 78: "hair drier", 79: "toothbrush",
+    0: "person",
+    1: "bicycle",
+    2: "car",
+    3: "motorcycle",
+    4: "airplane",
+    5: "bus",
+    6: "train",
+    7: "truck",
+    8: "boat",
+    9: "traffic light",
+    10: "fire hydrant",
+    11: "stop sign",
+    12: "parking meter",
+    13: "bench",
+    14: "bird",
+    15: "cat",
+    16: "dog",
+    17: "horse",
+    18: "sheep",
+    19: "cow",
+    20: "elephant",
+    21: "bear",
+    22: "zebra",
+    23: "giraffe",
+    24: "backpack",
+    25: "umbrella",
+    26: "handbag",
+    27: "tie",
+    28: "suitcase",
+    29: "frisbee",
+    30: "skis",
+    31: "snowboard",
+    32: "sports ball",
+    33: "kite",
+    34: "baseball bat",
+    35: "baseball glove",
+    36: "skateboard",
+    37: "surfboard",
+    38: "tennis racket",
+    39: "bottle",
+    40: "wine glass",
+    41: "cup",
+    42: "fork",
+    43: "knife",
+    44: "spoon",
+    45: "bowl",
+    46: "banana",
+    47: "apple",
+    48: "sandwich",
+    49: "orange",
+    50: "broccoli",
+    51: "carrot",
+    52: "hot dog",
+    53: "pizza",
+    54: "donut",
+    55: "cake",
+    56: "chair",
+    57: "couch",
+    58: "potted plant",
+    59: "bed",
+    60: "dining table",
+    61: "toilet",
+    62: "tv",
+    63: "laptop",
+    64: "mouse",
+    65: "remote",
+    66: "keyboard",
+    67: "cell phone",
+    68: "microwave",
+    69: "oven",
+    70: "toaster",
+    71: "sink",
+    72: "refrigerator",
+    73: "book",
+    74: "clock",
+    75: "vase",
+    76: "scissors",
+    77: "teddy bear",
+    78: "hair drier",
+    79: "toothbrush",
 }
 
 # Robot-relevant classes for navigation and manipulation
-NAVIGATION_CLASSES = ["person", "car", "truck", "bus", "bicycle", "motorcycle",
-                      "traffic light", "stop sign", "bench", "chair"]
-MANIPULATION_CLASSES = ["cup", "bottle", "knife", "fork", "spoon", "bowl",
-                        "apple", "banana", "sandwich", "pizza"]
+NAVIGATION_CLASSES = [
+    "person",
+    "car",
+    "truck",
+    "bus",
+    "bicycle",
+    "motorcycle",
+    "traffic light",
+    "stop sign",
+    "bench",
+    "chair",
+]
+MANIPULATION_CLASSES = [
+    "cup",
+    "bottle",
+    "knife",
+    "fork",
+    "spoon",
+    "bowl",
+    "apple",
+    "banana",
+    "sandwich",
+    "pizza",
+]
 DOOR_CLASSES = ["door"]  # Custom trained would add this
 
 
 class YOLODetector:
     """YOLOv8 object detection for robotics."""
 
-    def __init__(self, model_size: str = "s", confidence: float = 0.5,
-                 iou_threshold: float = 0.45, device: str = "cpu"):
+    def __init__(
+        self,
+        model_size: str = "s",
+        confidence: float = 0.5,
+        iou_threshold: float = 0.45,
+        device: str = "cpu",
+    ):
         """
         Initialize YOLOv8 detector.
 
@@ -120,7 +208,7 @@ class YOLODetector:
         self.device = device
         self.model = None
         self.frame_counter = 0
-        self.tracker: Dict[int, DetectedObject] = {}
+        self.tracker: dict[int, DetectedObject] = {}
         self.next_track_id = 0
         self.logger = structlog.get_logger(component="yolo_detector")
 
@@ -130,19 +218,24 @@ class YOLODetector:
         """Load YOLOv8 model."""
         try:
             from ultralytics import YOLO
+
             model_name = f"yolov8{self.model_size}.pt"
             self.model = YOLO(model_name)
             self.logger.info("yolo_loaded", model=model_name, device=self.device)
         except ImportError:
-            self.logger.warning("ultralytics_not_installed",
-                              hint="pip install ultralytics")
+            self.logger.warning("ultralytics_not_installed", hint="pip install ultralytics")
             self.model = None
         except Exception as e:
             self.logger.warning("yolo_load_failed", error=str(e))
             self.model = None
 
-    def detect(self, image, depth_map: List[List[float]] = None,
-               camera_fov: float = 60.0, camera_resolution: Tuple[int, int] = (640, 480)) -> DetectionResult:
+    def detect(
+        self,
+        image,
+        depth_map: list[list[float]] = None,
+        camera_fov: float = 60.0,
+        camera_resolution: tuple[int, int] = (640, 480),
+    ) -> DetectionResult:
         """
         Detect objects in image.
 
@@ -154,6 +247,7 @@ class YOLODetector:
         """
         self.frame_counter += 1
         import time
+
         start_time = time.time()
 
         if self.model is None:
@@ -176,10 +270,13 @@ class YOLODetector:
                     conf = float(box.conf[0])
                     x1, y1, x2, y2 = box.xyxy[0].tolist()
 
-                    bbox_norm = [x1 / camera_resolution[0], y1 / camera_resolution[1],
-                                 x2 / camera_resolution[0], y2 / camera_resolution[1]]
-                    center = [(bbox_norm[0] + bbox_norm[2]) / 2,
-                              (bbox_norm[1] + bbox_norm[3]) / 2]
+                    bbox_norm = [
+                        x1 / camera_resolution[0],
+                        y1 / camera_resolution[1],
+                        x2 / camera_resolution[0],
+                        y2 / camera_resolution[1],
+                    ]
+                    center = [(bbox_norm[0] + bbox_norm[2]) / 2, (bbox_norm[1] + bbox_norm[3]) / 2]
                     area = (bbox_norm[2] - bbox_norm[0]) * (bbox_norm[3] - bbox_norm[1])
 
                     depth = -1.0
@@ -232,6 +329,7 @@ class YOLODetector:
         """Simulate detection when model not available."""
         import random
         import time
+
         start_time = time.time()
 
         objects = []
@@ -281,7 +379,7 @@ class YOLODetector:
             model_name="simulated",
         )
 
-    def _assign_track(self, center: List[float], class_id: int, threshold: float = 0.1) -> int:
+    def _assign_track(self, center: list[float], class_id: int, threshold: float = 0.1) -> int:
         """Simple IoU-based tracking."""
         best_id = -1
         best_iou = threshold
@@ -303,30 +401,39 @@ class YOLODetector:
 
         return best_id
 
-    def detect_persons(self, result: DetectionResult) -> List[DetectedObject]:
+    def detect_persons(self, result: DetectionResult) -> list[DetectedObject]:
         """Get all detected persons."""
         return result.filter_by_class("person")
 
-    def detect_doors(self, result: DetectionResult) -> List[DetectedObject]:
+    def detect_doors(self, result: DetectionResult) -> list[DetectedObject]:
         """Get door-like objects (would need custom model for real doors)."""
         return []  # COCO doesn't have door class
 
-    def detect_tools(self, result: DetectionResult) -> List[DetectedObject]:
+    def detect_tools(self, result: DetectionResult) -> list[DetectedObject]:
         """Get tool-like objects."""
         tool_classes = ["knife", "scissors", "remote", "cell phone", "laptop"]
         return [obj for obj in result.objects if obj.class_name in tool_classes]
 
-    def get_closest_person(self, result: DetectionResult) -> Optional[DetectedObject]:
+    def get_closest_person(self, result: DetectionResult) -> DetectedObject | None:
         """Get closest person for social navigation."""
         persons = self.detect_persons(result)
         if not persons:
             return None
-        return min(persons, key=lambda p: p.depth if p.depth > 0 else float('inf'))
+        return min(persons, key=lambda p: p.depth if p.depth > 0 else float("inf"))
 
-    def get_navigation_obstacles(self, result: DetectionResult) -> List[DetectedObject]:
+    def get_navigation_obstacles(self, result: DetectionResult) -> list[DetectedObject]:
         """Get objects that are navigation obstacles."""
-        obstacle_classes = ["person", "car", "truck", "bus", "bicycle", "motorcycle",
-                          "chair", "bench", "potted plant"]
+        obstacle_classes = [
+            "person",
+            "car",
+            "truck",
+            "bus",
+            "bicycle",
+            "motorcycle",
+            "chair",
+            "bench",
+            "potted plant",
+        ]
         return [obj for obj in result.objects if obj.class_name in obstacle_classes]
 
     def to_context(self) -> str:

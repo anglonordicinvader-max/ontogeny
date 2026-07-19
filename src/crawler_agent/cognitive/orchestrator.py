@@ -4,7 +4,7 @@ import asyncio
 import os
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -12,103 +12,143 @@ import structlog
 
 from ..config.settings import load_settings
 from ..crawlers import (
-    # Code Hosting
-    GitHubCrawler, GitLabCrawler, BitbucketCrawler,
-    CodebergCrawler, GiteaDotComCrawler, SourceForgeCrawler,
-    LaunchpadCrawler, SavannahCrawler, ApacheCrawler, PagureCrawler,
-    # Additional
-    GitHubCodeSearchCrawler, PapersWithCodeCrawler, HuggingFaceHubCrawler, GitHubTrendingCrawler,
-    # AI/ML
-    HuggingFaceCrawler, PastebinCrawler,
+    ApacheCrawler,
     # Academic
-    ArxivCrawler, SemanticScholarCrawler,
-    # Q&A/Community
-    StackOverflowCrawler, RedditCrawler, HackerNewsCrawler,
-    # Documentation
-    RSSCrawler, WikipediaCrawler,
+    ArxivCrawler,
+    BitbucketCrawler,
+    CodebergCrawler,
+    CratesCrawler,
+    CrawlerConfig,
+    # Base
+    CrawlResult,
     # Messaging
-    DiscordCrawler, SlackCrawler,
-    # Productivity
-    NotionCrawler, JiraCrawler,
-    # Web
-    WebScraperCrawler,
-    # Package Registries
-    PyPICrawler, NpmCrawler, CratesCrawler,
-    GoDevCrawler, MavenCrawler, NugetCrawler, RubyGemsCrawler,
+    DiscordCrawler,
+    GiteaDotComCrawler,
+    # Additional
+    GitHubCodeSearchCrawler,
+    # Code Hosting
+    GitHubCrawler,
+    GitHubTrendingCrawler,
+    GitLabCrawler,
+    GoDevCrawler,
+    HackerNewsCrawler,
+    # AI/ML
+    HuggingFaceCrawler,
+    HuggingFaceHubCrawler,
     # Archives
     InternetArchiveCrawler,
-    # Base
-    CrawlResult, CrawlerConfig,
+    JiraCrawler,
+    LaunchpadCrawler,
+    MavenCrawler,
+    # Productivity
+    NotionCrawler,
+    NpmCrawler,
+    NugetCrawler,
+    PagureCrawler,
+    PapersWithCodeCrawler,
+    PastebinCrawler,
+    # Package Registries
+    PyPICrawler,
+    RedditCrawler,
+    # Documentation
+    RSSCrawler,
+    RubyGemsCrawler,
+    SavannahCrawler,
+    SemanticScholarCrawler,
+    SlackCrawler,
+    SourceForgeCrawler,
+    # Q&A/Community
+    StackOverflowCrawler,
+    # Web
+    WebScraperCrawler,
+    WikipediaCrawler,
 )
-from ..storage import Database, VectorStore, DockerManager, CrawlerWorkspace, CodeSandbox
-from ..processing import LLMProcessor, EmbeddingGenerator
+from ..processing import EmbeddingGenerator, LLMProcessor
+from ..storage import CodeSandbox, CrawlerWorkspace, Database, DockerManager, VectorStore
 from ..utils import ProxyPool, RotatingProxyManager
+from .goals import Goal, GoalManager, GoalPriority, GoalSource
 from .memory import MemorySystem
 from .metacognition import MetaCognition, ReasoningTrace
-from .goals import GoalManager, Goal, GoalSource, GoalPriority
-from .self_modify import SelfModifier, Modification
-from .recursive_modify import RecursiveSelfModifier, RecursiveModification
-from .planning import Planner, Plan, PlanStep, PlanStatus, StepStatus
-from .scheduler import AdaptiveScheduler, CrawlOrchestrator, CrawlIntensity
+from .planning import Plan, Planner, PlanStatus, PlanStep, StepStatus
+from .recursive_modify import RecursiveModification, RecursiveSelfModifier
+from .scheduler import AdaptiveScheduler, CrawlIntensity, CrawlOrchestrator
+from .self_modify import Modification, SelfModifier
+
 
 # Lazy import to avoid circular dependency
 def _get_learning():
     from .learning import FocusedLearner, LearningMode
+
     return FocusedLearner, LearningMode
-from .knowledge_graph import KnowledgeGraph
-from .causal_reasoning import CausalReasoner
-from .skill_composition import SkillComposer
-from .uncertainty import UncertaintyTracker
-from .simulator import InternalSimulator, SimulationType
-from .backend import CognitiveBackend, LLMBackend, HybridBackend, PatternBackend
-from .pattern_learner import PatternLearner
-from .rl_agent import RLAgent, State as RLState
-from .curiosity import CuriosityEngine
-from .world_model import BayesianWorldModel
-from .meta_learner import MetaLearner
-from .sleep import SleepConsolidator
-from .attention import AttentionMechanism
-from .emotional import EmotionalProcessor
-from .transfer import TransferLearner
-from .benchmark import BenchmarkHarness, create_benchmark_harness
-from .patch_verifier import PatchVerifier, TestGenerator
-from .skill_library import SkillLibrary, create_skill_library
-from .distillation import KnowledgeDistiller, create_knowledge_distiller
-from .ci_validator import GitHubActionsValidator, LocalCIValidator, CompositeValidator
-from .outcome_verifier import CompositeOutcomeVerifier, create_outcome_verifier, VerificationSpec, VerificationStatus
-from .blender_sandbox import BlenderSandbox, create_blender_sandbox, SimulationSpec, SimulationType
-from .mcts_planner import MCTSPlanner, create_mcts_planner, MCTSConfig
-from .tools import ToolManager, ToolResult
-from .sim_library import SimulationLibrary, SimBackend
-from .self_audit import SelfAuditor
-from .multimodal import MultimodalProcessor
+
+
+from ..agents import MultiAgentOrchestrator
+from .adversarial_trainer import AdversarialTrainer
 from .agent_variety import AgentPopulation
-from .skill_export import SkillExporter
-from .world_selector import WorldSelector, SelectionCriteria
-from .sensor_sim import SensorArray
+from .architecture_modifier import ArchitectureModifier
+from .attention import AttentionMechanism
+from .backend import CognitiveBackend, HybridBackend, LLMBackend, PatternBackend
+from .benchmark import BenchmarkHarness, create_benchmark_harness
+from .blender_sandbox import BlenderSandbox, SimulationSpec, create_blender_sandbox
+from .blender_sandbox import SimulationType as BlenderSimulationType
+from .causal_reasoning import CausalReasoner
+from .ci_validator import CompositeValidator, GitHubActionsValidator, LocalCIValidator
+from .contrastive_trainer import ContrastiveTrainer
+from .curiosity import CuriosityEngine
+from .custom_model_manager import CustomModelManager
+from .distillation import KnowledgeDistiller, create_knowledge_distiller
+from .emergent_curriculum import EmergentCurriculum
+from .emotional import EmotionalProcessor
+from .evo_architecture import EvoArchitecture
 from .failure_injection import FailureInjector
-from .navigation import ObstacleAvoidance, PathPlanner, SLAMSimulation, WaypointFollower
-from .weather import WeatherSystem
+from .knowledge_graph import KnowledgeGraph
 from .locomotion import LocomotionController
 from .manipulation_tasks import ManipulationController
-from .social_sim import SocialSimulator
-from .self_reflection import SelfReflectionEngine
-from .evo_architecture import EvoArchitecture
-from .modification_memory import ModificationMemory
-from .model_trainer import ModelTrainer
-from .custom_model_manager import CustomModelManager
-from .model_evaluation import ModelEvaluator, QualityGate, RollbackManager, ABTestRunner
-from .production import PerformanceMonitor, RetrainingTrigger, CircuitBreaker, GracefulDegradation, MetricType
-from .self_training import SelfTrainingSynthesizer
-from .contrastive_trainer import ContrastiveTrainer
+from .mcts_planner import MCTSConfig, MCTSPlanner, create_mcts_planner
+from .meta_learner import MetaLearner
+from .model_evaluation import ABTestRunner, ModelEvaluator, QualityGate, RollbackManager
 from .model_population import ModelPopulation
-from .emergent_curriculum import EmergentCurriculum
-from .adversarial_trainer import AdversarialTrainer
-from .architecture_modifier import ArchitectureModifier
-from ..agents import MultiAgentOrchestrator
+from .model_trainer import ModelTrainer
+from .modification_memory import ModificationMemory
+from .multimodal import MultimodalProcessor
+from .navigation import ObstacleAvoidance, PathPlanner, SLAMSimulation, WaypointFollower
+from .outcome_verifier import (
+    CompositeOutcomeVerifier,
+    VerificationSpec,
+    VerificationStatus,
+    create_outcome_verifier,
+)
+from .patch_verifier import PatchVerifier, TestGenerator
+from .pattern_learner import PatternLearner
+from .production import (
+    CircuitBreaker,
+    GracefulDegradation,
+    MetricType,
+    PerformanceMonitor,
+    RetrainingTrigger,
+)
+from .rl_agent import RLAgent
+from .rl_agent import State as RLState
+from .self_audit import SelfAuditor
+from .self_reflection import SelfReflectionEngine
+from .self_training import SelfTrainingSynthesizer
+from .sensor_sim import SensorArray
+from .sim_library import SimBackend, SimulationLibrary
+from .simulator import InternalSimulator, SimulationType
+from .skill_composition import SkillComposer
+from .skill_export import SkillExporter
+from .skill_library import SkillLibrary, create_skill_library
+from .sleep import SleepConsolidator
+from .social_sim import SocialSimulator
+from .tools import ToolManager, ToolResult
+from .transfer import TransferLearner
+from .uncertainty import UncertaintyTracker
+from .weather import WeatherSystem
+from .world_model import BayesianWorldModel
+from .world_selector import SelectionCriteria, WorldSelector
 
 
-class AgentState(str, Enum):
+class AgentState(StrEnum):
     IDLE = "idle"
     THINKING = "thinking"
     PLANNING = "planning"
@@ -167,7 +207,7 @@ class CognitiveOrchestrator:
 
         # Crawlers
         self.crawlers: dict[str, Any] = {}
-        
+
         # Initialize proxy management with auto-refresh
         proxy_settings = self.settings.proxy
         providers = [
@@ -182,7 +222,7 @@ class CognitiveOrchestrator:
             for p in proxy_settings.providers
             if p.name and p.api_key
         ]
-        
+
         self.proxy_manager = RotatingProxyManager(
             proxies=proxy_settings.proxies,
             proxy_file=proxy_settings.proxy_file or None,
@@ -302,6 +342,7 @@ class CognitiveOrchestrator:
             )
             # Quick probe to confirm maldoror exists in Ollama
             import httpx
+
             resp = await httpx.AsyncClient().get(
                 f"{self.settings.llm.api_base or 'http://localhost:11434'}/api/tags",
                 timeout=5.0,
@@ -376,7 +417,7 @@ class CognitiveOrchestrator:
         self.multi_agent.set_crawlers(self.crawlers)
         if self.code_sandbox:
             self.multi_agent.set_sandbox(self.code_sandbox)
-        
+
         # Initialize learning system
         FocusedLearner, _ = _get_learning()
         self.learner = FocusedLearner(
@@ -418,20 +459,24 @@ class CognitiveOrchestrator:
         )
         self.skill_library = await create_skill_library(self.backend)
         self.knowledge_distiller = KnowledgeDistiller(self.backend)
-        self.ci_validator = CompositeValidator([
-            LocalCIValidator(self.code_sandbox) if self.code_sandbox else None,
-            GitHubActionsValidator(
-                repo_owner=os.environ.get("GITHUB_OWNER", ""),
-                repo_name=os.environ.get("GITHUB_REPO", ""),
-                token=os.environ.get("GITHUB_TOKEN"),
-            ) if os.environ.get("GITHUB_TOKEN") else None,
-        ])
+        self.ci_validator = CompositeValidator(
+            [
+                LocalCIValidator(self.code_sandbox) if self.code_sandbox else None,
+                GitHubActionsValidator(
+                    repo_owner=os.environ.get("GITHUB_OWNER", ""),
+                    repo_name=os.environ.get("GITHUB_REPO", ""),
+                    token=os.environ.get("GITHUB_TOKEN"),
+                )
+                if os.environ.get("GITHUB_TOKEN")
+                else None,
+            ]
+        )
 
-# New: Verification, Grounding & Planning
+        # New: Verification, Grounding & Planning
         self.outcome_verifier = await create_outcome_verifier(
             code_sandbox=self.code_sandbox,
             blender_sandbox=None,  # Will initialize after blender_sandbox
-            backend=self.backend
+            backend=self.backend,
         )
         try:
             self.blender_sandbox = await create_blender_sandbox()
@@ -439,7 +484,7 @@ class CognitiveOrchestrator:
             self.outcome_verifier = await create_outcome_verifier(
                 code_sandbox=self.code_sandbox,
                 blender_sandbox=self.blender_sandbox,
-                backend=self.backend
+                backend=self.backend,
             )
             self.logger.info("blender_sandbox_initialized")
         except Exception as e:
@@ -448,9 +493,17 @@ class CognitiveOrchestrator:
         self.mcts_planner = await create_mcts_planner(
             backend=self.backend,
             bayesian_model=self.world_model,
-            available_actions=list(self.crawlers.keys()) + [
-                "think", "search", "execute", "blender_simulate", "blender_render",
-                "github_api", "arxiv_api", "ros2_publish", "ros2_subscribe",
+            available_actions=list(self.crawlers.keys())
+            + [
+                "think",
+                "search",
+                "execute",
+                "blender_simulate",
+                "blender_render",
+                "github_api",
+                "arxiv_api",
+                "ros2_publish",
+                "ros2_subscribe",
             ],
         )
 
@@ -570,13 +623,14 @@ class CognitiveOrchestrator:
         # Start proxy auto-refresh
         if self.settings.proxy.auto_refresh:
             await self.proxy_manager.start()
-        
+
         # Verify proxy availability
         if self.settings.proxy.required and not self.proxy_pool._proxies:
             self.logger.warning("no_proxies_initial, attempting_fetch")
             # Try to fetch some free proxies
             if self.settings.proxy.fetch_free_proxies:
                 from ..utils.proxy_fetcher import FreeProxyFetcher
+
                 fetcher = FreeProxyFetcher()
                 try:
                     proxies = await fetcher.fetch_all(limit=20)
@@ -585,7 +639,7 @@ class CognitiveOrchestrator:
                     self.logger.info("free_proxies_fetched", count=len(proxies))
                 except Exception as e:
                     self.logger.error("initial_proxy_fetch_failed", error=str(e))
-            
+
             if self.settings.proxy.required and not self.proxy_pool._proxies:
                 self.logger.error("no_proxies_configured")
                 raise RuntimeError(
@@ -613,13 +667,19 @@ class CognitiveOrchestrator:
 
         crawler_map = {
             # Code Hosting
-            "github": lambda: GitHubCrawler(
-                token=self.settings.platform.github_token,
-                config=config, proxy_pool=self.proxy_pool,
-            ) if self.settings.platform.github_token else None,
+            "github": lambda: (
+                GitHubCrawler(
+                    token=self.settings.platform.github_token,
+                    config=config,
+                    proxy_pool=self.proxy_pool,
+                )
+                if self.settings.platform.github_token
+                else None
+            ),
             "gitlab": lambda: GitLabCrawler(
                 token=self.settings.platform.github_token,
-                config=config, proxy_pool=self.proxy_pool,
+                config=config,
+                proxy_pool=self.proxy_pool,
             ),
             "bitbucket": lambda: BitbucketCrawler(config=config, proxy_pool=self.proxy_pool),
             "codeberg": lambda: CodebergCrawler(config=config, proxy_pool=self.proxy_pool),
@@ -629,44 +689,53 @@ class CognitiveOrchestrator:
             "savannah": lambda: SavannahCrawler(config=config, proxy_pool=self.proxy_pool),
             "apache": lambda: ApacheCrawler(config=config, proxy_pool=self.proxy_pool),
             "pagure": lambda: PagureCrawler(config=config, proxy_pool=self.proxy_pool),
-            
             # AI/ML
-            "huggingface": lambda: HuggingFaceCrawler(
-                token=self.settings.platform.huggingface_token,
-                config=config, proxy_pool=self.proxy_pool,
-            ) if self.settings.platform.huggingface_token else None,
+            "huggingface": lambda: (
+                HuggingFaceCrawler(
+                    token=self.settings.platform.huggingface_token,
+                    config=config,
+                    proxy_pool=self.proxy_pool,
+                )
+                if self.settings.platform.huggingface_token
+                else None
+            ),
             "pastebin": lambda: PastebinCrawler(
                 api_key=self.settings.platform.pastebin_api_key,
-                config=config, proxy_pool=self.proxy_pool,
+                config=config,
+                proxy_pool=self.proxy_pool,
             ),
-            
             # Academic
             "arxiv": lambda: ArxivCrawler(config=config, proxy_pool=self.proxy_pool),
-            "semantic_scholar": lambda: SemanticScholarCrawler(
-                api_key=self.settings.platform.semantic_scholar_api_key,
-                config=config, proxy_pool=self.proxy_pool,
-            ) if self.settings.platform.semantic_scholar_api_key else None,
-            
+            "semantic_scholar": lambda: (
+                SemanticScholarCrawler(
+                    api_key=self.settings.platform.semantic_scholar_api_key,
+                    config=config,
+                    proxy_pool=self.proxy_pool,
+                )
+                if self.settings.platform.semantic_scholar_api_key
+                else None
+            ),
             # Q&A/Community
-            "stackoverflow": lambda: StackOverflowCrawler(config=config, proxy_pool=self.proxy_pool),
+            "stackoverflow": lambda: StackOverflowCrawler(
+                config=config, proxy_pool=self.proxy_pool
+            ),
             "reddit": lambda: RedditCrawler(config=config, proxy_pool=self.proxy_pool),
             "hackernews": lambda: HackerNewsCrawler(config=config, proxy_pool=self.proxy_pool),
-            
             # Documentation
             "rss": lambda: RSSCrawler(config=config, proxy_pool=self.proxy_pool),
             "wikipedia": lambda: WikipediaCrawler(config=config, proxy_pool=self.proxy_pool),
-            
             # Messaging
             "discord": lambda: DiscordCrawler(config=config, proxy_pool=self.proxy_pool),
             "slack": lambda: SlackCrawler(config=config, proxy_pool=self.proxy_pool),
-            
             # Productivity
             "notion": lambda: NotionCrawler(config=config, proxy_pool=self.proxy_pool),
-            "jira": lambda: JiraCrawler(base_url="https://your-domain.atlassian.net", config=config, proxy_pool=self.proxy_pool),
-            
+            "jira": lambda: JiraCrawler(
+                base_url="https://your-domain.atlassian.net",
+                config=config,
+                proxy_pool=self.proxy_pool,
+            ),
             # Web
             "webscraper": lambda: WebScraperCrawler(config=config, proxy_pool=self.proxy_pool),
-            
             # Package Registries
             "pypi": lambda: PyPICrawler(config=config, proxy_pool=self.proxy_pool),
             "npm": lambda: NpmCrawler(config=config, proxy_pool=self.proxy_pool),
@@ -676,25 +745,39 @@ class CognitiveOrchestrator:
             "nuget": lambda: NugetCrawler(config=config, proxy_pool=self.proxy_pool),
             "rubygems": lambda: RubyGemsCrawler(config=config, proxy_pool=self.proxy_pool),
             # Archives
-            "internetarchive": lambda: InternetArchiveCrawler(config=config, proxy_pool=self.proxy_pool),
+            "internetarchive": lambda: InternetArchiveCrawler(
+                config=config, proxy_pool=self.proxy_pool
+            ),
             # Additional
-            "github_code": lambda: GitHubCodeSearchCrawler(
-                name="github_code",
-                token=self.settings.platform.github_token,
-                config=config, proxy_pool=self.proxy_pool,
-            ) if self.settings.platform.github_token else None,
+            "github_code": lambda: (
+                GitHubCodeSearchCrawler(
+                    name="github_code",
+                    token=self.settings.platform.github_token,
+                    config=config,
+                    proxy_pool=self.proxy_pool,
+                )
+                if self.settings.platform.github_token
+                else None
+            ),
             "papers_with_code": lambda: PapersWithCodeCrawler(
                 name="papers_with_code",
-                config=config, proxy_pool=self.proxy_pool,
+                config=config,
+                proxy_pool=self.proxy_pool,
             ),
-            "hf_hub": lambda: HuggingFaceHubCrawler(
-                name="hf_hub",
-                token=self.settings.platform.huggingface_token,
-                config=config, proxy_pool=self.proxy_pool,
-            ) if self.settings.platform.huggingface_token else None,
+            "hf_hub": lambda: (
+                HuggingFaceHubCrawler(
+                    name="hf_hub",
+                    token=self.settings.platform.huggingface_token,
+                    config=config,
+                    proxy_pool=self.proxy_pool,
+                )
+                if self.settings.platform.huggingface_token
+                else None
+            ),
             "github_trending": lambda: GitHubTrendingCrawler(
                 name="github_trending",
-                config=config, proxy_pool=self.proxy_pool,
+                config=config,
+                proxy_pool=self.proxy_pool,
             ),
         }
 
@@ -742,17 +825,23 @@ class CognitiveOrchestrator:
 
                 # 4. Create or continue plan
                 self.state = AgentState.PLANNING
-                plan_done = self.current_plan and all(
-                    s.status in (StepStatus.COMPLETED, StepStatus.FAILED, StepStatus.SKIPPED)
-                    for s in self.current_plan.steps
-                ) if self.current_plan and self.current_plan.steps else False
+                plan_done = (
+                    self.current_plan
+                    and all(
+                        s.status in (StepStatus.COMPLETED, StepStatus.FAILED, StepStatus.SKIPPED)
+                        for s in self.current_plan.steps
+                    )
+                    if self.current_plan and self.current_plan.steps
+                    else False
+                )
                 if not self.current_plan or self.current_plan.goal_id != goal.id or plan_done:
                     context = await self.memory.get_context_window()
                     self.current_plan = await self.planner.create_plan(
                         goal_id=goal.id,
                         goal_description=goal.description,
                         context=context,
-                        available_actions=list(self.crawlers.keys()) + ["think", "search", "execute"],
+                        available_actions=list(self.crawlers.keys())
+                        + ["think", "search", "execute"],
                     )
 
                     if self.current_plan.steps:
@@ -794,11 +883,13 @@ class CognitiveOrchestrator:
                 if step:
                     step.status = StepStatus.EXECUTING
                     step_result = await self._execute_step(step, goal)
-                    result["actions"].append({
-                        "step": step.description,
-                        "action": step.action,
-                        "success": step_result.get("success", False),
-                    })
+                    result["actions"].append(
+                        {
+                            "step": step.description,
+                            "action": step.action,
+                            "success": step_result.get("success", False),
+                        }
+                    )
 
                     # 6. Meta-cognitive evaluation
                     self.state = AgentState.THINKING
@@ -859,14 +950,20 @@ class CognitiveOrchestrator:
                                 pass
 
                     # 11. Update progress
-                    completed = sum(1 for s in self.current_plan.steps if s.status == StepStatus.COMPLETED)
-                    progress = completed / len(self.current_plan.steps) if self.current_plan.steps else 0
+                    completed = sum(
+                        1 for s in self.current_plan.steps if s.status == StepStatus.COMPLETED
+                    )
+                    progress = (
+                        completed / len(self.current_plan.steps) if self.current_plan.steps else 0
+                    )
                     await self.goals.update_progress(goal.id, progress)
 
-                    result["goals_progress"].append({
-                        "goal": goal.description,
-                        "progress": progress,
-                    })
+                    result["goals_progress"].append(
+                        {
+                            "goal": goal.description,
+                            "progress": progress,
+                        }
+                    )
 
                     # 12. Check if plan needs replanning
                     if not step_result.get("success") and self.current_plan:
@@ -906,7 +1003,9 @@ class CognitiveOrchestrator:
                             novelty=min(1.0, novelty_bonus),
                         )
                         next_rl_state = RLState(context={"progress": progress})
-                        await self.rl_agent.record_outcome(rl_state, rl_action, reward, next_rl_state)
+                        await self.rl_agent.record_outcome(
+                            rl_state, rl_action, reward, next_rl_state
+                        )
                         result["rl_reward"] = reward
 
                     # 15. Curiosity and novelty detection
@@ -947,11 +1046,17 @@ class CognitiveOrchestrator:
                 try:
                     recent_errors = [
                         {"module": e.get("module", "unknown"), "error": e.get("error", "")}
-                        for e in self.execution_log[-20:] if not e.get("actions", [{}])[0].get("success", True)
+                        for e in self.execution_log[-20:]
+                        if not e.get("actions", [{}])[0].get("success", True)
                     ]
                     perf_metrics = {
                         "module_success_rates": {
-                            "orchestrator": sum(1 for e in self.execution_log[-20:] if e.get("actions", [{}])[0].get("success", True)) / max(len(self.execution_log[-20:]), 1),
+                            "orchestrator": sum(
+                                1
+                                for e in self.execution_log[-20:]
+                                if e.get("actions", [{}])[0].get("success", True)
+                            )
+                            / max(len(self.execution_log[-20:]), 1),
                         }
                     }
                     recursive_mod = await self.recursive_modifier.analyze_and_improve(
@@ -969,6 +1074,7 @@ class CognitiveOrchestrator:
                         # === Self-Training Loop: synthesize training data from recursive mod ===
                         try:
                             from .modification_memory import ModificationRecord
+
                             synth_record = ModificationRecord(
                                 id=recursive_mod.id,
                                 timestamp=datetime.utcnow().isoformat(),
@@ -977,11 +1083,17 @@ class CognitiveOrchestrator:
                                 task_type="code_rewrite",
                                 description=recursive_mod.description,
                                 reasoning=recursive_mod.reasoning,
-                                original_code=recursive_mod.original_code[:1500] if hasattr(recursive_mod, 'original_code') else "",
-                                modified_code=recursive_mod.new_code[:3000] if hasattr(recursive_mod, 'new_code') else "",
+                                original_code=recursive_mod.original_code[:1500]
+                                if hasattr(recursive_mod, "original_code")
+                                else "",
+                                modified_code=recursive_mod.new_code[:3000]
+                                if hasattr(recursive_mod, "new_code")
+                                else "",
                                 success=True,
                             )
-                            synthesized = await self.self_trainer.synthesize_from_success(synth_record)
+                            synthesized = await self.self_trainer.synthesize_from_success(
+                                synth_record
+                            )
                             if synthesized:
                                 result["self_training"] = {
                                     "synthesized": len(synthesized),
@@ -1004,7 +1116,9 @@ class CognitiveOrchestrator:
                             "id": audit_report.id,
                             "healthy": audit_report.overall_healthy,
                             "checks": len(audit_report.checks),
-                            "warnings": sum(1 for c in audit_report.checks if c.severity == "warning"),
+                            "warnings": sum(
+                                1 for c in audit_report.checks if c.severity == "warning"
+                            ),
                             "recommendations": audit_report.recommendations[:3],
                         }
                     except Exception as e:
@@ -1016,6 +1130,7 @@ class CognitiveOrchestrator:
                     result["exploration_goal"] = exploration_goal
                     # Automatically create a goal from curiosity gap
                     from .goals import GoalSource
+
                     curiosity_goal = await self.goals.create_goal(
                         description=exploration_goal,
                         priority=GoalPriority.MEDIUM,
@@ -1041,7 +1156,9 @@ class CognitiveOrchestrator:
                 if self.model_trainer and self.modification_memory:
                     trigger = self.retrain_trigger.should_retrain(
                         current_iteration=self.iteration,
-                        training_data_ready=self.modification_memory.ready_for_training(min_examples=20),
+                        training_data_ready=self.modification_memory.ready_for_training(
+                            min_examples=20
+                        ),
                         current_model_version=self.model_trainer.current_version,
                     )
                     if trigger["retrain"]:
@@ -1065,6 +1182,7 @@ class CognitiveOrchestrator:
 
         except Exception as e:
             import traceback
+
             tb = traceback.format_exc()
             self.logger.error("cycle_error", error=str(e), traceback=tb)
             result["error"] = str(e)
@@ -1086,15 +1204,21 @@ class CognitiveOrchestrator:
                 self.logger.info("training_logs_ingested", count=ingested)
             if not self.modification_memory.ready_for_training(min_examples=20):
                 return
-            self.logger.info("starting_maldoror_training", version=self.model_trainer.current_version)
+            self.logger.info(
+                "starting_maldoror_training", version=self.model_trainer.current_version
+            )
             run = await self.model_trainer.train(max_steps=200)
             if not run.success:
                 self.logger.warning("maldoror_training_failed", error=run.error)
-                self.perf_monitor.record(MetricType.ERROR_RATE, 1.0, model_version=self.model_trainer.current_version)
+                self.perf_monitor.record(
+                    MetricType.ERROR_RATE, 1.0, model_version=self.model_trainer.current_version
+                )
                 return
 
             # Record training metrics
-            self.perf_monitor.record(MetricType.LATENCY, run.duration_seconds * 1000, model_version=run.version)
+            self.perf_monitor.record(
+                MetricType.LATENCY, run.duration_seconds * 1000, model_version=run.version
+            )
 
             # Deploy to Ollama
             deployed = await self.custom_model_manager.deploy(run)
@@ -1116,8 +1240,14 @@ class CognitiveOrchestrator:
                 gate = await self.quality_gate.check(report)
 
                 # Record evaluation metrics
-                self.perf_monitor.record(MetricType.QUALITY_SCORE, report.maldoror_avg, model_version=run.version)
-                self.perf_monitor.record(MetricType.SUCCESS_RATE, 1.0 if gate["passed"] else 0.0, model_version=run.version)
+                self.perf_monitor.record(
+                    MetricType.QUALITY_SCORE, report.maldoror_avg, model_version=run.version
+                )
+                self.perf_monitor.record(
+                    MetricType.SUCCESS_RATE,
+                    1.0 if gate["passed"] else 0.0,
+                    model_version=run.version,
+                )
 
                 result["evaluation"] = {
                     "verdict": report.verdict,
@@ -1131,7 +1261,9 @@ class CognitiveOrchestrator:
                 if not gate["passed"]:
                     self.logger.warning("quality_gate_failed", checks=gate["checks"])
                     if self.rollback_manager and await self.rollback_manager.should_rollback(gate):
-                        await self.rollback_manager.rollback(reason=f"quality_gate_failed: {gate['checks']}")
+                        await self.rollback_manager.rollback(
+                            reason=f"quality_gate_failed: {gate['checks']}"
+                        )
                         result["rollback"] = True
                         return
 
@@ -1162,7 +1294,9 @@ class CognitiveOrchestrator:
             if not self.modification_memory.ready_for_training(min_examples=10):
                 return
 
-            self.logger.info("starting_population_competition", generation=self.model_population.generation)
+            self.logger.info(
+                "starting_population_competition", generation=self.model_population.generation
+            )
             best = await self.model_population.compete()
 
             if best and best.training_run and best.training_run.success:
@@ -1186,7 +1320,9 @@ class CognitiveOrchestrator:
                         "generation": best.generation,
                         "winner_strategy": best.config.name,
                         "winner_fitness": best.fitness,
-                        "best_fitness": self.model_population.best_variant.fitness if self.model_population.best_variant else 0,
+                        "best_fitness": self.model_population.best_variant.fitness
+                        if self.model_population.best_variant
+                        else 0,
                     }
         except Exception as e:
             self.logger.warning("population_competition_error", error=str(e))
@@ -1224,9 +1360,9 @@ class CognitiveOrchestrator:
             if examples:
                 result["adversarial_training"] = {
                     "examples_generated": len(examples),
-                    "flaw_categories": list(set(
-                        cat for ex in examples for cat in ex.flaw_categories
-                    )),
+                    "flaw_categories": list(
+                        set(cat for ex in examples for cat in ex.flaw_categories)
+                    ),
                 }
         except Exception as e:
             self.logger.warning("adversarial_training_error", error=str(e))
@@ -1257,7 +1393,9 @@ class CognitiveOrchestrator:
                     "description": modification.description,
                     "eval_score": mod_result.eval_score,
                     "duration": mod_result.duration_seconds,
-                    "new_version": mod_result.after_state.version if mod_result.after_state else "unknown",
+                    "new_version": mod_result.after_state.version
+                    if mod_result.after_state
+                    else "unknown",
                 }
             else:
                 result["architecture_modification"] = {
@@ -1309,12 +1447,15 @@ class CognitiveOrchestrator:
             return
 
         # Create snippet render
-        from .blender_sandbox import SimulationSpec, SimulationType
         spec = SimulationSpec(
-            type=SimulationType.EMOTION,
+            type=BlenderSimulationType.EMOTION,
             emotion_config={
                 "mood": result.get("emotional_state", "neutral"),
-                "valence": 0.5 if "happy" in event_type else -0.3 if "sad" in event_type or "fail" in event_type else 0.0,
+                "valence": 0.5
+                if "happy" in event_type
+                else -0.3
+                if "sad" in event_type or "fail" in event_type
+                else 0.0,
                 "arousal": 0.7 if "high_reward" in event_type or "goal" in event_type else 0.4,
             },
             emotion_visualizer=self.settings.emotion_visualizer,
@@ -1339,7 +1480,9 @@ class CognitiveOrchestrator:
                     "event": event_type,
                     "video_path": render_result.video_path,
                 }
-                self.logger.info("auto_render_complete", event=event_type, path=render_result.video_path)
+                self.logger.info(
+                    "auto_render_complete", event=event_type, path=render_result.video_path
+                )
         except Exception as e:
             self.logger.warning("auto_render_failed", error=str(e))
 
@@ -1375,9 +1518,17 @@ class CognitiveOrchestrator:
             query = step.parameters.get("query", goal.description)
             limit = step.parameters.get("limit", 10)
             all_results = []
-            search_methods = ["search", "search_repositories", "search_projects",
-                              "search_packages", "search_artifacts", "search_gems",
-                              "search_pastes", "search_models", "search_messages"]
+            search_methods = [
+                "search",
+                "search_repositories",
+                "search_projects",
+                "search_packages",
+                "search_artifacts",
+                "search_gems",
+                "search_pastes",
+                "search_models",
+                "search_messages",
+            ]
             for name, crawler in self.crawlers.items():
                 for method_name in search_methods:
                     method = getattr(crawler, method_name, None)
@@ -1396,7 +1547,11 @@ class CognitiveOrchestrator:
 
             step.status = StepStatus.COMPLETED
             step.result = f"Found {len(all_results)} results"
-            return {"success": True, "count": len(all_results), "items": [r.title for r in all_results[:10]]}
+            return {
+                "success": True,
+                "count": len(all_results),
+                "items": [r.title for r in all_results[:10]],
+            }
 
         elif action == "think":
             # Use LLM to reason
@@ -1444,7 +1599,13 @@ class CognitiveOrchestrator:
             result = await self.blender_sandbox.run_simulation(spec)
             step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
             step.result = f"Simulation {'succeeded' if result.success else 'failed'}: {result.output or result.error}"
-            return {"success": result.success, "output": result.output, "frames": result.frames, "blend_path": result.blend_path, "error": result.error}
+            return {
+                "success": result.success,
+                "output": result.output,
+                "frames": result.frames,
+                "blend_path": result.blend_path,
+                "error": result.error,
+            }
 
         elif action == "blender_render":
             # Render a scene in Blender
@@ -1453,7 +1614,7 @@ class CognitiveOrchestrator:
                 return {"success": False, "error": "Blender sandbox not available"}
 
             spec = SimulationSpec(
-                type=SimulationType.RENDER,
+                type=BlenderSimulationType.RENDER,
                 objects=step.parameters.get("objects", []),
                 render=True,
                 render_resolution=tuple(step.parameters.get("render_resolution", [1920, 1080])),
@@ -1463,7 +1624,12 @@ class CognitiveOrchestrator:
             result = await self.blender_sandbox.run_render(spec)
             step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
             step.result = f"Render {'succeeded' if result.success else 'failed'}: {result.output or result.error}"
-            return {"success": result.success, "render_path": result.render_path, "blend_path": result.blend_path, "error": result.error}
+            return {
+                "success": result.success,
+                "render_path": result.render_path,
+                "blend_path": result.blend_path,
+                "error": result.error,
+            }
 
         elif action == "github_api":
             # GitHub API operations
@@ -1475,7 +1641,12 @@ class CognitiveOrchestrator:
             result = await self.tool_manager.invoke("github", operation, **params)
             step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
             step.result = f"GitHub {operation} {'succeeded' if result.success else 'failed'}"
-            return {"success": result.success, "data": result.data, "error": result.error, "metadata": result.metadata}
+            return {
+                "success": result.success,
+                "data": result.data,
+                "error": result.error,
+                "metadata": result.metadata,
+            }
 
         elif action == "arxiv_api":
             # arXiv API operations
@@ -1487,7 +1658,12 @@ class CognitiveOrchestrator:
             result = await self.tool_manager.invoke("arxiv", operation, **params)
             step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
             step.result = f"arXiv {operation} {'succeeded' if result.success else 'failed'}"
-            return {"success": result.success, "data": result.data, "error": result.error, "metadata": result.metadata}
+            return {
+                "success": result.success,
+                "data": result.data,
+                "error": result.error,
+                "metadata": result.metadata,
+            }
 
         elif action == "ros2_publish":
             # ROS2 publish
@@ -1497,7 +1673,9 @@ class CognitiveOrchestrator:
             topic = step.parameters.get("topic", "/ontogeny/default")
             message_type = step.parameters.get("message_type", "std_msgs/msg/String")
             data = step.parameters.get("data", {})
-            result = await self.tool_manager.invoke("ros2", "publish", topic=topic, message_type=message_type, data=data)
+            result = await self.tool_manager.invoke(
+                "ros2", "publish", topic=topic, message_type=message_type, data=data
+            )
             step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
             step.result = f"ROS2 publish {'succeeded' if result.success else 'failed'}"
             return {"success": result.success, "data": result.data, "error": result.error}
@@ -1510,7 +1688,14 @@ class CognitiveOrchestrator:
             topic = step.parameters.get("topic", "/ontogeny/default")
             message_type = step.parameters.get("message_type", "std_msgs/msg/String")
             timeout = step.parameters.get("timeout", 5.0)
-            result = await self.tool_manager.invoke("ros2", "subscribe", topic=topic, message_type=message_type, callback=lambda x: x, timeout=timeout)
+            result = await self.tool_manager.invoke(
+                "ros2",
+                "subscribe",
+                topic=topic,
+                message_type=message_type,
+                callback=lambda x: x,
+                timeout=timeout,
+            )
             step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
             step.result = f"ROS2 subscribe {'succeeded' if result.success else 'failed'}"
             return {"success": result.success, "data": result.data, "error": result.error}
@@ -1527,16 +1712,18 @@ class CognitiveOrchestrator:
 
             # Check practical worlds first
             from crawler_agent.cognitive.practical_worlds import get_practical_world
+
             practical = get_practical_world(scenario_name)
 
             # If not in practical worlds, check survival worlds
             if not practical:
                 from crawler_agent.cognitive.survival_worlds import get_survival_world
+
                 survival = get_survival_world(scenario_name)
                 if survival:
                     # Convert survival world to simulation spec
                     spec = SimulationSpec(
-                        type=SimulationType.RIGID_BODY,
+                        type=BlenderSimulationType.RIGID_BODY,
                         objects=[
                             ObjectSpec(
                                 type=obj.get("type", "cube"),
@@ -1554,16 +1741,25 @@ class CognitiveOrchestrator:
                     result = await self.sim_library.run_custom(spec, backend=backend_enum)
                     step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
                     step.result = f"Survival world '{scenario_name}' {'succeeded' if result.success else 'failed'}"
-                    return {"success": result.success, "frames": len(result.frames), "stats": result.stats, "error": result.error}
+                    return {
+                        "success": result.success,
+                        "frames": len(result.frames),
+                        "stats": result.stats,
+                        "error": result.error,
+                    }
 
             # Anatomy mode: use practical worlds by default
             if self.settings.emotion_visualizer in ("anatomy", "both") and practical:
-                from crawler_agent.cognitive.practical_worlds import PRACTICAL_WORLDS, get_practical_world
+                from crawler_agent.cognitive.practical_worlds import (
+                    PRACTICAL_WORLDS,
+                    get_practical_world,
+                )
+
                 practical = get_practical_world(scenario_name)
                 if practical:
                     # Convert practical world to simulation spec
                     spec = SimulationSpec(
-                        type=SimulationType.RIGID_BODY,
+                        type=BlenderSimulationType.RIGID_BODY,
                         objects=[
                             ObjectSpec(
                                 type=obj.get("type", "cube"),
@@ -1581,12 +1777,26 @@ class CognitiveOrchestrator:
                     result = await self.sim_library.run_custom(spec, backend=backend_enum)
                     step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
                     step.result = f"Practical world '{scenario_name}' {'succeeded' if result.success else 'failed'}"
-                    return {"success": result.success, "frames": len(result.frames), "stats": result.stats, "error": result.error}
+                    return {
+                        "success": result.success,
+                        "frames": len(result.frames),
+                        "stats": result.stats,
+                        "error": result.error,
+                    }
 
-            result = await self.sim_library.run_scenario(scenario_name, backend=backend_enum, modifications=modifications)
+            result = await self.sim_library.run_scenario(
+                scenario_name, backend=backend_enum, modifications=modifications
+            )
             step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
-            step.result = f"Scenario '{scenario_name}' {'succeeded' if result.success else 'failed'}"
-            return {"success": result.success, "frames": len(result.frames), "stats": result.stats, "error": result.error}
+            step.result = (
+                f"Scenario '{scenario_name}' {'succeeded' if result.success else 'failed'}"
+            )
+            return {
+                "success": result.success,
+                "frames": len(result.frames),
+                "stats": result.stats,
+                "error": result.error,
+            }
 
         elif action == "sim_custom":
             # Run a custom simulation
@@ -1600,7 +1810,12 @@ class CognitiveOrchestrator:
             result = await self.sim_library.run_custom(spec, backend=backend_enum)
             step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
             step.result = f"Custom simulation {'succeeded' if result.success else 'failed'}"
-            return {"success": result.success, "frames": len(result.frames), "stats": result.stats, "error": result.error}
+            return {
+                "success": result.success,
+                "frames": len(result.frames),
+                "stats": result.stats,
+                "error": result.error,
+            }
 
         elif action == "select_world":
             # Select practical or survival world based on skill needs
@@ -1609,7 +1824,7 @@ class CognitiveOrchestrator:
             goal = step.parameters.get("goal", "")
             max_difficulty = step.parameters.get("max_difficulty", 1.0)
             weak_skills = step.parameters.get("weak_skills", [])
-            tier = step.parameters.get("tier")  # Optional: force specific tier
+            step.parameters.get("tier")  # Optional: force specific tier
             criteria = SelectionCriteria(
                 weak_skills=weak_skills or self.world_selector.get_weak_skills(),
                 goal_description=goal,
@@ -1623,13 +1838,15 @@ class CognitiveOrchestrator:
                 "success": True,
                 "world": world.name,
                 "description": world.description,
-                "difficulty": world.difficulty if hasattr(world, 'difficulty') else world.tier / 4.0,
-                "tags": world.tags if hasattr(world, 'tags') else [],
+                "difficulty": world.difficulty
+                if hasattr(world, "difficulty")
+                else world.tier / 4.0,
+                "tags": world.tags if hasattr(world, "tags") else [],
                 "matched_skills": result.matched_skills,
                 "reason": result.reason,
-                "is_survival": hasattr(world, 'tier'),
-                "tier": world.tier if hasattr(world, 'tier') else None,
-                "hazards": [h.value for h in world.hazards] if hasattr(world, 'hazards') else [],
+                "is_survival": hasattr(world, "tier"),
+                "tier": world.tier if hasattr(world, "tier") else None,
+                "hazards": [h.value for h in world.hazards] if hasattr(world, "hazards") else [],
             }
 
         elif action == "vision_analyze":
@@ -1645,7 +1862,12 @@ class CognitiveOrchestrator:
             )
             step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
             step.result = f"Vision analysis {'succeeded' if result.success else 'failed'}"
-            return {"success": result.success, "description": result.description, "objects": result.objects, "error": result.error}
+            return {
+                "success": result.success,
+                "description": result.description,
+                "objects": result.objects,
+                "error": result.error,
+            }
 
         elif action == "audio_transcribe":
             # Transcribe audio
@@ -1659,7 +1881,12 @@ class CognitiveOrchestrator:
             )
             step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
             step.result = f"Audio transcription {'succeeded' if result.success else 'failed'}"
-            return {"success": result.success, "transcript": result.transcript, "language": result.language, "error": result.error}
+            return {
+                "success": result.success,
+                "transcript": result.transcript,
+                "language": result.language,
+                "error": result.error,
+            }
 
         elif action == "audio_analyze":
             # Analyze audio content
@@ -1673,7 +1900,12 @@ class CognitiveOrchestrator:
             )
             step.status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
             step.result = f"Audio analysis {'succeeded' if result.success else 'failed'}"
-            return {"success": result.success, "transcript": result.transcript, "metadata": result.metadata, "error": result.error}
+            return {
+                "success": result.success,
+                "transcript": result.transcript,
+                "metadata": result.metadata,
+                "error": result.error,
+            }
 
         elif action == "agent_create":
             # Create a new agent instance with behavioral variation
@@ -1685,7 +1917,12 @@ class CognitiveOrchestrator:
             agent = self.agent_population.create_agent(name=name, parent_id=parent_id)
             step.status = StepStatus.COMPLETED
             step.result = f"Created agent '{agent.name}' (gen {agent.generation})"
-            return {"success": True, "agent_id": agent.id, "name": agent.name, "generation": agent.generation}
+            return {
+                "success": True,
+                "agent_id": agent.id,
+                "name": agent.name,
+                "generation": agent.generation,
+            }
 
         elif action == "agent_reproduce":
             # Create offspring from best performers
@@ -1713,7 +1950,10 @@ class CognitiveOrchestrator:
             )
             step.status = StepStatus.COMPLETED
             step.result = f"Propagated {len(propagated)} agents from {agent_id}"
-            return {"success": True, "propagated": [{"id": a.id, "name": a.name} for a in propagated]}
+            return {
+                "success": True,
+                "propagated": [{"id": a.id, "name": a.name} for a in propagated],
+            }
 
         elif action == "agent_best":
             # Get best agents
@@ -1748,7 +1988,11 @@ class CognitiveOrchestrator:
                 if portable:
                     step.status = StepStatus.COMPLETED
                     step.result = f"Exported skill '{portable.manifest.name}'"
-                    return {"success": True, "name": portable.manifest.name, "version": portable.manifest.version}
+                    return {
+                        "success": True,
+                        "name": portable.manifest.name,
+                        "version": portable.manifest.version,
+                    }
                 else:
                     step.status = StepStatus.FAILED
                     return {"success": False, "error": f"Skill '{skill_id}' not found"}
@@ -1825,10 +2069,22 @@ class CognitiveOrchestrator:
             )
             actual_output = step.parameters.get("actual_output", step.result)
             context = step.parameters.get("context", {})
-            result = await self.outcome_verifier.verify(step.parameters.get("task_type", "code"), spec, actual_output, context)
-            step.status = StepStatus.COMPLETED if result.status == VerificationStatus.PASSED else StepStatus.FAILED
+            result = await self.outcome_verifier.verify(
+                step.parameters.get("task_type", "code"), spec, actual_output, context
+            )
+            step.status = (
+                StepStatus.COMPLETED
+                if result.status == VerificationStatus.PASSED
+                else StepStatus.FAILED
+            )
             step.result = f"Verification {'passed' if result.status == VerificationStatus.PASSED else 'failed'}: score={result.score:.2f}"
-            return {"success": result.status == VerificationStatus.PASSED, "score": result.score, "details": result.details, "errors": result.errors, "evidence": result.evidence}
+            return {
+                "success": result.status == VerificationStatus.PASSED,
+                "score": result.score,
+                "details": result.details,
+                "errors": result.errors,
+                "evidence": result.evidence,
+            }
 
         elif action == "mcts_plan":
             # Run MCTS planning
@@ -1873,7 +2129,9 @@ class CognitiveOrchestrator:
             persons = self.sensor_array.yolo.detect_persons(result)
             obstacles = self.sensor_array.yolo.get_navigation_obstacles(result)
             step.status = StepStatus.COMPLETED
-            step.result = f"YOLO: {result.count} objects detected ({result.inference_time_ms:.1f}ms)"
+            step.result = (
+                f"YOLO: {result.count} objects detected ({result.inference_time_ms:.1f}ms)"
+            )
             return {
                 "success": True,
                 "count": result.count,
@@ -1934,8 +2192,12 @@ class CognitiveOrchestrator:
 
             step.status = StepStatus.COMPLETED if path.valid else StepStatus.FAILED
             step.result = f"Path {algorithm}: {len(path.waypoints)} waypoints, cost={path.cost:.2f}"
-            return {"success": path.valid, "waypoints": path.waypoints, "cost": path.cost,
-                    "algorithm": algorithm}
+            return {
+                "success": path.valid,
+                "waypoints": path.waypoints,
+                "cost": path.cost,
+                "algorithm": algorithm,
+            }
 
         elif action == "weather_update":
             # Update weather
@@ -2010,8 +2272,12 @@ class CognitiveOrchestrator:
                 gesture = self.social.gesture.detect(nearest, robot_pos)
                 step.status = StepStatus.COMPLETED
                 step.result = f"Gesture: {gesture.type} ({gesture.confidence:.0%})"
-                return {"success": True, "gesture": gesture.type, "confidence": gesture.confidence,
-                        "meaning": self.social.gesture.get_meaning(gesture)}
+                return {
+                    "success": True,
+                    "gesture": gesture.type,
+                    "confidence": gesture.confidence,
+                    "meaning": self.social.gesture.get_meaning(gesture),
+                }
             step.status = StepStatus.COMPLETED
             step.result = "No humans detected"
             return {"success": True, "gesture": "none"}
@@ -2038,8 +2304,11 @@ class CognitiveOrchestrator:
             )
             step.status = StepStatus.COMPLETED
             step.result = f"Reflection: {reflection.lesson_learned[:100]}"
-            return {"success": True, "reflection": reflection.lesson_learned,
-                    "type": reflection.reflection_type.value}
+            return {
+                "success": True,
+                "reflection": reflection.lesson_learned,
+                "type": reflection.reflection_type.value,
+            }
 
         elif action == "self_reflect_review":
             # Pre-action review from self-reflection
@@ -2169,7 +2438,7 @@ class CognitiveOrchestrator:
             tasks = step.parameters.get("tasks", ["general"])
             if not self.evo_architecture.variants:
                 await self.evo_architecture.initialize_population()
-            variants = await self.evo_architecture.evolve_generation(tasks)
+            await self.evo_architecture.evolve_generation(tasks)
             step.status = StepStatus.COMPLETED
             stats = self.evo_architecture.get_stats()
             step.result = f"Gen {stats['generation']}: best={stats['best_fitness']:.3f}"
@@ -2191,7 +2460,9 @@ class CognitiveOrchestrator:
 
         elif action == "attention_allocate":
             # Allocate compute resources
-            components = step.parameters.get("components", ["attention", "reasoning", "working_memory"])
+            components = step.parameters.get(
+                "components", ["attention", "reasoning", "working_memory"]
+            )
             uncertainty = step.parameters.get("uncertainty", {})
             context = step.parameters.get("context", {})
             allocation = await self.attention.allocate_compute(
@@ -2222,15 +2493,16 @@ class CognitiveOrchestrator:
         # Analyze recent performance
         recent = self.execution_log[-10:] if self.execution_log else []
         success_rate = sum(
-            1 for log in recent
-            if all(a.get("success", False) for a in log.get("actions", []))
+            1 for log in recent if all(a.get("success", False) for a in log.get("actions", []))
         ) / max(len(recent), 1)
 
         # Record pre-modification performance baseline
         pre_success_rate = success_rate
         pre_avg_reward = 0.0
         if recent:
-            rewards = [log.get("rl_reward", 0.0) for log in recent if log.get("rl_reward") is not None]
+            rewards = [
+                log.get("rl_reward", 0.0) for log in recent if log.get("rl_reward") is not None
+            ]
             pre_avg_reward = sum(rewards) / max(len(rewards), 1)
 
         # === PROACTIVE: Create new skills when performance is decent but capabilities are limited ===
@@ -2263,6 +2535,7 @@ class CognitiveOrchestrator:
                         # === Self-Training Loop: synthesize training data from success ===
                         try:
                             from .modification_memory import ModificationRecord
+
                             synth_record = ModificationRecord(
                                 id=mod.id,
                                 timestamp=datetime.utcnow().isoformat(),
@@ -2274,7 +2547,9 @@ class CognitiveOrchestrator:
                                 modified_code=mod.code,
                                 success=True,
                             )
-                            synthesized = await self.self_trainer.synthesize_from_success(synth_record)
+                            synthesized = await self.self_trainer.synthesize_from_success(
+                                synth_record
+                            )
                             if synthesized:
                                 result["self_training"] = {
                                     "synthesized": len(synthesized),
@@ -2298,11 +2573,16 @@ class CognitiveOrchestrator:
                             # Actually re-measure after modification
                             post_result = await self.run_cycle()
                             post_actions = post_result.get("actions", [])
-                            post_success = all(a.get("success", False) for a in post_actions) if post_actions else False
+                            post_success = (
+                                all(a.get("success", False) for a in post_actions)
+                                if post_actions
+                                else False
+                            )
                             post_reward = post_result.get("rl_reward", 0.0)
 
-                            perf_delta = (1.0 if post_success else 0.0 - pre_success_rate) * 0.5 + \
-                                        (post_reward - pre_avg_reward) * 0.5
+                            perf_delta = (1.0 if post_success else 0.0 - pre_success_rate) * 0.5 + (
+                                post_reward - pre_avg_reward
+                            ) * 0.5
 
                             await self.self_modifier.learn_from_outcome(
                                 mod.id,
@@ -2323,6 +2603,7 @@ class CognitiveOrchestrator:
                             if perf_delta >= 0:
                                 try:
                                     from .modification_memory import ModificationRecord
+
                                     synth_record = ModificationRecord(
                                         id=mod.id,
                                         timestamp=datetime.utcnow().isoformat(),
@@ -2335,19 +2616,24 @@ class CognitiveOrchestrator:
                                         success=True,
                                         performance_delta=perf_delta,
                                     )
-                                    synthesized = await self.self_trainer.synthesize_from_success(synth_record)
+                                    synthesized = await self.self_trainer.synthesize_from_success(
+                                        synth_record
+                                    )
                                     if synthesized:
                                         result["self_training"] = {
                                             "synthesized": len(synthesized),
                                             "types": [e.synth_type for e in synthesized],
                                         }
                                 except Exception as e:
-                                    self.logger.warning("self_training_synthesis_error", error=str(e))
+                                    self.logger.warning(
+                                        "self_training_synthesis_error", error=str(e)
+                                    )
 
                             # === Contrastive Training: record failure for contrastive learning ===
                             else:
                                 try:
                                     from .modification_memory import ModificationRecord
+
                                     fail_record = ModificationRecord(
                                         id=f"{mod.id}_fail",
                                         timestamp=datetime.utcnow().isoformat(),
@@ -2362,7 +2648,9 @@ class CognitiveOrchestrator:
                                     )
                                     self.modification_memory.record(fail_record)
                                     # Generate contrastive data from the failure
-                                    contrastive = await self.contrastive_trainer.generate_contrastive_data()
+                                    contrastive = (
+                                        await self.contrastive_trainer.generate_contrastive_data()
+                                    )
                                     if contrastive:
                                         result["contrastive_training"] = {
                                             "generated": len(contrastive),
@@ -2375,7 +2663,10 @@ class CognitiveOrchestrator:
 
         # === RECURSIVE: Improve the improvement process itself ===
         mod_stats = self.self_modifier.get_stats()
-        if mod_stats["total_modifications"] >= 5 and mod_stats["rolled_back"] > mod_stats["applied"]:
+        if (
+            mod_stats["total_modifications"] >= 5
+            and mod_stats["rolled_back"] > mod_stats["applied"]
+        ):
             # More rollbacks than successes — the improvement process itself needs fixing
             mod = await self.self_modifier.propose_optimization(
                 skill_name="self_modification_strategy",
@@ -2386,7 +2677,8 @@ class CognitiveOrchestrator:
                 result["self_improvement"] = {
                     "type": "recursive_improvement",
                     "issue": "Improvement process itself is underperforming",
-                    "rollback_rate": mod_stats["rolled_back"] / max(mod_stats["total_modifications"], 1),
+                    "rollback_rate": mod_stats["rolled_back"]
+                    / max(mod_stats["total_modifications"], 1),
                 }
 
     async def handle_user_input(self, user_input: str) -> str:
@@ -2395,7 +2687,7 @@ class CognitiveOrchestrator:
         self.memory.working.add(f"User: {user_input}", {"role": "user"})
 
         # Recall relevant memories
-        relevant = await self.memory.recall_relevant(user_input)
+        await self.memory.recall_relevant(user_input)
 
         # Get context
         context = await self.memory.get_context_window()
@@ -2423,10 +2715,18 @@ class CognitiveOrchestrator:
         memory_stats = {}
         if self.memory:
             memory_stats = {
-                "working_memory_size": len(self.memory.working.items) if hasattr(self.memory.working, 'items') else 0,
-                "episodic_count": await self.memory.episodic.count() if hasattr(self.memory.episodic, 'count') else 0,
-                "semantic_count": await self.memory.semantic.count() if hasattr(self.memory.semantic, 'count') else 0,
-                "procedural_count": len(await self.memory.procedural.list_skills()) if hasattr(self.memory.procedural, 'list_skills') else 0,
+                "working_memory_size": len(self.memory.working.items)
+                if hasattr(self.memory.working, "items")
+                else 0,
+                "episodic_count": await self.memory.episodic.count()
+                if hasattr(self.memory.episodic, "count")
+                else 0,
+                "semantic_count": await self.memory.semantic.count()
+                if hasattr(self.memory.semantic, "count")
+                else 0,
+                "procedural_count": len(await self.memory.procedural.list_skills())
+                if hasattr(self.memory.procedural, "list_skills")
+                else 0,
             }
 
         # Current goals
@@ -2443,7 +2743,11 @@ class CognitiveOrchestrator:
         # Recent modifications
         recent_mods = []
         if self.self_modifier:
-            history = self.self_modifier.modification_history if hasattr(self.self_modifier, 'modification_history') else []
+            history = (
+                self.self_modifier.modification_history
+                if hasattr(self.self_modifier, "modification_history")
+                else []
+            )
             recent_mods = [
                 {"id": m.id, "description": m.description[:100], "applied": m.applied}
                 for m in history[-5:]
@@ -2458,6 +2762,7 @@ class CognitiveOrchestrator:
         health = {}
         try:
             from .reliability import get_reliability_manager
+
             reliability = get_reliability_manager()
             health = {
                 "circuit_breakers": reliability.get_circuit_breaker_report(),
@@ -2487,11 +2792,15 @@ class CognitiveOrchestrator:
             # Recent modifications
             "recent_modifications": recent_mods,
             "self_modification": self.self_modifier.get_stats() if self.self_modifier else {},
-            "recursive_modification": self.recursive_modifier.get_stats() if self.recursive_modifier else {},
+            "recursive_modification": self.recursive_modifier.get_stats()
+            if self.recursive_modifier
+            else {},
             # Crawlers & Infrastructure
             "crawlers": list(self.crawlers.keys()),
             "proxy_pool": self.proxy_pool.get_stats(),
-            "scheduler": self.crawl_orchestrator.scheduler.get_stats() if self.crawl_orchestrator else {},
+            "scheduler": self.crawl_orchestrator.scheduler.get_stats()
+            if self.crawl_orchestrator
+            else {},
             # Tools & Simulation
             "tools": list(self.tool_manager.tools.keys()) if self.tool_manager else [],
             "simulation": sim_status,
@@ -2511,7 +2820,9 @@ class CognitiveOrchestrator:
             "transfer_learner": self.transfer_learner.get_stats() if self.transfer_learner else {},
             # Tier 3: Foundation
             "meta_learner": self.meta_learner.get_stats() if self.meta_learner else {},
-            "sleep_consolidator": self.sleep_consolidator.get_stats() if self.sleep_consolidator else {},
+            "sleep_consolidator": self.sleep_consolidator.get_stats()
+            if self.sleep_consolidator
+            else {},
             # System Health
             "health": health,
             # World Selector
@@ -2610,7 +2921,8 @@ class CognitiveOrchestrator:
         # Store insights in knowledge graph
         for insight in dream_result.insights:
             concepts, relations = await self.knowledge_graph.extract_knowledge(
-                insight, source="dream",
+                insight,
+                source="dream",
             )
             for c in concepts:
                 self.knowledge_graph.add_concept(c)
@@ -2689,6 +3001,7 @@ class CognitiveOrchestrator:
     async def causal_intervention(self, variable: str, value: Any, query: str) -> dict[str, Any]:
         """Perform a causal do-calculus intervention."""
         from .causal_reasoning import Intervention
+
         intervention = Intervention(variable=variable, value=value)
         result = await self.causal_reasoner.do_calculus(query, intervention)
         return result
@@ -2696,6 +3009,7 @@ class CognitiveOrchestrator:
     async def counterfactual(self, outcome: str, variable: str, value: Any) -> dict[str, Any]:
         """Run counterfactual reasoning."""
         from .causal_reasoning import Intervention
+
         intervention = Intervention(variable=variable, value=value)
         cf = await self.causal_reasoner.counterfactual_reasoning(outcome, intervention)
         return {
@@ -2804,7 +3118,9 @@ class CognitiveOrchestrator:
         if self.circuit_breaker:
             cb_state = self.circuit_breaker.get_state()
             if cb_state["state"] != "closed":
-                parts.append(f"Circuit Breaker: {cb_state['state']} (failures: {cb_state['failure_count']})")
+                parts.append(
+                    f"Circuit Breaker: {cb_state['state']} (failures: {cb_state['failure_count']})"
+                )
         return "\n\n".join(parts)
 
     async def execute_code(
@@ -2818,7 +3134,9 @@ class CognitiveOrchestrator:
             return {"error": "Docker not available"}
 
         result = await self.code_sandbox.execute_code(
-            code, language=language, timeout=timeout,
+            code,
+            language=language,
+            timeout=timeout,
         )
         return {
             "success": result.success,
@@ -2864,7 +3182,7 @@ class CognitiveOrchestrator:
         """Cleanup all resources."""
         # Stop proxy refresh
         await self.proxy_manager.stop()
-        
+
         for crawler in self.crawlers.values():
             await crawler.cleanup()
 

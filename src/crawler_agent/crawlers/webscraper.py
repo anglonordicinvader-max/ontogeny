@@ -1,13 +1,13 @@
 """Generic web scraper for arbitrary sites."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 from urllib.parse import urljoin, urlparse
 
 import httpx
 import structlog
 from bs4 import BeautifulSoup
 
-from .base import BaseCrawler, CrawlerConfig, CrawlResult, ContentType
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class WebScraperCrawler(BaseCrawler):
@@ -132,6 +132,7 @@ class WebScraperCrawler(BaseCrawler):
         for script in soup.find_all("script", type="application/ld+json"):
             try:
                 import json
+
                 data = json.loads(script.string)
                 if isinstance(data, dict):
                     metadata["structured_data"] = data

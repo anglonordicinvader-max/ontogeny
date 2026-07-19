@@ -33,11 +33,11 @@ from crawler_agent.cognitive.survival_worlds import (
 @dataclass
 class SkillWorldMapping:
     skill: str
-    worlds: List[str]
+    worlds: list[str]
     weight: float = 1.0
 
 
-SKILL_WORLD_MAP: List[SkillWorldMapping] = [
+SKILL_WORLD_MAP: list[SkillWorldMapping] = [
     SkillWorldMapping("navigation", ["small_house", "indoor_maze", "office_building"]),
     SkillWorldMapping("climbing", ["construction_site", "parkour_course", "stair_climb"]),
     SkillWorldMapping("pushing", ["warehouse", "truck_loading", "construction_site"]),
@@ -47,7 +47,9 @@ SKILL_WORLD_MAP: List[SkillWorldMapping] = [
     SkillWorldMapping("stairs", ["stair_climb", "office_building", "construction_site"]),
     SkillWorldMapping("object_manipulation", ["warehouse", "truck_loading", "small_house"]),
     SkillWorldMapping("endurance", ["stair_climb", "robot_obstacle_course", "parkour_course"]),
-    SkillWorldMapping("problem_solving", ["indoor_maze", "parkour_course", "robot_obstacle_course"]),
+    SkillWorldMapping(
+        "problem_solving", ["indoor_maze", "parkour_course", "robot_obstacle_course"]
+    ),
     # Survival/critical mappings
     SkillWorldMapping("fire_survival", ["fire_escape", "multi_hazard", "extreme_weather_rescue"]),
     SkillWorldMapping("flood_survival", ["flood_escape", "multi_hazard"]),
@@ -55,7 +57,9 @@ SKILL_WORLD_MAP: List[SkillWorldMapping] = [
     SkillWorldMapping("rescue", ["rescue_mission", "multi_robot_rescue", "extreme_weather_rescue"]),
     SkillWorldMapping("hazard_avoidance", ["chemical_zone", "fire_escape", "multi_hazard"]),
     SkillWorldMapping("balance_extreme", ["high_wind", "ice_rink", "sloped_path"]),
-    SkillWorldMapping("damage_adaptation", ["damaged_robot", "total_system_failure", "catastrophic_failure"]),
+    SkillWorldMapping(
+        "damage_adaptation", ["damaged_robot", "total_system_failure", "catastrophic_failure"]
+    ),
     SkillWorldMapping("unknown_terrain", ["hostile_terrain_mission", "unknown_environment_scan"]),
     SkillWorldMapping("tool_advanced", ["tool_sequence", "basic_tool"]),
     SkillWorldMapping("night_operations", ["night_nav", "total_system_failure"]),
@@ -64,11 +68,11 @@ SKILL_WORLD_MAP: List[SkillWorldMapping] = [
 
 @dataclass
 class SelectionCriteria:
-    weak_skills: List[str] = field(default_factory=list)
+    weak_skills: list[str] = field(default_factory=list)
     goal_description: str = ""
     max_difficulty: float = 1.0
-    preferred_type: Optional[WorldType] = None
-    exclude_worlds: List[str] = field(default_factory=list)
+    preferred_type: WorldType | None = None
+    exclude_worlds: list[str] = field(default_factory=list)
     prefer_variety: bool = True
 
 
@@ -76,7 +80,7 @@ class SelectionCriteria:
 class SelectionResult:
     world: PracticalWorld
     reason: str
-    matched_skills: List[str]
+    matched_skills: list[str]
     difficulty_rating: float
 
 
@@ -85,14 +89,14 @@ class WorldSelector:
 
     def __init__(self):
         self.logger = structlog.get_logger(component="world_selector")
-        self.history: List[str] = []
-        self.skill_scores: Dict[str, float] = {}
+        self.history: list[str] = []
+        self.skill_scores: dict[str, float] = {}
 
     def update_skill(self, skill: str, score: float):
         """Update skill mastery score."""
         self.skill_scores[skill] = max(0.0, min(1.0, score))
 
-    def get_weak_skills(self, threshold: float = 0.5) -> List[str]:
+    def get_weak_skills(self, threshold: float = 0.5) -> list[str]:
         """Get skills below mastery threshold."""
         return [s for s, score in self.skill_scores.items() if score < threshold]
 
@@ -114,7 +118,7 @@ class WorldSelector:
             if isinstance(world, SurvivalChallenge):
                 if world.tier > criteria.max_difficulty * 4:
                     continue
-            elif hasattr(world, 'difficulty'):
+            elif hasattr(world, "difficulty"):
                 if world.difficulty > criteria.max_difficulty:
                     continue
 
@@ -128,7 +132,7 @@ class WorldSelector:
                         matched.append(mapping.skill)
 
             # Tag matching
-            tags = world.tags if hasattr(world, 'tags') else []
+            tags = world.tags if hasattr(world, "tags") else []
             for tag in tags:
                 for skill in criteria.weak_skills:
                     if skill.replace("_", " ") in tag or tag in skill.replace("_", " "):
@@ -157,7 +161,7 @@ class WorldSelector:
         candidates.sort(key=lambda x: x[1], reverse=True)
         best_world, best_score, matched = candidates[0]
 
-        self.history.append(best_world.name if hasattr(best_world, 'name') else str(best_world))
+        self.history.append(best_world.name if hasattr(best_world, "name") else str(best_world))
         if len(self.history) > 20:
             self.history = self.history[-20:]
 
@@ -175,7 +179,9 @@ class WorldSelector:
             world=best_world,
             reason=f"Selected: {'; '.join(reason_parts)}",
             matched_skills=matched,
-            difficulty_rating=best_world.difficulty if hasattr(best_world, 'difficulty') else best_world.tier / 4.0,
+            difficulty_rating=best_world.difficulty
+            if hasattr(best_world, "difficulty")
+            else best_world.tier / 4.0,
         )
 
     def select_by_goal(self, goal: str) -> SelectionResult:
@@ -191,7 +197,7 @@ class WorldSelector:
         criteria = SelectionCriteria(max_difficulty=max_difficulty)
         return self.select(criteria)
 
-    def get_progression(self) -> List[PracticalWorld]:
+    def get_progression(self) -> list[PracticalWorld]:
         """Get worlds in difficulty order for progressive training."""
         return get_worlds_by_difficulty()
 
@@ -200,5 +206,7 @@ class WorldSelector:
         recent = self.history[-3:] if self.history else []
         practical_count = len(PRACTICAL_WORLDS)
         survival_count = len(ALL_SURVIVAL_WORLDS)
-        return (f"World Selector: {practical_count} practical + {survival_count} survival worlds, "
-                f"{len(weak)} weak skills, recent: {', '.join(recent)}")
+        return (
+            f"World Selector: {practical_count} practical + {survival_count} survival worlds, "
+            f"{len(weak)} weak skills, recent: {', '.join(recent)}"
+        )

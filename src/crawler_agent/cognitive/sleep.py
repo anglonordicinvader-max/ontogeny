@@ -22,6 +22,7 @@ import structlog
 @dataclass
 class MemorySnapshot:
     """A snapshot of memory state before consolidation."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: datetime = field(default_factory=datetime.utcnow)
     episodic_count: int = 0
@@ -36,6 +37,7 @@ class MemorySnapshot:
 @dataclass
 class ConsolidationReport:
     """Detailed report of a consolidation cycle."""
+
     timestamp: datetime = field(default_factory=datetime.utcnow)
     episodes_replayed: int = 0
     memories_strengthened: int = 0
@@ -48,7 +50,7 @@ class ConsolidationReport:
     knowledge_integrated: int = 0
     duration_ms: float = 0.0
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "timestamp": self.timestamp.isoformat(),
             "episodes_replayed": self.episodes_replayed,
@@ -80,9 +82,9 @@ class SleepConsolidator:
 
     def __init__(self, backend=None):
         self.backend = backend
-        self.consolidation_log: List[Dict] = []
-        self.generalizations: List[Dict] = []
-        self.concepts: Dict[str, Dict] = {}  # abstracted concepts
+        self.consolidation_log: list[dict] = []
+        self.generalizations: list[dict] = []
+        self.concepts: dict[str, dict] = {}  # abstracted concepts
         self.forget_count = 0
         self.strengthen_count = 0
         self.compression_count = 0
@@ -110,9 +112,7 @@ class SleepConsolidator:
         )
 
         # 3. Forget/decay weak memories
-        report.memories_forgotten = await self._forget_weak(
-            memory_system, importance_threshold
-        )
+        report.memories_forgotten = await self._forget_weak(memory_system, importance_threshold)
 
         # 4. Prune knowledge graph
         if knowledge_graph:
@@ -121,14 +121,10 @@ class SleepConsolidator:
             report.edges_pruned = pruned.get("edges_pruned", 0)
 
         # 5. Abstract concepts from specific instances
-        report.concepts_abstracted = await self._abstract_concepts(
-            memory_system, knowledge_graph
-        )
+        report.concepts_abstracted = await self._abstract_concepts(memory_system, knowledge_graph)
 
         # 6. Compress long-term memories
-        compressed = await self._compress_memories(
-            memory_system, max_consolidation_age_hours
-        )
+        compressed = await self._compress_memories(memory_system, max_consolidation_age_hours)
         report.memories_compressed = compressed.get("compressed", 0)
         report.tokens_saved = compressed.get("tokens_saved", 0)
 
@@ -159,34 +155,32 @@ class SleepConsolidator:
     async def _replay_experiences(self, memory_system: Any) -> int:
         """Replay recent experiences to strengthen memory traces."""
         recent = []
-        if hasattr(memory_system, 'episodic') and hasattr(memory_system.episodic, 'list_memories'):
+        if hasattr(memory_system, "episodic") and hasattr(memory_system.episodic, "list_memories"):
             recent = await memory_system.episodic.list_memories(limit=20)
 
         replayed = 0
         for memory in recent:
-            if hasattr(memory, 'access_count'):
+            if hasattr(memory, "access_count"):
                 memory.access_count += 1
                 replayed += 1
             # Also increase strength slightly on replay
-            if hasattr(memory, 'strength'):
+            if hasattr(memory, "strength"):
                 memory.strength = min(2.0, memory.strength * 1.02)
 
         return replayed
 
-    async def _strengthen_memories(
-        self, memory_system: Any, threshold: float
-    ) -> int:
+    async def _strengthen_memories(self, memory_system: Any, threshold: float) -> int:
         """Strengthen memories above importance threshold."""
         strengthened = 0
 
-        for layer_name in ['episodic', 'semantic']:
+        for layer_name in ["episodic", "semantic"]:
             layer = getattr(memory_system, layer_name, None)
-            if layer and hasattr(layer, 'list_memories'):
+            if layer and hasattr(layer, "list_memories"):
                 memories = await layer.list_memories(limit=50)
                 for memory in memories:
-                    importance = getattr(memory, 'importance', 0.5)
+                    importance = getattr(memory, "importance", 0.5)
                     if importance > threshold:
-                        old_strength = getattr(memory, 'strength', 1.0)
+                        old_strength = getattr(memory, "strength", 1.0)
                         # Stronger boost for higher importance
                         boost = 1.0 + (importance * 0.15)
                         memory.strength = min(2.0, old_strength * boost)
@@ -195,19 +189,17 @@ class SleepConsolidator:
         self.strengthen_count += strengthened
         return strengthened
 
-    async def _forget_weak(
-        self, memory_system: Any, threshold: float
-    ) -> int:
+    async def _forget_weak(self, memory_system: Any, threshold: float) -> int:
         """Forget/decay memories below strength threshold."""
         forgotten = 0
         weak_threshold = threshold * 0.5
 
-        for layer_name in ['episodic', 'semantic']:
+        for layer_name in ["episodic", "semantic"]:
             layer = getattr(memory_system, layer_name, None)
-            if layer and hasattr(layer, 'list_memories'):
+            if layer and hasattr(layer, "list_memories"):
                 memories = await layer.list_memories(limit=100)
                 for memory in memories:
-                    strength = getattr(memory, 'strength', 1.0)
+                    strength = getattr(memory, "strength", 1.0)
                     if strength < weak_threshold:
                         # Progressive decay
                         memory.strength = strength * 0.3
@@ -218,28 +210,30 @@ class SleepConsolidator:
 
     async def _prune_knowledge_graph(
         self, knowledge_graph: Any, threshold: float
-    ) -> Dict[str, int]:
+    ) -> dict[str, int]:
         """Prune weak/unused nodes and edges from knowledge graph."""
         nodes_pruned = 0
         edges_pruned = 0
 
-        if not hasattr(knowledge_graph, 'nodes') or not hasattr(knowledge_graph, 'edges'):
+        if not hasattr(knowledge_graph, "nodes") or not hasattr(knowledge_graph, "edges"):
             return {"nodes_pruned": 0, "edges_pruned": 0}
 
         # Prune weak nodes (low confidence or low access count)
         weak_nodes = []
         for node_id, node in list(knowledge_graph.nodes.items()):
-            confidence = getattr(node, 'confidence', 0.5)
-            access_count = getattr(node, 'access_count', 0)
+            confidence = getattr(node, "confidence", 0.5)
+            access_count = getattr(node, "access_count", 0)
             if confidence < threshold * 0.5 and access_count < 3:
                 weak_nodes.append(node_id)
 
         for node_id in weak_nodes:
             # Remove connected edges first
-            if hasattr(knowledge_graph, 'edges'):
+            if hasattr(knowledge_graph, "edges"):
                 edges_to_remove = [
-                    e_id for e_id, edge in knowledge_graph.edges.items()
-                    if getattr(edge, 'source', '') == node_id or getattr(edge, 'target', '') == node_id
+                    e_id
+                    for e_id, edge in knowledge_graph.edges.items()
+                    if getattr(edge, "source", "") == node_id
+                    or getattr(edge, "target", "") == node_id
                 ]
                 for e_id in edges_to_remove:
                     del knowledge_graph.edges[e_id]
@@ -249,10 +243,11 @@ class SleepConsolidator:
             nodes_pruned += 1
 
         # Prune weak edges (low weight)
-        if hasattr(knowledge_graph, 'edges'):
+        if hasattr(knowledge_graph, "edges"):
             weak_edges = [
-                e_id for e_id, edge in knowledge_graph.edges.items()
-                if getattr(edge, 'weight', 0.5) < threshold * 0.3
+                e_id
+                for e_id, edge in knowledge_graph.edges.items()
+                if getattr(edge, "weight", 0.5) < threshold * 0.3
             ]
             for e_id in weak_edges:
                 del knowledge_graph.edges[e_id]
@@ -261,13 +256,13 @@ class SleepConsolidator:
         self.logger.info("knowledge_graph_pruned", nodes=nodes_pruned, edges=edges_pruned)
         return {"nodes_pruned": nodes_pruned, "edges_pruned": edges_pruned}
 
-    async def _abstract_concepts(
-        self, memory_system: Any, knowledge_graph: Any = None
-    ) -> int:
+    async def _abstract_concepts(self, memory_system: Any, knowledge_graph: Any = None) -> int:
         """Abstract general concepts from specific instances."""
         abstracted = 0
 
-        if not hasattr(memory_system, 'episodic') or not hasattr(memory_system.episodic, 'list_memories'):
+        if not hasattr(memory_system, "episodic") or not hasattr(
+            memory_system.episodic, "list_memories"
+        ):
             return 0
 
         memories = await memory_system.episodic.list_memories(limit=50)
@@ -278,7 +273,7 @@ class SleepConsolidator:
         word_counts = defaultdict(int)
         word_memories = defaultdict(list)
         for memory in memories:
-            content = getattr(memory, 'content', '')
+            content = getattr(memory, "content", "")
             words = set(content.lower().split())
             for word in words:
                 if len(word) > 4:
@@ -292,7 +287,7 @@ class SleepConsolidator:
                 # Find related words (co-occur in same memories)
                 related = set()
                 for memory in word_memories[word]:
-                    content = getattr(memory, 'content', '').lower()
+                    content = getattr(memory, "content", "").lower()
                     for other_word in content.split():
                         if other_word != word and len(other_word) > 4:
                             related.add(other_word)
@@ -309,14 +304,14 @@ class SleepConsolidator:
         self.logger.info("concepts_abstracted", count=abstracted)
         return abstracted
 
-    async def _compress_memories(
-        self, memory_system: Any, max_age_hours: float
-    ) -> Dict[str, int]:
+    async def _compress_memories(self, memory_system: Any, max_age_hours: float) -> dict[str, int]:
         """Compress old memories by summarizing groups of related memories."""
         compressed = 0
         tokens_saved = 0
 
-        if not hasattr(memory_system, 'episodic') or not hasattr(memory_system.episodic, 'list_memories'):
+        if not hasattr(memory_system, "episodic") or not hasattr(
+            memory_system.episodic, "list_memories"
+        ):
             return {"compressed": 0, "tokens_saved": 0}
 
         memories = await memory_system.episodic.list_memories(limit=100)
@@ -325,7 +320,7 @@ class SleepConsolidator:
         # Group old memories by content similarity (simple word overlap)
         old_memories = []
         for memory in memories:
-            created = getattr(memory, 'created_at', None)
+            created = getattr(memory, "created_at", None)
             if created and isinstance(created, datetime) and created < cutoff:
                 old_memories.append(memory)
 
@@ -335,45 +330,45 @@ class SleepConsolidator:
         # Group by importance level
         importance_groups = defaultdict(list)
         for memory in old_memories:
-            importance = getattr(memory, 'importance', 0.5)
+            importance = getattr(memory, "importance", 0.5)
             bucket = round(importance * 10) / 10  # Round to nearest 0.1
             importance_groups[bucket].append(memory)
 
         # Compress each group into a summary
-        for importance_level, group in importance_groups.items():
+        for _importance_level, group in importance_groups.items():
             if len(group) < 3:
                 continue
 
             # Create summary
-            contents = [getattr(m, 'content', '') for m in group]
-            total_tokens = sum(len(c) // 4 for c in contents)
+            contents = [getattr(m, "content", "") for m in group]
+            sum(len(c) // 4 for c in contents)
 
             # Simple compression: keep most important, summarize rest
-            group.sort(key=lambda m: getattr(m, 'importance', 0.5), reverse=True)
+            group.sort(key=lambda m: getattr(m, "importance", 0.5), reverse=True)
             keep_count = max(1, len(group) // 3)
 
             for memory in group[keep_count:]:
                 # Mark as compressed (reduce strength to indicate less detail needed)
-                if hasattr(memory, 'strength'):
+                if hasattr(memory, "strength"):
                     memory.strength = memory.strength * 0.5
                 compressed += 1
-                tokens_saved += len(getattr(memory, 'content', '')) // 4
+                tokens_saved += len(getattr(memory, "content", "")) // 4
 
         self.compression_count += compressed
         self.logger.info("memories_compressed", count=compressed, tokens_saved=tokens_saved)
         return {"compressed": compressed, "tokens_saved": tokens_saved}
 
-    async def _integrate_knowledge(
-        self, memory_system: Any, knowledge_graph: Any = None
-    ) -> int:
+    async def _integrate_knowledge(self, memory_system: Any, knowledge_graph: Any = None) -> int:
         """Integrate new knowledge with existing knowledge."""
         integrated = 0
 
-        if not (hasattr(memory_system, 'episodic') and hasattr(memory_system, 'semantic')):
+        if not (hasattr(memory_system, "episodic") and hasattr(memory_system, "semantic")):
             return 0
 
-        if not (hasattr(memory_system.episodic, 'list_memories') and
-                hasattr(memory_system.semantic, 'list_memories')):
+        if not (
+            hasattr(memory_system.episodic, "list_memories")
+            and hasattr(memory_system.semantic, "list_memories")
+        ):
             return 0
 
         episodic = await memory_system.episodic.list_memories(limit=20)
@@ -381,9 +376,9 @@ class SleepConsolidator:
 
         # Link related memories by word overlap
         for e_memory in episodic:
-            e_content = set(getattr(e_memory, 'content', '').lower().split())
+            e_content = set(getattr(e_memory, "content", "").lower().split())
             for s_memory in semantic:
-                s_content = set(getattr(s_memory, 'content', '').lower().split())
+                s_content = set(getattr(s_memory, "content", "").lower().split())
                 if not e_content or not s_content:
                     continue
                 overlap = len(e_content & s_content) / max(1, len(e_content | s_content))
@@ -391,9 +386,9 @@ class SleepConsolidator:
                     integrated += 1
 
         # Add concepts to knowledge graph if available
-        if knowledge_graph and hasattr(knowledge_graph, 'add_node'):
+        if knowledge_graph and hasattr(knowledge_graph, "add_node"):
             for concept_name, concept_data in self.concepts.items():
-                if hasattr(knowledge_graph, 'nodes') and concept_name not in knowledge_graph.nodes:
+                if hasattr(knowledge_graph, "nodes") and concept_name not in knowledge_graph.nodes:
                     knowledge_graph.add_node(
                         concept_name,
                         type="concept",
@@ -407,11 +402,11 @@ class SleepConsolidator:
 
     async def _consolidate_working_to_longterm(self, memory_system: Any) -> None:
         """Move important working memory items to long-term storage."""
-        if not hasattr(memory_system, 'working'):
+        if not hasattr(memory_system, "working"):
             return
 
         working = memory_system.working
-        if not hasattr(working, 'items') or not working.items:
+        if not hasattr(working, "items") or not working.items:
             return
 
         # Move important items to episodic memory
@@ -422,7 +417,9 @@ class SleepConsolidator:
 
             # Only move high-importance items
             if importance > 0.6:
-                if hasattr(memory_system, 'episodic') and hasattr(memory_system.episodic, 'record_event'):
+                if hasattr(memory_system, "episodic") and hasattr(
+                    memory_system.episodic, "record_event"
+                ):
                     await memory_system.episodic.record_event(
                         content=content,
                         metadata=metadata,
@@ -430,10 +427,10 @@ class SleepConsolidator:
                     )
 
         # Clear working memory
-        if hasattr(working, 'clear'):
+        if hasattr(working, "clear"):
             working.clear()
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """Get consolidation statistics."""
         return {
             "total_consolidations": len(self.consolidation_log),

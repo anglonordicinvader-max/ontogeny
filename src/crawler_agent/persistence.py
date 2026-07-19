@@ -12,6 +12,7 @@ import structlog
 @dataclass
 class AgentState:
     """Serializable agent state."""
+
     iteration: int = 0
     start_time: str = ""
     goals: list[dict[str, Any]] = field(default_factory=list)

@@ -4,7 +4,7 @@ from typing import Any
 
 import structlog
 
-from .base import Agent, AgentRole, AgentMessage, AgentTask
+from .base import Agent, AgentMessage, AgentRole, AgentTask
 
 
 class AgentRegistry:
@@ -34,14 +34,12 @@ class AgentRegistry:
     def get_available(self) -> list[Agent]:
         """Get agents that are idle."""
         from .base import AgentState
+
         return [a for a in self.agents.values() if a.state == AgentState.IDLE]
 
     def get_with_capability(self, capability: str) -> list[Agent]:
         """Get agents with a specific capability."""
-        return [
-            a for a in self.agents.values()
-            if capability in a.capabilities
-        ]
+        return [a for a in self.agents.values() if capability in a.capabilities]
 
     async def broadcast(self, message: AgentMessage) -> None:
         """Broadcast a message to all agents except sender."""
@@ -86,8 +84,7 @@ class AgentRegistry:
         return {
             "total_agents": len(agents),
             "by_role": {
-                role.value: len([a for a in agents if a.role == role])
-                for role in AgentRole
+                role.value: len([a for a in agents if a.role == role]) for role in AgentRole
             },
             "idle": len([a for a in agents if a.state.value == "idle"]),
             "working": len([a for a in agents if a.state.value == "working"]),

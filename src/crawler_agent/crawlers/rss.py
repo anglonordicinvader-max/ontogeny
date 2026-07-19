@@ -1,13 +1,13 @@
 """RSS/Atom feed crawler."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 from datetime import datetime
 
 import httpx
 import structlog
 from bs4 import BeautifulSoup
 
-from .base import BaseCrawler, CrawlerConfig, CrawlResult, ContentType
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class RSSCrawler(BaseCrawler):
@@ -132,6 +132,7 @@ class RSSCrawler(BaseCrawler):
                 if href:
                     if not href.startswith("http"):
                         from urllib.parse import urljoin
+
                         href = urljoin(website_url, href)
                     feed_urls.append(href)
 

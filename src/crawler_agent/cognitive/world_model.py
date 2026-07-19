@@ -17,6 +17,7 @@ import structlog
 @dataclass
 class Belief:
     """A belief about the world."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     statement: str = ""
     probability: float = 0.5  # Prior probability 0-1
@@ -37,15 +38,17 @@ class Belief:
             # P(H|E) = P(E|H) * P(H) / P(E)
             likelihood_ratio = strength
             self.probability = (
-                likelihood_ratio * self.probability /
-                (likelihood_ratio * self.probability + (1 - self.probability))
+                likelihood_ratio
+                * self.probability
+                / (likelihood_ratio * self.probability + (1 - self.probability))
             )
         else:
             self.contradicting_evidence += 1
             # Update against belief
             self.probability = (
-                (1 - strength) * self.probability /
-                ((1 - strength) * self.probability + self.probability)
+                (1 - strength)
+                * self.probability
+                / ((1 - strength) * self.probability + self.probability)
             )
 
         # Confidence based on evidence count
@@ -59,6 +62,7 @@ class Belief:
 @dataclass
 class CausalLink:
     """A causal relationship between variables."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     cause: str = ""
     effect: str = ""
@@ -156,13 +160,13 @@ class BayesianWorldModel:
         """Make a prediction based on the world model."""
         # Find relevant beliefs
         relevant_beliefs = [
-            b for b in self.beliefs.values()
-            if query.lower() in b.statement.lower()
+            b for b in self.beliefs.values() if query.lower() in b.statement.lower()
         ]
 
         # Find relevant causal links
         relevant_causes = [
-            c for c in self.causal_links.values()
+            c
+            for c in self.causal_links.values()
             if query.lower() in c.cause.lower() or query.lower() in c.effect.lower()
         ]
 
@@ -181,7 +185,8 @@ class BayesianWorldModel:
             "query": query,
             "predicted_probability": avg_prob,
             "causal_strength": avg_strength,
-            "confidence": sum(b.confidence for b in relevant_beliefs) / max(1, len(relevant_beliefs)),
+            "confidence": sum(b.confidence for b in relevant_beliefs)
+            / max(1, len(relevant_beliefs)),
             "evidence_count": sum(b.evidence_count for b in relevant_beliefs),
         }
 
@@ -198,11 +203,13 @@ class BayesianWorldModel:
         effects = []
         for link in self.causal_links.values():
             if link.cause == variable:
-                effects.append({
-                    "effect": link.effect,
-                    "strength": link.strength,
-                    "confidence": link.confidence,
-                })
+                effects.append(
+                    {
+                        "effect": link.effect,
+                        "strength": link.strength,
+                        "confidence": link.confidence,
+                    }
+                )
 
         # Simulate cascading effects
         predicted_state = dict(self.variables)
@@ -247,7 +254,9 @@ class BayesianWorldModel:
         # Estimate counterfactual probability
         if causal_path:
             path_strength = math.prod(link.strength for link in causal_path)
-            counterfactual_prob = outcome_belief.probability * (1 - path_strength) + path_strength * 0.5
+            counterfactual_prob = (
+                outcome_belief.probability * (1 - path_strength) + path_strength * 0.5
+            )
         else:
             counterfactual_prob = outcome_belief.probability * 0.9
 
@@ -271,8 +280,7 @@ class BayesianWorldModel:
     def get_strong_beliefs(self, min_probability: float = 0.7) -> list[Belief]:
         """Get beliefs with high probability."""
         return [
-            b for b in self.beliefs.values()
-            if b.probability >= min_probability and b.is_reliable
+            b for b in self.beliefs.values() if b.probability >= min_probability and b.is_reliable
         ]
 
     def get_stats(self) -> dict[str, Any]:
@@ -340,6 +348,7 @@ class BayesianWorldModel:
     @dataclass
     class PredictionRecord:
         """Record of a prediction and its outcome."""
+
         id: str = field(default_factory=lambda: str(uuid.uuid4()))
         prediction: str = ""
         predicted_probability: float = 0.5
@@ -429,13 +438,15 @@ class BayesianWorldModel:
                     links_updated.append(f"{link.cause} -> {link.effect}")
 
         # Record prediction error in history
-        self.prediction_history.append({
-            "type": "update",
-            "prediction_id": prediction_id,
-            "prediction_error": prediction_error,
-            "beliefs_updated": len(beliefs_updated),
-            "links_updated": len(links_updated),
-        })
+        self.prediction_history.append(
+            {
+                "type": "update",
+                "prediction_id": prediction_id,
+                "prediction_error": prediction_error,
+                "beliefs_updated": len(beliefs_updated),
+                "links_updated": len(links_updated),
+            }
+        )
 
         self.logger.info(
             "world_model_updated",
@@ -454,7 +465,8 @@ class BayesianWorldModel:
     def _calculate_average_prediction_error(self) -> float:
         """Calculate average prediction error from recent history."""
         errors = [
-            r.prediction_error for r in self.prediction_history
+            r.prediction_error
+            for r in self.prediction_history
             if isinstance(r, self.PredictionRecord) and r.updated
         ]
         if not errors:
@@ -462,8 +474,8 @@ class BayesianWorldModel:
 
         # Weight recent errors more heavily
         recent = errors[-20:] if len(errors) > 20 else errors
-        weights = [0.9 ** i for i in range(len(recent))]
-        weighted_error = sum(e * w for e, w in zip(recent, weights)) / sum(weights)
+        weights = [0.9**i for i in range(len(recent))]
+        weighted_error = sum(e * w for e, w in zip(recent, weights, strict=False)) / sum(weights)
         return weighted_error
 
     async def internal_simulation(
@@ -513,14 +525,16 @@ Simulate:"""
             data = response.parsed_json
 
             # Record simulation for later comparison with actual outcomes
-            self.prediction_history.append({
-                "type": "simulation",
-                "action": action,
-                "predicted_effects": data.get("predicted_effects", []),
-                "risks": data.get("risks", []),
-                "confidence": data.get("simulation_confidence", 0.5),
-                "context": context,
-            })
+            self.prediction_history.append(
+                {
+                    "type": "simulation",
+                    "action": action,
+                    "predicted_effects": data.get("predicted_effects", []),
+                    "risks": data.get("risks", []),
+                    "confidence": data.get("simulation_confidence", 0.5),
+                    "context": context,
+                }
+            )
 
             return data
         except Exception:
@@ -530,12 +544,10 @@ Simulate:"""
         """Assess the quality of the world model."""
         avg_error = self._calculate_average_prediction_error()
         total_predictions = sum(
-            1 for r in self.prediction_history
-            if isinstance(r, self.PredictionRecord)
+            1 for r in self.prediction_history if isinstance(r, self.PredictionRecord)
         )
         updated_predictions = sum(
-            1 for r in self.prediction_history
-            if isinstance(r, self.PredictionRecord) and r.updated
+            1 for r in self.prediction_history if isinstance(r, self.PredictionRecord) and r.updated
         )
 
         return {

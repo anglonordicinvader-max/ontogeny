@@ -5,9 +5,9 @@ import hashlib
 import json
 import subprocess
 import tempfile
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -16,25 +16,26 @@ import structlog
 from .backend import CognitiveBackend
 
 
-class ModificationType(str, Enum):
-    SKILL = "skill"              # Add new skill/capability
-    CONFIG = "config"            # Modify configuration
-    STRATEGY = "strategy"        # Change approach/strategy
-    TOOL = "tool"                # Create or modify tool
-    WORKFLOW = "workflow"        # Modify workflow/process
+class ModificationType(StrEnum):
+    SKILL = "skill"  # Add new skill/capability
+    CONFIG = "config"  # Modify configuration
+    STRATEGY = "strategy"  # Change approach/strategy
+    TOOL = "tool"  # Create or modify tool
+    WORKFLOW = "workflow"  # Modify workflow/process
 
 
-class SafetyLevel(str, Enum):
-    SAFE = "safe"                # No risk, always allowed
-    LOW_RISK = "low_risk"        # Minimal risk, auto-approved
+class SafetyLevel(StrEnum):
+    SAFE = "safe"  # No risk, always allowed
+    LOW_RISK = "low_risk"  # Minimal risk, auto-approved
     MEDIUM_RISK = "medium_risk"  # Moderate risk, needs review
-    HIGH_RISK = "high_risk"      # Significant risk, needs approval
-    CRITICAL = "critical"        # Dangerous, requires human approval
+    HIGH_RISK = "high_risk"  # Significant risk, needs approval
+    CRITICAL = "critical"  # Dangerous, requires human approval
 
 
 @dataclass
 class Modification:
     """A proposed self-modification."""
+
     id: str
     mod_type: ModificationType
     description: str
@@ -497,6 +498,7 @@ class SelfModifier:
         # Try to extract numeric metrics from output
         try:
             import ast
+
             # Look for common metric patterns
             if "success_rate" in output:
                 for line in output.split("\n"):

@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import quote
 
-from .base import BaseCrawler, CrawlResult, ContentType, CrawlerConfig
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class GitHubCodeSearchCrawler(BaseCrawler):
@@ -15,7 +15,9 @@ class GitHubCodeSearchCrawler(BaseCrawler):
 
     BASE_URL = "https://api.github.com"
 
-    def __init__(self, token: str = "", config: CrawlerConfig | None = None, proxy_pool: Any = None):
+    def __init__(
+        self, token: str = "", config: CrawlerConfig | None = None, proxy_pool: Any = None
+    ):
         super().__init__(config, proxy_pool)
         self.token = token
 
@@ -53,7 +55,9 @@ class GitHubCodeSearchCrawler(BaseCrawler):
         headers = await self._get_headers()
 
         results = []
-        async with self.session.get(url, params=params, headers=headers, proxy=self._get_proxy()) as resp:
+        async with self.session.get(
+            url, params=params, headers=headers, proxy=self._get_proxy()
+        ) as resp:
             if resp.status == 200:
                 data = await resp.json()
                 for item in data.get("items", [])[:limit]:
@@ -97,7 +101,9 @@ class GitHubCodeSearchCrawler(BaseCrawler):
         headers = await self._get_headers()
 
         results = []
-        async with self.session.get(url, params=params, headers=headers, proxy=self._get_proxy()) as resp:
+        async with self.session.get(
+            url, params=params, headers=headers, proxy=self._get_proxy()
+        ) as resp:
             if resp.status == 200:
                 data = await resp.json()
                 for item in data.get("items", [])[:limit]:
@@ -162,7 +168,9 @@ class PapersWithCodeCrawler(BaseCrawler):
                     repos = item.get("repositories", [])
                     repo_info = ""
                     if repos:
-                        repo_info = f"\nRepo: {repos[0].get('url', '')}\nStars: {repos[0].get('stars', 0)}"
+                        repo_info = (
+                            f"\nRepo: {repos[0].get('url', '')}\nStars: {repos[0].get('stars', 0)}"
+                        )
 
                     result = CrawlResult(
                         url=paper_url,
@@ -223,7 +231,9 @@ class HuggingFaceHubCrawler(BaseCrawler):
 
     BASE_URL = "https://huggingface.co/api"
 
-    def __init__(self, token: str = "", config: CrawlerConfig | None = None, proxy_pool: Any = None):
+    def __init__(
+        self, token: str = "", config: CrawlerConfig | None = None, proxy_pool: Any = None
+    ):
         super().__init__(config, proxy_pool)
         self.token = token
 
@@ -251,7 +261,9 @@ class HuggingFaceHubCrawler(BaseCrawler):
         headers = await self._get_headers()
         results = []
 
-        async with self.session.get(url, params=params, headers=headers, proxy=self._get_proxy()) as resp:
+        async with self.session.get(
+            url, params=params, headers=headers, proxy=self._get_proxy()
+        ) as resp:
             if resp.status == 200:
                 data = await resp.json()
                 for item in data:
@@ -286,7 +298,9 @@ class HuggingFaceHubCrawler(BaseCrawler):
         headers = await self._get_headers()
         results = []
 
-        async with self.session.get(url, params=params, headers=headers, proxy=self._get_proxy()) as resp:
+        async with self.session.get(
+            url, params=params, headers=headers, proxy=self._get_proxy()
+        ) as resp:
             if resp.status == 200:
                 data = await resp.json()
                 for item in data:
@@ -319,7 +333,9 @@ class HuggingFaceHubCrawler(BaseCrawler):
         headers = await self._get_headers()
         results = []
 
-        async with self.session.get(url, params=params, headers=headers, proxy=self._get_proxy()) as resp:
+        async with self.session.get(
+            url, params=params, headers=headers, proxy=self._get_proxy()
+        ) as resp:
             if resp.status == 200:
                 data = await resp.json()
                 for item in data:
@@ -399,18 +415,20 @@ class GitHubTrendingCrawler(BaseCrawler):
             desc = re.sub(r"<[^>]+>", "", desc).strip()
             stars = re.sub(r"<[^>]+>", "", stars).strip()
 
-            results.append(CrawlResult(
-                url=f"https://github.com{path}",
-                title=name,
-                content=f"{desc}\nStars today: {stars}",
-                source="github_trending",
-                content_type=ContentType.REPOSITORY,
-                metadata={
-                    "language": None,  # Would extract from HTML
-                    "stars_today": stars,
-                },
-                timestamp=datetime.utcnow(),
-            ))
+            results.append(
+                CrawlResult(
+                    url=f"https://github.com{path}",
+                    title=name,
+                    content=f"{desc}\nStars today: {stars}",
+                    source="github_trending",
+                    content_type=ContentType.REPOSITORY,
+                    metadata={
+                        "language": None,  # Would extract from HTML
+                        "stars_today": stars,
+                    },
+                    timestamp=datetime.utcnow(),
+                )
+            )
 
         return results
 

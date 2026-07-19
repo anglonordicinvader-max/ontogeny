@@ -17,7 +17,7 @@ import structlog
 
 @dataclass
 class WeatherState:
-    wind_direction: List[float] = field(default_factory=lambda: [1, 0, 0])
+    wind_direction: list[float] = field(default_factory=lambda: [1, 0, 0])
     wind_speed: float = 0.0  # m/s
     wind_gusts: bool = False
     rain_intensity: float = 0.0  # 0.0 to 1.0
@@ -35,7 +35,7 @@ class WindSimulation:
         self.state = WeatherState()
         self.logger = structlog.get_logger(component="wind")
 
-    def set_wind(self, direction: List[float], speed: float, gusts: bool = False):
+    def set_wind(self, direction: list[float], speed: float, gusts: bool = False):
         norm = math.sqrt(sum(d**2 for d in direction))
         if norm > 0:
             direction = [d / norm for d in direction]
@@ -43,10 +43,12 @@ class WindSimulation:
         self.state.wind_speed = speed
         self.state.wind_gusts = gusts
 
-    def get_force(self, object_mass: float, dt: float = 0.01) -> List[float]:
+    def get_force(self, object_mass: float, dt: float = 0.01) -> list[float]:
         """Get wind force on an object."""
-        base_force = [self.state.wind_direction[i] * self.state.wind_speed * object_mass * 0.1
-                      for i in range(3)]
+        base_force = [
+            self.state.wind_direction[i] * self.state.wind_speed * object_mass * 0.1
+            for i in range(3)
+        ]
 
         if self.state.wind_gusts:
             gust_factor = 1.0 + random.uniform(-0.3, 0.5)
@@ -54,7 +56,9 @@ class WindSimulation:
 
         return base_force
 
-    def apply_to_position(self, position: List[float], mass: float, dt: float = 0.01) -> List[float]:
+    def apply_to_position(
+        self, position: list[float], mass: float, dt: float = 0.01
+    ) -> list[float]:
         """Apply wind to position."""
         force = self.get_force(mass, dt)
         acceleration = [f / mass for f in force]
@@ -62,7 +66,9 @@ class WindSimulation:
         return new_pos
 
     def to_context(self) -> str:
-        return f"Wind: {self.state.wind_speed:.1f}m/s {'gusty' if self.state.wind_gusts else 'steady'}"
+        return (
+            f"Wind: {self.state.wind_speed:.1f}m/s {'gusty' if self.state.wind_gusts else 'steady'}"
+        )
 
 
 class RainSimulation:
@@ -70,27 +76,29 @@ class RainSimulation:
 
     def __init__(self, max_particles: int = 500):
         self.max_particles = max_particles
-        self.particles: List[Dict] = []
+        self.particles: list[dict] = []
         self.intensity = 0.0
         self.logger = structlog.get_logger(component="rain")
 
     def set_intensity(self, intensity: float):
         self.intensity = max(0.0, min(1.0, intensity))
 
-    def update(self, dt: float, wind: WindSimulation = None) -> List[Dict]:
+    def update(self, dt: float, wind: WindSimulation = None) -> list[dict]:
         """Update rain particles."""
         target_count = int(self.intensity * self.max_particles)
 
         while len(self.particles) < target_count:
-            self.particles.append({
-                "x": random.uniform(-20, 20),
-                "y": random.uniform(-20, 20),
-                "z": random.uniform(10, 20),
-                "vx": 0,
-                "vy": 0,
-                "vz": -10 - random.uniform(0, 5),
-                "size": random.uniform(0.01, 0.03),
-            })
+            self.particles.append(
+                {
+                    "x": random.uniform(-20, 20),
+                    "y": random.uniform(-20, 20),
+                    "z": random.uniform(10, 20),
+                    "vx": 0,
+                    "vy": 0,
+                    "vz": -10 - random.uniform(0, 5),
+                    "size": random.uniform(0.01, 0.03),
+                }
+            )
 
         while len(self.particles) > target_count:
             self.particles.pop()
@@ -112,7 +120,7 @@ class RainSimulation:
         self.particles = active
         return self.particles
 
-    def get_ground_impact(self) -> List[Dict]:
+    def get_ground_impact(self) -> list[dict]:
         """Get particles hitting ground."""
         impacts = []
         for p in self.particles:
@@ -138,7 +146,7 @@ class DayNightCycle:
         """Get sun angle from horizon (0=horizon, 90=zenith)."""
         return max(0, 90 - abs(self.time_of_day - 12) * 15)
 
-    def get_sun_color(self) -> Tuple[float, float, float]:
+    def get_sun_color(self) -> tuple[float, float, float]:
         """Get sun color based on time."""
         hour = self.time_of_day
         if 6 <= hour <= 8:
@@ -157,7 +165,7 @@ class DayNightCycle:
         angle = self.get_sun_angle()
         return max(0, math.sin(math.radians(angle)) * 3.0)
 
-    def get_ambient_color(self) -> Tuple[float, float, float]:
+    def get_ambient_color(self) -> tuple[float, float, float]:
         """Get ambient light color."""
         hour = self.time_of_day
         if 6 <= hour <= 18:
@@ -212,14 +220,19 @@ class WeatherSystem:
         self.temperature = 22.0
         self.logger = structlog.get_logger(component="weather")
 
-    def set_weather(self, wind_speed: float = 0, rain_intensity: float = 0,
-                    fog_density: float = 0, temperature: float = 22.0):
+    def set_weather(
+        self,
+        wind_speed: float = 0,
+        rain_intensity: float = 0,
+        fog_density: float = 0,
+        temperature: float = 22.0,
+    ):
         self.wind.set_wind([1, 0, 0], wind_speed, gusts=wind_speed > 10)
         self.rain.set_intensity(rain_intensity)
         self.fog.set_density(fog_density)
         self.temperature = temperature
 
-    def update(self, dt: float) -> Dict:
+    def update(self, dt: float) -> dict:
         rain_particles = self.rain.update(dt, self.wind)
         return {
             "wind_force": self.wind.get_force(1.0),
@@ -230,6 +243,8 @@ class WeatherSystem:
         }
 
     def to_context(self) -> str:
-        return (f"Weather: wind={self.wind.to_context()}, "
-                f"{self.rain.to_context()}, {self.fog.to_context()}, "
-                f"{self.day_night.to_context()}, temp={self.temperature:.0f}°C")
+        return (
+            f"Weather: wind={self.wind.to_context()}, "
+            f"{self.rain.to_context()}, {self.fog.to_context()}, "
+            f"{self.day_night.to_context()}, temp={self.temperature:.0f}°C"
+        )

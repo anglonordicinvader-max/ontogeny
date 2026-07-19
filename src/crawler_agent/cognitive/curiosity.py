@@ -17,6 +17,7 @@ import structlog
 @dataclass
 class KnowledgeGap:
     """A detected gap in knowledge."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     topic: str = ""
     gap_type: str = ""  # missing, incomplete, contradictory, outdated
@@ -35,6 +36,7 @@ class KnowledgeGap:
 @dataclass
 class NoveltySignal:
     """Signal indicating something novel was encountered."""
+
     topic: str = ""
     novelty_score: float = 0.0  # 0-1, higher = more novel
     context: dict[str, Any] = field(default_factory=dict)
@@ -93,8 +95,14 @@ class CuriosityEngine:
 
         # Check for missing topics
         important_topics = [
-            "physics", "mathematics", "computer_science", "biology",
-            "chemistry", "philosophy", "economics", "history",
+            "physics",
+            "mathematics",
+            "computer_science",
+            "biology",
+            "chemistry",
+            "philosophy",
+            "economics",
+            "history",
         ]
         for topic in important_topics:
             if topic not in knowledge_state:
@@ -127,10 +135,7 @@ class CuriosityEngine:
     async def generate_exploration_goal(self) -> str | None:
         """Generate an intrinsic exploration goal."""
         # Find most curious unresolved gap
-        candidates = [
-            gap for gap in self.knowledge_gaps.values()
-            if gap.should_explore
-        ]
+        candidates = [gap for gap in self.knowledge_gaps.values() if gap.should_explore]
 
         if not candidates:
             return None
@@ -174,21 +179,25 @@ class CuriosityEngine:
             key=lambda x: x[1],
         ):
             if coverage < 0.7:
-                topics.append({
-                    "topic": topic,
-                    "coverage": coverage,
-                    "novelty": 1.0 - coverage,
-                })
+                topics.append(
+                    {
+                        "topic": topic,
+                        "coverage": coverage,
+                        "novelty": 1.0 - coverage,
+                    }
+                )
 
         # Add gaps as topics
         for gap in self.knowledge_gaps.values():
             if gap.should_explore:
-                topics.append({
-                    "topic": gap.topic,
-                    "coverage": 0.0,
-                    "novelty": gap.curiosity_score,
-                    "gap_type": gap.gap_type,
-                })
+                topics.append(
+                    {
+                        "topic": gap.topic,
+                        "coverage": 0.0,
+                        "novelty": gap.curiosity_score,
+                        "gap_type": gap.gap_type,
+                    }
+                )
 
         return sorted(topics, key=lambda t: t["novelty"], reverse=True)[:limit]
 
@@ -226,7 +235,8 @@ class CuriosityEngine:
             "topics_covered": len(self.topic_coverage),
             "avg_coverage": (
                 sum(self.topic_coverage.values()) / len(self.topic_coverage)
-                if self.topic_coverage else 0
+                if self.topic_coverage
+                else 0
             ),
             "total_exploration_reward": self.total_exploration_reward,
         }
@@ -283,55 +293,62 @@ class CuriosityEngine:
         # 1. Capability gap goals
         for cap, score in current_capabilities.items():
             if score < 0.6:
-                goals.append({
-                    "type": "capability_gap",
-                    "goal": f"Improve competency in {cap}",
-                    "description": f"Current proficiency: {score:.0%}. Target: >80%",
-                    "motivation": "competence_drive",
-                    "urgency": 1.0 - score,
-                    "expected_difficulty": 0.5,
-                    "learning_potential": 0.8,
-                })
+                goals.append(
+                    {
+                        "type": "capability_gap",
+                        "goal": f"Improve competency in {cap}",
+                        "description": f"Current proficiency: {score:.0%}. Target: >80%",
+                        "motivation": "competence_drive",
+                        "urgency": 1.0 - score,
+                        "expected_difficulty": 0.5,
+                        "learning_potential": 0.8,
+                    }
+                )
 
         # 2. Knowledge gap goals
         for gap in self.knowledge_gaps.values():
             if gap.should_explore:
-                goals.append({
-                    "type": "knowledge_gap",
-                    "goal": f"Learn about {gap.topic}: {gap.description}",
-                    "motivation": "curiosity",
-                    "urgency": gap.curiosity_score,
-                    "expected_difficulty": gap.priority / 10,
-                    "learning_potential": gap.curiosity_score,
-                })
+                goals.append(
+                    {
+                        "type": "knowledge_gap",
+                        "goal": f"Learn about {gap.topic}: {gap.description}",
+                        "motivation": "curiosity",
+                        "urgency": gap.curiosity_score,
+                        "expected_difficulty": gap.priority / 10,
+                        "learning_potential": gap.curiosity_score,
+                    }
+                )
 
         # 3. Novelty seeking goals
         underexplored = [
-            (topic, coverage) for topic, coverage in self.topic_coverage.items()
-            if coverage < 0.3
+            (topic, coverage) for topic, coverage in self.topic_coverage.items() if coverage < 0.3
         ]
         for topic, coverage in underexplored[:3]:
-            goals.append({
-                "type": "novelty_seeking",
-                "goal": f"Explore underexplored topic: {topic}",
-                "description": f"Current coverage: {coverage:.0%}",
-                "motivation": "novelty_seeking",
-                "urgency": 0.3,
-                "expected_difficulty": 0.4,
-                "learning_potential": 0.6,
-            })
+            goals.append(
+                {
+                    "type": "novelty_seeking",
+                    "goal": f"Explore underexplored topic: {topic}",
+                    "description": f"Current coverage: {coverage:.0%}",
+                    "motivation": "novelty_seeking",
+                    "urgency": 0.3,
+                    "expected_difficulty": 0.4,
+                    "learning_potential": 0.6,
+                }
+            )
 
         # 4. Boredom detection
         if self._detect_boredom():
-            goals.append({
-                "type": "boredom_relief",
-                "goal": "Seek novel or challenging tasks",
-                "description": "Boredom detected - repeated similar activities",
-                "motivation": "boredom_relief",
-                "urgency": 0.7,
-                "expected_difficulty": 0.3,
-                "learning_potential": 0.9,
-            })
+            goals.append(
+                {
+                    "type": "boredom_relief",
+                    "goal": "Seek novel or challenging tasks",
+                    "description": "Boredom detected - repeated similar activities",
+                    "motivation": "boredom_relief",
+                    "urgency": 0.7,
+                    "expected_difficulty": 0.3,
+                    "learning_potential": 0.9,
+                }
+            )
 
         # Sort by combined score
         for g in goals:
@@ -365,14 +382,16 @@ class CuriosityEngine:
                 failures = [a for a in attempts if not a.get("success")]
                 failure_reasons = [a.get("failure_reason", "unknown") for a in failures]
 
-                gaps.append({
-                    "task_type": task_type,
-                    "success_rate": success_rate,
-                    "total_attempts": len(attempts),
-                    "failure_patterns": failure_reasons,
-                    "improvement_priority": (1 - success_rate) * len(attempts),
-                    "recommended_action": self._recommend_improvement(failure_reasons),
-                })
+                gaps.append(
+                    {
+                        "task_type": task_type,
+                        "success_rate": success_rate,
+                        "total_attempts": len(attempts),
+                        "failure_patterns": failure_reasons,
+                        "improvement_priority": (1 - success_rate) * len(attempts),
+                        "recommended_action": self._recommend_improvement(failure_reasons),
+                    }
+                )
 
         gaps.sort(key=lambda g: g["improvement_priority"], reverse=True)
         return gaps
@@ -455,9 +474,7 @@ class CuriosityEngine:
         if len(self.novelty_history) < 5:
             return False
 
-        recent_novelty = [
-            s.novelty_score for s in self.novelty_history[-10:]
-        ]
+        recent_novelty = [s.novelty_score for s in self.novelty_history[-10:]]
         avg_novelty = sum(recent_novelty) / len(recent_novelty)
         return avg_novelty < 0.2
 

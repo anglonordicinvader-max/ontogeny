@@ -18,6 +18,7 @@ import structlog
 @dataclass
 class Pattern:
     """A learned pattern."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     pattern_type: str = ""  # frequency, sequence, association, causal
     description: str = ""
@@ -51,9 +52,15 @@ class PatternLearner:
 
     def __init__(self):
         self.patterns: dict[str, Pattern] = {}
-        self.frequency_counts: dict[str, defaultdict[str, int]] = defaultdict(lambda: defaultdict(int))
-        self.sequence_counts: dict[str, defaultdict[tuple, int]] = defaultdict(lambda: defaultdict(int))
-        self.association_counts: dict[str, defaultdict[tuple, int]] = defaultdict(lambda: defaultdict(int))
+        self.frequency_counts: dict[str, defaultdict[str, int]] = defaultdict(
+            lambda: defaultdict(int)
+        )
+        self.sequence_counts: dict[str, defaultdict[tuple, int]] = defaultdict(
+            lambda: defaultdict(int)
+        )
+        self.association_counts: dict[str, defaultdict[tuple, int]] = defaultdict(
+            lambda: defaultdict(int)
+        )
         self.logger = structlog.get_logger()
 
     async def learn_from_experience(
@@ -122,13 +129,15 @@ class PatternLearner:
         predictions = []
         for pattern in self.patterns.values():
             if self._matches_conditions(pattern, context):
-                predictions.append({
-                    "pattern_id": pattern.id,
-                    "type": pattern.pattern_type,
-                    "description": pattern.description,
-                    "outcomes": pattern.outcomes,
-                    "confidence": pattern.confidence,
-                })
+                predictions.append(
+                    {
+                        "pattern_id": pattern.id,
+                        "type": pattern.pattern_type,
+                        "description": pattern.description,
+                        "outcomes": pattern.outcomes,
+                        "confidence": pattern.confidence,
+                    }
+                )
 
         # Sort by confidence
         predictions.sort(key=lambda x: x["confidence"], reverse=True)
@@ -145,16 +154,13 @@ class PatternLearner:
 
     def get_strong_patterns(self, min_confidence: float = 0.7) -> list[Pattern]:
         """Get high-confidence patterns."""
-        return [
-            p for p in self.patterns.values()
-            if p.confidence >= min_confidence
-        ]
+        return [p for p in self.patterns.values() if p.confidence >= min_confidence]
 
     def decay_patterns(self, decay_rate: float = 0.01):
         """Apply decay to old patterns (forgetting)."""
         to_remove = []
         for pid, pattern in self.patterns.items():
-            pattern.confidence *= (1 - decay_rate)
+            pattern.confidence *= 1 - decay_rate
             if pattern.confidence < 0.1:
                 to_remove.append(pid)
 
@@ -167,20 +173,22 @@ class PatternLearner:
         keys = list(experience.keys())
 
         for i, key1 in enumerate(keys):
-            for key2 in keys[i+1:]:
+            for key2 in keys[i + 1 :]:
                 pair = (key1, key2)
                 self.frequency_counts[experience.get("type", "general")][str(pair)] += 1
 
                 count = self.frequency_counts[experience.get("type", "general")][str(pair)]
                 if count >= 3:
-                    patterns.append(Pattern(
-                        pattern_type="frequency",
-                        description=f"{key1} co-occurs with {key2}",
-                        conditions={"has_key": key1},
-                        outcomes={"likely_has_key": key2},
-                        confidence=min(0.9, count / 10),
-                        support=count,
-                    ))
+                    patterns.append(
+                        Pattern(
+                            pattern_type="frequency",
+                            description=f"{key1} co-occurs with {key2}",
+                            conditions={"has_key": key1},
+                            outcomes={"likely_has_key": key2},
+                            confidence=min(0.9, count / 10),
+                            support=count,
+                        )
+                    )
 
         return patterns
 
@@ -198,14 +206,16 @@ class PatternLearner:
             count = self.sequence_counts["events"][pair]
 
             if count >= 2:
-                patterns.append(Pattern(
-                    pattern_type="sequence",
-                    description=f"'{current}' is often followed by '{next_event}'",
-                    conditions={"after": current},
-                    outcomes={"expect": next_event},
-                    confidence=min(0.85, count / 8),
-                    support=count,
-                ))
+                patterns.append(
+                    Pattern(
+                        pattern_type="sequence",
+                        description=f"'{current}' is often followed by '{next_event}'",
+                        conditions={"after": current},
+                        outcomes={"expect": next_event},
+                        confidence=min(0.85, count / 8),
+                        support=count,
+                    )
+                )
 
         return patterns
 
@@ -222,22 +232,26 @@ class PatternLearner:
 
                     count = self.association_counts["associations"][pair]
                     if count >= 3:
-                        patterns.append(Pattern(
-                            pattern_type="association",
-                            description=f"When {key}={value}, then {other_key}={other_value}",
-                            conditions={key: value},
-                            outcomes={other_key: other_value},
-                            confidence=min(0.8, count / 10),
-                            support=count,
-                        ))
+                        patterns.append(
+                            Pattern(
+                                pattern_type="association",
+                                description=f"When {key}={value}, then {other_key}={other_value}",
+                                conditions={key: value},
+                                outcomes={other_key: other_value},
+                                confidence=min(0.8, count / 10),
+                                support=count,
+                            )
+                        )
 
         return patterns
 
     def _find_similar(self, pattern: Pattern) -> Pattern | None:
         """Find an existing similar pattern."""
         for existing in self.patterns.values():
-            if (existing.pattern_type == pattern.pattern_type and
-                existing.description == pattern.description):
+            if (
+                existing.pattern_type == pattern.pattern_type
+                and existing.description == pattern.description
+            ):
                 return existing
         return None
 

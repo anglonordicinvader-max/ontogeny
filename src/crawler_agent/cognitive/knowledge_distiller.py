@@ -12,6 +12,7 @@ from .backend import CognitiveBackend
 @dataclass
 class DistillationExample:
     """A training example for distillation."""
+
     prompt: str
     completion: str
     metadata: dict[str, Any] = None
@@ -61,25 +62,33 @@ class KnowledgeDistiller:
 
     def _save_example(self, example: DistillationExample) -> None:
         f = self.storage_path / "examples.jsonl"
-        f.write_text(f.read_text() + json.dumps({
-            "prompt": example.prompt,
-            "completion": example.completion,
-            "metadata": example.metadata,
-        }) + "\n" if f.exists() else json.dumps({
-            "prompt": example.prompt,
-            "completion": example.completion,
-            "metadata": example.metadata,
-        }) + "\n")
+        f.write_text(
+            f.read_text()
+            + json.dumps(
+                {
+                    "prompt": example.prompt,
+                    "completion": example.completion,
+                    "metadata": example.metadata,
+                }
+            )
+            + "\n"
+            if f.exists()
+            else json.dumps(
+                {
+                    "prompt": example.prompt,
+                    "completion": example.completion,
+                    "metadata": example.metadata,
+                }
+            )
+            + "\n"
+        )
 
     def can_distill(self) -> bool:
         return len(self.examples) >= self.min_examples
 
     async def generate_training_data(self) -> list[dict[str, str]]:
         """Format examples for LoRA training."""
-        return [
-            {"prompt": e.prompt, "completion": e.completion}
-            for e in self.examples
-        ]
+        return [{"prompt": e.prompt, "completion": e.completion} for e in self.examples]
 
     async def trigger_distillation(self) -> dict[str, Any]:
         """Trigger LoRA fine-tuning (placeholder for actual training)."""

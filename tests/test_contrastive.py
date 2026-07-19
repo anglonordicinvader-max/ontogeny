@@ -7,15 +7,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from src.crawler_agent.cognitive.backend import CognitiveResponse
 from src.crawler_agent.cognitive.contrastive_trainer import (
-    ContrastiveTrainer,
     ContrastiveExample,
+    ContrastiveTrainer,
 )
 from src.crawler_agent.cognitive.modification_memory import (
     ModificationMemory,
     ModificationRecord,
 )
-from src.crawler_agent.cognitive.backend import CognitiveResponse
 
 
 @pytest.fixture
@@ -147,12 +147,14 @@ class TestContrastiveTrainer:
         trainer.memory.record(failed_record)
 
         mock_backend.complete.return_value = CognitiveResponse(
-            content=json.dumps({
-                "prediction": "fail",
-                "reason": "The import order is wrong and will cause circular dependencies",
-                "confidence": 0.8,
-                "warning_signs": ["Imports at top", "No error handling"],
-            }),
+            content=json.dumps(
+                {
+                    "prediction": "fail",
+                    "reason": "The import order is wrong and will cause circular dependencies",
+                    "confidence": 0.8,
+                    "warning_signs": ["Imports at top", "No error handling"],
+                }
+            ),
             confidence=0.8,
         )
 
@@ -167,12 +169,14 @@ class TestContrastiveTrainer:
         trainer.memory.record(failed_record)
 
         mock_backend.complete.return_value = CognitiveResponse(
-            content=json.dumps({
-                "root_cause": "The import order was reversed, causing the module to be used before it was defined",
-                "correct_approach": "Keep standard library imports first, then third-party, then local",
-                "fixed_code": "import os\nimport sys\nfrom foo import bar",
-                "lessons": ["Import order matters", "Follow PEP 8"],
-            }),
+            content=json.dumps(
+                {
+                    "root_cause": "The import order was reversed, causing the module to be used before it was defined",
+                    "correct_approach": "Keep standard library imports first, then third-party, then local",
+                    "fixed_code": "import os\nimport sys\nfrom foo import bar",
+                    "lessons": ["Import order matters", "Follow PEP 8"],
+                }
+            ),
             confidence=0.8,
         )
 
@@ -188,12 +192,14 @@ class TestContrastiveTrainer:
         trainer.memory.record(failed_record)
 
         mock_backend.complete.return_value = CognitiveResponse(
-            content=json.dumps({
-                "correct": "A",
-                "explanation": "Approach A follows PEP 8 import ordering conventions",
-                "key_difference": "Import order determines initialization sequence",
-                "takeaway": "Always follow standard library first convention",
-            }),
+            content=json.dumps(
+                {
+                    "correct": "A",
+                    "explanation": "Approach A follows PEP 8 import ordering conventions",
+                    "key_difference": "Import order determines initialization sequence",
+                    "takeaway": "Always follow standard library first convention",
+                }
+            ),
             confidence=0.8,
         )
 
@@ -210,12 +216,14 @@ class TestContrastiveTrainer:
         trainer.memory.record(failed_record)
 
         mock_backend.complete.return_value = CognitiveResponse(
-            content=json.dumps({
-                "prediction": "fail",
-                "reason": "Test reason for failure prediction",
-                "confidence": 0.8,
-                "warning_signs": ["test warning"],
-            }),
+            content=json.dumps(
+                {
+                    "prediction": "fail",
+                    "reason": "Test reason for failure prediction",
+                    "confidence": 0.8,
+                    "warning_signs": ["test warning"],
+                }
+            ),
             confidence=0.8,
         )
 
@@ -231,12 +239,14 @@ class TestContrastiveTrainer:
         trainer.memory.record(failed_record)
 
         mock_backend.complete.return_value = CognitiveResponse(
-            content=json.dumps({
-                "prediction": "fail",
-                "reason": "Test reason for adding to memory",
-                "confidence": 0.8,
-                "warning_signs": ["test"],
-            }),
+            content=json.dumps(
+                {
+                    "prediction": "fail",
+                    "reason": "Test reason for adding to memory",
+                    "confidence": 0.8,
+                    "warning_signs": ["test"],
+                }
+            ),
             confidence=0.8,
         )
 
@@ -247,7 +257,9 @@ class TestContrastiveTrainer:
         assert len(trainer.memory.records) > initial_count
 
         # Check that records have the contrastive_training source module
-        contrastive_records = [r for r in trainer.memory.records if r.source_module == "contrastive_training"]
+        contrastive_records = [
+            r for r in trainer.memory.records if r.source_module == "contrastive_training"
+        ]
         assert len(contrastive_records) > 0
 
     @pytest.mark.asyncio
@@ -262,12 +274,14 @@ class TestContrastiveTrainer:
         trainer.min_quality = 0.95
 
         mock_backend.complete.return_value = CognitiveResponse(
-            content=json.dumps({
-                "prediction": "fail",
-                "reason": "The import order is wrong and will cause circular dependencies",
-                "confidence": 0.8,
-                "warning_signs": ["test warning"],
-            }),
+            content=json.dumps(
+                {
+                    "prediction": "fail",
+                    "reason": "The import order is wrong and will cause circular dependencies",
+                    "confidence": 0.8,
+                    "warning_signs": ["test warning"],
+                }
+            ),
             confidence=0.8,
         )
 

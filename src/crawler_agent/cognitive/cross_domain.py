@@ -18,10 +18,10 @@ import structlog
 @dataclass
 class Domain:
     name: str
-    skills: List[str] = field(default_factory=list)
-    abstractions: List[str] = field(default_factory=list)
-    examples: List[Dict] = field(default_factory=list)
-    similarity_to: Dict[str, float] = field(default_factory=dict)
+    skills: list[str] = field(default_factory=list)
+    abstractions: list[str] = field(default_factory=list)
+    examples: list[dict] = field(default_factory=list)
+    similarity_to: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -41,8 +41,8 @@ class CrossDomainTransfer:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.logger = structlog.get_logger(component="cross_domain")
 
-        self.domains: Dict[str, Domain] = {}
-        self.transfers: List[Transfer] = []
+        self.domains: dict[str, Domain] = {}
+        self.transfers: list[Transfer] = []
 
         self._setup_domains()
         self._load()
@@ -83,19 +83,24 @@ class CrossDomainTransfer:
 
     def _save(self):
         domains_file = self.data_dir / "domains.json"
-        domains_file.write_text(json.dumps({
-            "domains": {
-                name: {
-                    "name": d.name,
-                    "skills": d.skills,
-                    "abstractions": d.abstractions,
-                    "similarity_to": d.similarity_to,
-                }
-                for name, d in self.domains.items()
-            },
-        }, indent=2))
+        domains_file.write_text(
+            json.dumps(
+                {
+                    "domains": {
+                        name: {
+                            "name": d.name,
+                            "skills": d.skills,
+                            "abstractions": d.abstractions,
+                            "similarity_to": d.similarity_to,
+                        }
+                        for name, d in self.domains.items()
+                    },
+                },
+                indent=2,
+            )
+        )
 
-    def find_transferable_skills(self, source: str, target: str) -> List[str]:
+    def find_transferable_skills(self, source: str, target: str) -> list[str]:
         """Find skills that can transfer between domains."""
         source_domain = self.domains.get(source)
         target_domain = self.domains.get(target)

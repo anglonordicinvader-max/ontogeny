@@ -1,16 +1,22 @@
 """PostgreSQL storage for crawled data."""
 
+from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import AsyncIterator
 
 import structlog
 from sqlalchemy import (
-    Column, String, Text, DateTime, JSON, Integer, Float,
-    create_engine, select, and_
+    JSON,
+    Column,
+    DateTime,
+    Float,
+    Integer,
+    String,
+    Text,
+    and_,
+    create_engine,
+    select,
 )
-from sqlalchemy.ext.asyncio import (
-    AsyncSession, async_sessionmaker, create_async_engine
-)
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from ..crawlers.base import CrawlResult
@@ -22,6 +28,7 @@ class Base(DeclarativeBase):
 
 class CrawlRecord(Base):
     """Database model for crawled content."""
+
     __tablename__ = "crawl_records"
 
     url = Column(String, primary_key=True)
@@ -38,6 +45,7 @@ class CrawlRecord(Base):
 
 class CrawlStats(Base):
     """Crawl statistics."""
+
     __tablename__ = "crawl_stats"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -130,8 +138,7 @@ class Database:
 
             if query:
                 conditions.append(
-                    CrawlRecord.title.ilike(f"%{query}%") |
-                    CrawlRecord.content.ilike(f"%{query}%")
+                    CrawlRecord.title.ilike(f"%{query}%") | CrawlRecord.content.ilike(f"%{query}%")
                 )
             if source:
                 conditions.append(CrawlRecord.source == source)
@@ -206,8 +213,7 @@ class Database:
 
             total = await session.scalar(select(func.count(CrawlRecord.url)))
             by_source = await session.execute(
-                select(CrawlRecord.source, func.count(CrawlRecord.url))
-                .group_by(CrawlRecord.source)
+                select(CrawlRecord.source, func.count(CrawlRecord.url)).group_by(CrawlRecord.source)
             )
             processed = await session.scalar(
                 select(func.count(CrawlRecord.url)).where(CrawlRecord.processed == 1)

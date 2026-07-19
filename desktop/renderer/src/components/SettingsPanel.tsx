@@ -21,10 +21,24 @@ const defaultSettings: Settings = {
 
 function applyTheme(theme: 'dark' | 'light') {
   const root = document.documentElement;
-  root.classList.add('theme-transitioning');
-  root.classList.toggle('light', theme === 'light');
-  root.classList.toggle('dark', theme !== 'light');
-  setTimeout(() => root.classList.remove('theme-transitioning'), 350);
+  const content = document.getElementById('root');
+  if (!content) {
+    root.classList.toggle('light', theme === 'light');
+    root.classList.toggle('dark', theme !== 'light');
+    return;
+  }
+  content.style.transition = 'opacity 120ms ease-out';
+  content.style.opacity = '0.6';
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      root.classList.toggle('light', theme === 'light');
+      root.classList.toggle('dark', theme !== 'light');
+      content.style.opacity = '1';
+      setTimeout(() => {
+        content.style.transition = '';
+      }, 200);
+    }, 120);
+  });
 }
 
 export function SettingsPanel() {
@@ -35,14 +49,16 @@ export function SettingsPanel() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    applyTheme(settings.theme);
+    const root = document.documentElement;
+    root.classList.toggle('light', settings.theme === 'light');
+    root.classList.toggle('dark', settings.theme !== 'light');
   }, []);
 
   const handleSave = () => {
     localStorage.setItem('ontogeny-settings', JSON.stringify(settings));
     applyTheme(settings.theme);
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setTimeout(() => setSaved(false), 1800);
   };
 
   const handleChange = (key: keyof Settings, value: unknown) => {
@@ -52,9 +68,11 @@ export function SettingsPanel() {
     }
   };
 
+  const sliderFillPct = ((settings.refreshRate - 0.5) / (5 - 0.5)) * 100;
+
   return (
     <div className="h-full overflow-y-auto p-4 space-y-4 animate-panel-in">
-      <Panel title="Backend Configuration">
+      <Panel title="Backend Configuration" accentGlow>
         <div className="space-y-4">
           <div className="space-y-2">
             <label className="text-xs text-text-secondary">Backend Port</label>
@@ -72,33 +90,39 @@ export function SettingsPanel() {
               aria-label="Toggle auto-connect"
               role="switch"
               aria-checked={settings.autoConnect}
-              className={`w-10 h-5 rounded-full transition-colors ${
-                settings.autoConnect ? 'bg-accent' : 'bg-surface-3'
-              }`}
+              className="relative w-10 h-5 rounded-full transition-all duration-200"
+              style={{
+                background: settings.autoConnect ? 'var(--accent-glass)' : 'var(--surface-4)',
+                backdropFilter: settings.autoConnect ? 'blur(6px)' : 'none',
+                boxShadow: settings.autoConnect ? '0 0 14px 2px var(--bloom-color)' : 'none',
+              }}
             >
               <div
-                className={`w-4 h-4 rounded-full bg-white transform transition-transform ${
-                  settings.autoConnect ? 'translate-x-5' : 'translate-x-0.5'
-                }`}
+                className="w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform duration-200"
+                style={{ transform: settings.autoConnect ? 'translateX(20px)' : 'translateX(2px)' }}
               />
             </button>
           </div>
         </div>
       </Panel>
 
-      <Panel title="Display">
+      <Panel title="Display" accentGlow>
         <div className="space-y-4">
           <div className="space-y-2">
             <label className="text-xs text-text-secondary">Refresh Rate (seconds)</label>
-            <input
-              type="range"
-              min="0.5"
-              max="5"
-              step="0.5"
-              value={settings.refreshRate}
-              onChange={(e) => handleChange('refreshRate', parseFloat(e.target.value))}
-              className="w-full"
-            />
+            <div className="slider-wrapper">
+              <div className="slider-track" />
+              <div className="slider-fill" style={{ width: `${sliderFillPct}%` }} />
+              <input
+                type="range"
+                min="0.5"
+                max="5"
+                step="0.5"
+                value={settings.refreshRate}
+                onChange={(e) => handleChange('refreshRate', parseFloat(e.target.value))}
+                className="accent-slider"
+              />
+            </div>
             <div className="text-2xs text-text-tertiary text-right">{settings.refreshRate}s</div>
           </div>
           <div className="space-y-2">
@@ -106,21 +130,27 @@ export function SettingsPanel() {
             <div className="flex gap-2">
               <button
                 onClick={() => handleChange('theme', 'dark')}
-                className={`flex-1 px-3 py-2 rounded-md text-sm border transition-colors ${
-                  settings.theme === 'dark'
-                    ? 'bg-surface-3 border-accent text-text-primary'
-                    : 'bg-surface-2 border-border text-text-secondary hover:border-border-emphasis'
-                }`}
+                className="flex-1 px-3 py-2 rounded-md text-sm border transition-all duration-200"
+                style={{
+                  borderColor: settings.theme === 'dark' ? 'var(--accent)' : 'var(--border)',
+                  color: settings.theme === 'dark' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  background: settings.theme === 'dark' ? 'var(--accent-glass-light)' : 'var(--surface-2)',
+                  backdropFilter: settings.theme === 'dark' ? 'blur(6px)' : 'none',
+                  boxShadow: settings.theme === 'dark' ? '0 0 14px 2px var(--bloom-color)' : 'none',
+                }}
               >
                 Dark
               </button>
               <button
                 onClick={() => handleChange('theme', 'light')}
-                className={`flex-1 px-3 py-2 rounded-md text-sm border transition-colors ${
-                  settings.theme === 'light'
-                    ? 'bg-surface-3 border-accent text-text-primary'
-                    : 'bg-surface-2 border-border text-text-secondary hover:border-border-emphasis'
-                }`}
+                className="flex-1 px-3 py-2 rounded-md text-sm border transition-all duration-200"
+                style={{
+                  borderColor: settings.theme === 'light' ? 'var(--accent)' : 'var(--border)',
+                  color: settings.theme === 'light' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  background: settings.theme === 'light' ? 'var(--accent-glass-light)' : 'var(--surface-2)',
+                  backdropFilter: settings.theme === 'light' ? 'blur(6px)' : 'none',
+                  boxShadow: settings.theme === 'light' ? '0 0 14px 2px var(--bloom-color)' : 'none',
+                }}
               >
                 Light
               </button>
@@ -129,7 +159,7 @@ export function SettingsPanel() {
         </div>
       </Panel>
 
-      <Panel title="Notifications">
+      <Panel title="Notifications" accentGlow>
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-xs text-text-secondary">Enable notifications</span>
@@ -138,14 +168,16 @@ export function SettingsPanel() {
               aria-label="Toggle notifications"
               role="switch"
               aria-checked={settings.notifications}
-              className={`w-10 h-5 rounded-full transition-colors ${
-                settings.notifications ? 'bg-accent' : 'bg-surface-3'
-              }`}
+              className="relative w-10 h-5 rounded-full transition-all duration-200"
+              style={{
+                background: settings.notifications ? 'var(--accent-glass)' : 'var(--surface-4)',
+                backdropFilter: settings.notifications ? 'blur(6px)' : 'none',
+                boxShadow: settings.notifications ? '0 0 14px 2px var(--bloom-color)' : 'none',
+              }}
             >
               <div
-                className={`w-4 h-4 rounded-full bg-white transform transition-transform ${
-                  settings.notifications ? 'translate-x-5' : 'translate-x-0.5'
-                }`}
+                className="w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform duration-200"
+                style={{ transform: settings.notifications ? 'translateX(20px)' : 'translateX(2px)' }}
               />
             </button>
           </div>
@@ -156,14 +188,16 @@ export function SettingsPanel() {
               aria-label="Toggle sound effects"
               role="switch"
               aria-checked={settings.soundEnabled}
-              className={`w-10 h-5 rounded-full transition-colors ${
-                settings.soundEnabled ? 'bg-accent' : 'bg-surface-3'
-              }`}
+              className="relative w-10 h-5 rounded-full transition-all duration-200"
+              style={{
+                background: settings.soundEnabled ? 'var(--accent-glass)' : 'var(--surface-4)',
+                backdropFilter: settings.soundEnabled ? 'blur(6px)' : 'none',
+                boxShadow: settings.soundEnabled ? '0 0 14px 2px var(--bloom-color)' : 'none',
+              }}
             >
               <div
-                className={`w-4 h-4 rounded-full bg-white transform transition-transform ${
-                  settings.soundEnabled ? 'translate-x-5' : 'translate-x-0.5'
-                }`}
+                className="w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform duration-200"
+                style={{ transform: settings.soundEnabled ? 'translateX(20px)' : 'translateX(2px)' }}
               />
             </button>
           </div>
@@ -172,18 +206,18 @@ export function SettingsPanel() {
 
       <Panel title="About">
         <div className="space-y-2">
-          <div className="text-xs text-text-secondary">Ontogeny v1.0.0</div>
-          <div className="text-2xs text-text-tertiary">AI-Native Research Workstation</div>
+          <div className="text-xs text-text-secondary font-medium">Ontogeny v1.0.0</div>
+          <div className="text-2xs text-text-tertiary">Proto-AGI Research Workstation</div>
           <div className="text-2xs text-text-tertiary">License: AGPL-3.0</div>
         </div>
       </Panel>
 
-      <div className="flex items-center gap-2">
-        <button onClick={handleSave} className="btn-primary">
+      <div className="flex items-center gap-3">
+        <button onClick={handleSave} className="btn-primary-glass">
           Save Settings
         </button>
         {saved && (
-          <span className="text-xs text-status-success animate-fade-in">
+          <span className="text-xs text-status-success animate-fade-out-delayed">
             Settings saved
           </span>
         )}

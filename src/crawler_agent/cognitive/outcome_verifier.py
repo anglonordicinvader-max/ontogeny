@@ -7,23 +7,23 @@ Replaces LLM-as-judge with actual execution-based verification:
 - Simulation tasks: compare predicted vs actual outcomes
 """
 
-import asyncio
 import ast
+import asyncio
 import json
 import tempfile
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable
 from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 import structlog
 
-from .backend import CognitiveBackend, CognitiveResponse
 from ..storage import CodeSandbox
+from .backend import CognitiveBackend, CognitiveResponse
 from .blender_sandbox import BlenderSandbox
-
 
 logger = structlog.get_logger()
 
@@ -39,21 +39,22 @@ class VerificationStatus(Enum):
 class VerificationResult:
     status: VerificationStatus
     score: float  # 0.0 - 1.0
-    details: Dict[str, Any] = field(default_factory=dict)
-    errors: List[str] = field(default_factory=list)
+    details: dict[str, Any] = field(default_factory=dict)
+    errors: list[str] = field(default_factory=list)
     execution_time_ms: float = 0.0
-    evidence: List[Dict] = field(default_factory=list)
+    evidence: list[dict] = field(default_factory=list)
 
 
 @dataclass
 class VerificationSpec:
     """Specification for how to verify a task outcome."""
+
     task_type: str  # "code", "planning", "reasoning", "simulation"
-    success_criteria: Dict[str, Any]
-    test_cases: List[Dict] = field(default_factory=list)
-    expected_output: Optional[str] = None
+    success_criteria: dict[str, Any]
+    test_cases: list[dict] = field(default_factory=list)
+    expected_output: str | None = None
     timeout_seconds: float = 60.0
-    metadata: Dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
 
 
 class OutcomeVerifier(ABC):
@@ -61,10 +62,7 @@ class OutcomeVerifier(ABC):
 
     @abstractmethod
     async def verify(
-        self,
-        spec: VerificationSpec,
-        actual_output: Any,
-        context: Dict[str, Any]
+        self, spec: VerificationSpec, actual_output: Any, context: dict[str, Any]
     ) -> VerificationResult:
         pass
 
@@ -77,10 +75,7 @@ class CodeOutcomeVerifier(OutcomeVerifier):
         self.logger = logger.bind(component="code_verifier")
 
     async def verify(
-        self,
-        spec: VerificationSpec,
-        actual_output: Any,
-        context: Dict[str, Any]
+        self, spec: VerificationSpec, actual_output: Any, context: dict[str, Any]
     ) -> VerificationResult:
         start = time.perf_counter()
         errors = []
@@ -99,11 +94,11 @@ class CodeOutcomeVerifier(OutcomeVerifier):
                     status=VerificationStatus.FAILED,
                     score=0.0,
                     errors=["No test cases provided for verification"],
-                    execution_time_ms=(time.perf_counter() - start) * 1000
+                    execution_time_ms=(time.perf_counter() - start) * 1000,
                 )
 
             # Write code to temp file
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
                 f.write(code)
                 code_path = f.name
 
@@ -114,20 +109,21 @@ class CodeOutcomeVerifier(OutcomeVerifier):
                 for i, tc in enumerate(test_cases):
                     test_code = self._build_test(code, tc)
                     result = await asyncio.wait_for(
-                        self.sandbox.run(test_code),
-                        timeout=spec.timeout_seconds
+                        self.sandbox.run(test_code), timeout=spec.timeout_seconds
                     )
 
                     success = result.get("success", False) and result.get("exit_code", 1) == 0
                     if success:
                         passed += 1
-                    evidence.append({
-                        "test_case": i,
-                        "input": tc.get("input"),
-                        "expected": tc.get("expected"),
-                        "actual": result.get("output", ""),
-                        "passed": success
-                    })
+                    evidence.append(
+                        {
+                            "test_case": i,
+                            "input": tc.get("input"),
+                            "expected": tc.get("expected"),
+                            "actual": result.get("output", ""),
+                            "passed": success,
+                        }
+                    )
                     if not success:
                         errors.append(f"Test {i} failed: {result.get('error', 'Unknown')}")
 
@@ -140,28 +136,28 @@ class CodeOutcomeVerifier(OutcomeVerifier):
                     details={"passed": passed, "total": total},
                     errors=errors,
                     execution_time_ms=(time.perf_counter() - start) * 1000,
-                    evidence=evidence
+                    evidence=evidence,
                 )
 
             finally:
                 Path(code_path).unlink(missing_ok=True)
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return VerificationResult(
                 status=VerificationStatus.TIMEOUT,
                 score=0.0,
                 errors=["Verification timed out"],
-                execution_time_ms=(time.perf_counter() - start) * 1000
+                execution_time_ms=(time.perf_counter() - start) * 1000,
             )
         except Exception as e:
             return VerificationResult(
                 status=VerificationStatus.ERROR,
                 score=0.0,
                 errors=[str(e)],
-                execution_time_ms=(time.perf_counter() - start) * 1000
+                execution_time_ms=(time.perf_counter() - start) * 1000,
             )
 
-    def _build_test(self, code: str, test_case: Dict) -> str:
+    def _build_test(self, code: str, test_case: dict) -> str:
         """Build executable test code from code + test case."""
         # Wrap user code and run test
         test_input = test_case.get("input", {})
@@ -177,7 +173,7 @@ import sys
 try:
     # Call the function with test input
     result = main(**{json.dumps(test_input)})
-    
+
     # Check result
     expected = {json.dumps(expected)}
     if result == expected:
@@ -200,10 +196,7 @@ class PlanningOutcomeVerifier(OutcomeVerifier):
         self.logger = logger.bind(component="planning_verifier")
 
     async def verify(
-        self,
-        spec: VerificationSpec,
-        actual_output: Any,
-        context: Dict[str, Any]
+        self, spec: VerificationSpec, actual_output: Any, context: dict[str, Any]
     ) -> VerificationResult:
         start = time.perf_counter()
         errors = []
@@ -219,7 +212,7 @@ class PlanningOutcomeVerifier(OutcomeVerifier):
                     status=VerificationStatus.FAILED,
                     score=0.0,
                     errors=["No goal specified for planning verification"],
-                    execution_time_ms=(time.perf_counter() - start) * 1000
+                    execution_time_ms=(time.perf_counter() - start) * 1000,
                 )
 
             # Use LLM to evaluate plan quality
@@ -240,7 +233,10 @@ Return JSON: {{"completeness": 0.0, "correctness": 0.0, "feasibility": 0.0, "eff
             response = await self.backend.complete(eval_prompt, temperature=0.1)
             try:
                 eval_data = json.loads(response.content)
-                scores = [eval_data.get(k, 0) for k in ("completeness", "correctness", "feasibility", "efficiency")]
+                scores = [
+                    eval_data.get(k, 0)
+                    for k in ("completeness", "correctness", "feasibility", "efficiency")
+                ]
                 score = sum(scores) / len(scores)
                 evidence.append({"llm_evaluation": eval_data})
             except json.JSONDecodeError:
@@ -252,10 +248,10 @@ Return JSON: {{"completeness": 0.0, "correctness": 0.0, "feasibility": 0.0, "eff
             return VerificationResult(
                 status=status,
                 score=score,
-                details={"evaluation": eval_data if 'eval_data' in locals() else {}},
+                details={"evaluation": eval_data if "eval_data" in locals() else {}},
                 errors=errors,
                 execution_time_ms=(time.perf_counter() - start) * 1000,
-                evidence=evidence
+                evidence=evidence,
             )
 
         except Exception as e:
@@ -263,7 +259,7 @@ Return JSON: {{"completeness": 0.0, "correctness": 0.0, "feasibility": 0.0, "eff
                 status=VerificationStatus.ERROR,
                 score=0.0,
                 errors=[str(e)],
-                execution_time_ms=(time.perf_counter() - start) * 1000
+                execution_time_ms=(time.perf_counter() - start) * 1000,
             )
 
 
@@ -275,10 +271,7 @@ class ReasoningOutcomeVerifier(OutcomeVerifier):
         self.logger = logger.bind(component="reasoning_verifier")
 
     async def verify(
-        self,
-        spec: VerificationSpec,
-        actual_output: Any,
-        context: Dict[str, Any]
+        self, spec: VerificationSpec, actual_output: Any, context: dict[str, Any]
     ) -> VerificationResult:
         start = time.perf_counter()
         errors = []
@@ -306,7 +299,10 @@ Return JSON: {{"validity": 0.0, "accuracy": 0.0, "completeness": 0.0, "hallucina
             response = await self.backend.complete(eval_prompt, temperature=0.1)
             try:
                 eval_data = json.loads(response.content)
-                scores = [eval_data.get(k, 0) for k in ("validity", "accuracy", "completeness", "hallucination_free")]
+                scores = [
+                    eval_data.get(k, 0)
+                    for k in ("validity", "accuracy", "completeness", "hallucination_free")
+                ]
                 score = sum(scores) / len(scores)
                 evidence.append({"llm_evaluation": eval_data})
             except json.JSONDecodeError:
@@ -318,10 +314,10 @@ Return JSON: {{"validity": 0.0, "accuracy": 0.0, "completeness": 0.0, "hallucina
             return VerificationResult(
                 status=status,
                 score=score,
-                details={"evaluation": eval_data if 'eval_data' in locals() else {}},
+                details={"evaluation": eval_data if "eval_data" in locals() else {}},
                 errors=errors,
                 execution_time_ms=(time.perf_counter() - start) * 1000,
-                evidence=evidence
+                evidence=evidence,
             )
 
         except Exception as e:
@@ -329,22 +325,19 @@ Return JSON: {{"validity": 0.0, "accuracy": 0.0, "completeness": 0.0, "hallucina
                 status=VerificationStatus.ERROR,
                 score=0.0,
                 errors=[str(e)],
-                execution_time_ms=(time.perf_counter() - start) * 1000
+                execution_time_ms=(time.perf_counter() - start) * 1000,
             )
 
 
 class SimulationOutcomeVerifier(OutcomeVerifier):
     """Verifies simulation predictions against actual outcomes."""
 
-    def __init__(self, blender_sandbox: Optional[BlenderSandbox] = None):
+    def __init__(self, blender_sandbox: BlenderSandbox | None = None):
         self.blender = blender_sandbox
         self.logger = logger.bind(component="simulation_verifier")
 
     async def verify(
-        self,
-        spec: VerificationSpec,
-        actual_output: Any,
-        context: Dict[str, Any]
+        self, spec: VerificationSpec, actual_output: Any, context: dict[str, Any]
     ) -> VerificationResult:
         start = time.perf_counter()
         errors = []
@@ -370,18 +363,16 @@ class SimulationOutcomeVerifier(OutcomeVerifier):
                     status=VerificationStatus.FAILED,
                     score=0.0,
                     errors=["No ground truth available for comparison"],
-                    execution_time_ms=(time.perf_counter() - start) * 1000
+                    execution_time_ms=(time.perf_counter() - start) * 1000,
                 )
 
             # Compare prediction vs ground truth
             score = self._compare_results(prediction, ground_truth, simulation_type)
             status = VerificationStatus.PASSED if score >= 0.8 else VerificationStatus.FAILED
 
-            evidence.append({
-                "prediction": prediction,
-                "ground_truth": ground_truth,
-                "similarity": score
-            })
+            evidence.append(
+                {"prediction": prediction, "ground_truth": ground_truth, "similarity": score}
+            )
 
             return VerificationResult(
                 status=status,
@@ -389,7 +380,7 @@ class SimulationOutcomeVerifier(OutcomeVerifier):
                 details={"simulation_type": simulation_type},
                 errors=errors,
                 execution_time_ms=(time.perf_counter() - start) * 1000,
-                evidence=evidence
+                evidence=evidence,
             )
 
         except Exception as e:
@@ -397,7 +388,7 @@ class SimulationOutcomeVerifier(OutcomeVerifier):
                 status=VerificationStatus.ERROR,
                 score=0.0,
                 errors=[str(e)],
-                execution_time_ms=(time.perf_counter() - start) * 1000
+                execution_time_ms=(time.perf_counter() - start) * 1000,
             )
 
     def _compare_results(self, prediction: Any, ground_truth: Any, sim_type: str) -> float:
@@ -413,7 +404,9 @@ class SimulationOutcomeVerifier(OutcomeVerifier):
         if isinstance(prediction, list) and isinstance(ground_truth, list):
             if len(prediction) != len(ground_truth):
                 return 0.0
-            errors = [abs(p - g) / (abs(g) + 1e-6) for p, g in zip(prediction, ground_truth)]
+            errors = [
+                abs(p - g) / (abs(g) + 1e-6) for p, g in zip(prediction, ground_truth, strict=False)
+            ]
             return max(0.0, 1.0 - sum(errors) / len(errors))
 
         # Dict comparison
@@ -433,9 +426,9 @@ class CompositeOutcomeVerifier:
 
     def __init__(
         self,
-        code_sandbox: Optional[CodeSandbox] = None,
-        blender_sandbox: Optional[BlenderSandbox] = None,
-        backend: Optional[CognitiveBackend] = None
+        code_sandbox: CodeSandbox | None = None,
+        blender_sandbox: BlenderSandbox | None = None,
+        backend: CognitiveBackend | None = None,
     ):
         self.verifiers = {}
         if code_sandbox:
@@ -453,18 +446,14 @@ class CompositeOutcomeVerifier:
         self.verifiers[task_type] = verifier
 
     async def verify(
-        self,
-        task_type: str,
-        spec: VerificationSpec,
-        actual_output: Any,
-        context: Dict[str, Any]
+        self, task_type: str, spec: VerificationSpec, actual_output: Any, context: dict[str, Any]
     ) -> VerificationResult:
         verifier = self.verifiers.get(task_type, self.default_verifier)
         if not verifier:
             return VerificationResult(
                 status=VerificationStatus.ERROR,
                 score=0.0,
-                errors=[f"No verifier for task type: {task_type}"]
+                errors=[f"No verifier for task type: {task_type}"],
             )
 
         self.logger.info("verifying", task_type=task_type, spec=spec.task_type)
@@ -472,13 +461,11 @@ class CompositeOutcomeVerifier:
 
 
 async def create_outcome_verifier(
-    code_sandbox: Optional[CodeSandbox] = None,
-    blender_sandbox: Optional[BlenderSandbox] = None,
-    backend: Optional[CognitiveBackend] = None
+    code_sandbox: CodeSandbox | None = None,
+    blender_sandbox: BlenderSandbox | None = None,
+    backend: CognitiveBackend | None = None,
 ) -> CompositeOutcomeVerifier:
     """Factory for creating the composite verifier."""
     return CompositeOutcomeVerifier(
-        code_sandbox=code_sandbox,
-        blender_sandbox=blender_sandbox,
-        backend=backend
+        code_sandbox=code_sandbox, blender_sandbox=blender_sandbox, backend=backend
     )

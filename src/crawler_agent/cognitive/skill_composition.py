@@ -1,24 +1,25 @@
 """Skill Composition system for combining learned skills."""
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
-from typing import Any, Callable
+from enum import Enum, StrEnum
+from typing import Any
 
 import structlog
 
 from .backend import CognitiveBackend
 
 
-class SkillType(str, Enum):
-    ATOMIC = "atomic"          # Single action
-    COMPOSITE = "composite"    # Combined skills
-    REACTIVE = "reactive"      # Trigger-based
+class SkillType(StrEnum):
+    ATOMIC = "atomic"  # Single action
+    COMPOSITE = "composite"  # Combined skills
+    REACTIVE = "reactive"  # Trigger-based
     PROCEDURAL = "procedural"  # Step-by-step
-    ADAPTIVE = "adaptive"      # Self-modifying
+    ADAPTIVE = "adaptive"  # Self-modifying
 
 
-class SkillStatus(str, Enum):
+class SkillStatus(StrEnum):
     LEARNED = "learned"
     REFINED = "refined"
     DEPRECATED = "deprecated"
@@ -28,6 +29,7 @@ class SkillStatus(str, Enum):
 @dataclass
 class SkillInput:
     """Input specification for a skill."""
+
     name: str
     type: str  # string, number, boolean, object
     required: bool = True
@@ -38,6 +40,7 @@ class SkillInput:
 @dataclass
 class SkillOutput:
     """Output specification for a skill."""
+
     name: str
     type: str
     description: str = ""
@@ -46,6 +49,7 @@ class SkillOutput:
 @dataclass
 class Skill:
     """A learnable skill."""
+
     id: str
     name: str
     description: str
@@ -78,6 +82,7 @@ class Skill:
 @dataclass
 class SkillChain:
     """A chain of skills executed in sequence."""
+
     id: str
     name: str
     steps: list[dict[str, Any]]  # [{skill_id, input_mapping, output_mapping}]
@@ -117,7 +122,7 @@ class SkillComposer:
 Return JSON with: steps (list of {skill_id, description, input_mapping, output_mapping, error_handling}), overall_strategy"""
 
         user_prompt = f"""Goal: {goal}
-Available skills: {[{'id': s.id, 'name': s.name, 'inputs': [i.name for i in s.inputs], 'outputs': [o.name for o in s.outputs]} for s in skills]}
+Available skills: {[{"id": s.id, "name": s.name, "inputs": [i.name for i in s.inputs], "outputs": [o.name for o in s.outputs]} for s in skills]}
 
 Create composition:"""
 
@@ -161,7 +166,7 @@ Return JSON with: compositions (list of {name, skills, strategy, effectiveness})
 
         user_prompt = f"""Goal: {goal}
 Context: {context}
-Available skills: {[{'name': s.name, 'type': s.skill_type.value, 'success_rate': s.success_rate} for s in available[:30]]}
+Available skills: {[{"name": s.name, "type": s.skill_type.value, "success_rate": s.success_rate} for s in available[:30]]}
 
 Suggest compositions:"""
 
@@ -263,14 +268,18 @@ Refine:"""
             skill.last_used = datetime.utcnow()
             if skill.usage_count > 0:
                 old_rate = skill.success_rate
-                skill.success_rate = (old_rate * (skill.usage_count - 1) + (1 if success else 0)) / skill.usage_count
+                skill.success_rate = (
+                    old_rate * (skill.usage_count - 1) + (1 if success else 0)
+                ) / skill.usage_count
 
-        self.execution_history.append({
-            "skill_id": skill_id,
-            "success": success,
-            "execution_time": execution_time,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        self.execution_history.append(
+            {
+                "skill_id": skill_id,
+                "success": success,
+                "execution_time": execution_time,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
 
     def get_skill_dependencies(self, skill_id: str) -> list[str]:
         """Get all skills this skill depends on."""
@@ -282,9 +291,9 @@ Refine:"""
     def get_composable_skills(self) -> list[Skill]:
         """Get skills that can be composed."""
         return [
-            s for s in self.skills.values()
-            if s.skill_type in (SkillType.ATOMIC, SkillType.PROCEDURAL)
-            and s.success_rate > 0.5
+            s
+            for s in self.skills.values()
+            if s.skill_type in (SkillType.ATOMIC, SkillType.PROCEDURAL) and s.success_rate > 0.5
         ]
 
     def to_context(self) -> str:
@@ -292,7 +301,9 @@ Refine:"""
         lines = ["Available Skills:"]
         for skill in sorted(self.skills.values(), key=lambda s: s.success_rate, reverse=True)[:20]:
             lines.append(f"  {skill.name} ({skill.skill_type.value}): {skill.description[:80]}")
-            lines.append(f"    Success rate: {skill.success_rate:.0%}, Used: {skill.usage_count} times")
+            lines.append(
+                f"    Success rate: {skill.success_rate:.0%}, Used: {skill.usage_count} times"
+            )
         return "\n".join(lines)
 
     def get_stats(self) -> dict[str, Any]:
@@ -303,6 +314,7 @@ Refine:"""
                 for t in SkillType
             },
             "total_chains": len(self.chains),
-            "avg_success_rate": sum(s.success_rate for s in self.skills.values()) / max(len(self.skills), 1),
+            "avg_success_rate": sum(s.success_rate for s in self.skills.values())
+            / max(len(self.skills), 1),
             "executions": len(self.execution_history),
         }

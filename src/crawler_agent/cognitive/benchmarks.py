@@ -28,7 +28,7 @@ class BenchmarkTask:
     description: str
     expected_output: str = ""
     time_limit_seconds: float = 30.0
-    metadata: Dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -46,13 +46,13 @@ class BenchmarkResult:
 class BenchmarkRun:
     run_id: str
     timestamp: datetime = field(default_factory=datetime.utcnow)
-    results: List[BenchmarkResult] = field(default_factory=list)
+    results: list[BenchmarkResult] = field(default_factory=list)
     overall_score: float = 0.0
-    category_scores: Dict[str, float] = field(default_factory=dict)
+    category_scores: dict[str, float] = field(default_factory=dict)
     improvement_since_last: float = 0.0
-    regressions: List[str] = field(default_factory=list)
+    regressions: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "run_id": self.run_id,
             "timestamp": self.timestamp.isoformat(),
@@ -72,9 +72,9 @@ class BenchmarkSuite:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.logger = structlog.get_logger(component="benchmarks")
 
-        self.tasks: Dict[str, BenchmarkTask] = {}
-        self.runs: List[BenchmarkRun] = []
-        self.best_scores: Dict[str, float] = {}
+        self.tasks: dict[str, BenchmarkTask] = {}
+        self.runs: list[BenchmarkRun] = []
+        self.best_scores: dict[str, float] = {}
 
         self._setup_tasks()
         self._load()
@@ -83,75 +83,129 @@ class BenchmarkSuite:
         """Setup benchmark tasks."""
         self.tasks = {
             "code_sort": BenchmarkTask(
-                id="code_sort", name="Sort Array", category="coding", difficulty=0.3,
+                id="code_sort",
+                name="Sort Array",
+                category="coding",
+                difficulty=0.3,
                 description="Implement a function to sort an array of integers",
             ),
             "code_binary_search": BenchmarkTask(
-                id="code_binary_search", name="Binary Search", category="coding", difficulty=0.5,
+                id="code_binary_search",
+                name="Binary Search",
+                category="coding",
+                difficulty=0.5,
                 description="Implement binary search on a sorted array",
             ),
             "code_fibonacci": BenchmarkTask(
-                id="code_fibonacci", name="Fibonacci", category="coding", difficulty=0.4,
+                id="code_fibonacci",
+                name="Fibonacci",
+                category="coding",
+                difficulty=0.4,
                 description="Implement efficient fibonacci with memoization",
             ),
             "code_linked_list": BenchmarkTask(
-                id="code_linked_list", name="Linked List", category="coding", difficulty=0.6,
+                id="code_linked_list",
+                name="Linked List",
+                category="coding",
+                difficulty=0.6,
                 description="Implement a singly linked list with insert, delete, and search",
             ),
             "code_tree_traversal": BenchmarkTask(
-                id="code_tree_traversal", name="Tree Traversal", category="coding", difficulty=0.6,
+                id="code_tree_traversal",
+                name="Tree Traversal",
+                category="coding",
+                difficulty=0.6,
                 description="Implement in-order, pre-order, and post-order tree traversal",
             ),
             "plan_tower_hanoi": BenchmarkTask(
-                id="plan_tower_hanoi", name="Tower of Hanoi", category="planning", difficulty=0.5,
+                id="plan_tower_hanoi",
+                name="Tower of Hanoi",
+                category="planning",
+                difficulty=0.5,
                 description="Plan moves for Tower of Hanoi with 4 disks",
             ),
             "plan_blocks": BenchmarkTask(
-                id="plan_blocks", name="Block World", category="planning", difficulty=0.6,
+                id="plan_blocks",
+                name="Block World",
+                category="planning",
+                difficulty=0.6,
                 description="Plan actions to stack blocks A on B on C",
             ),
             "plan_route": BenchmarkTask(
-                id="plan_route", name="Route Planning", category="planning", difficulty=0.4,
+                id="plan_route",
+                name="Route Planning",
+                category="planning",
+                difficulty=0.4,
                 description="Find shortest path in a graph with 10 nodes",
             ),
             "plan_schedule": BenchmarkTask(
-                id="plan_schedule", name="Task Scheduling", category="planning", difficulty=0.7,
+                id="plan_schedule",
+                name="Task Scheduling",
+                category="planning",
+                difficulty=0.7,
                 description="Schedule tasks with dependencies and deadlines",
             ),
             "reason_syllogism": BenchmarkTask(
-                id="reason_syllogism", name="Syllogistic Reasoning", category="reasoning", difficulty=0.3,
+                id="reason_syllogism",
+                name="Syllogistic Reasoning",
+                category="reasoning",
+                difficulty=0.3,
                 description="All men are mortal. Socrates is a man. Therefore?",
             ),
             "reason_analogy": BenchmarkTask(
-                id="reason_analogy", name="Analogy", category="reasoning", difficulty=0.5,
+                id="reason_analogy",
+                name="Analogy",
+                category="reasoning",
+                difficulty=0.5,
                 description="A is to B as C is to ? (complete the analogy)",
             ),
             "reason_counterfactual": BenchmarkTask(
-                id="reason_counterfactual", name="Counterfactual", category="reasoning", difficulty=0.6,
+                id="reason_counterfactual",
+                name="Counterfactual",
+                category="reasoning",
+                difficulty=0.6,
                 description="What would happen if gravity was reversed?",
             ),
             "reason_causal": BenchmarkTask(
-                id="reason_causal", name="Causal Reasoning", category="reasoning", difficulty=0.7,
+                id="reason_causal",
+                name="Causal Reasoning",
+                category="reasoning",
+                difficulty=0.7,
                 description="Determine cause and effect in complex scenarios",
             ),
             "physics_projectile": BenchmarkTask(
-                id="physics_projectile", name="Projectile Motion", category="physics", difficulty=0.4,
+                id="physics_projectile",
+                name="Projectile Motion",
+                category="physics",
+                difficulty=0.4,
                 description="Predict landing position of a thrown object",
             ),
             "physics_collision": BenchmarkTask(
-                id="physics_collision", name="Collision", category="physics", difficulty=0.6,
+                id="physics_collision",
+                name="Collision",
+                category="physics",
+                difficulty=0.6,
                 description="Predict outcome of elastic collision between two objects",
             ),
             "physics_spring": BenchmarkTask(
-                id="physics_spring", name="Spring Mass", category="physics", difficulty=0.5,
+                id="physics_spring",
+                name="Spring Mass",
+                category="physics",
+                difficulty=0.5,
                 description="Predict motion of mass on a spring",
             ),
             "memory_recall": BenchmarkTask(
-                id="memory_recall", name="Memory Recall", category="memory", difficulty=0.3,
+                id="memory_recall",
+                name="Memory Recall",
+                category="memory",
+                difficulty=0.3,
                 description="Recall facts from previous experiments",
             ),
             "memory_sequence": BenchmarkTask(
-                id="memory_sequence", name="Sequence Memory", category="memory", difficulty=0.5,
+                id="memory_sequence",
+                name="Sequence Memory",
+                category="memory",
+                difficulty=0.5,
                 description="Remember and reproduce a sequence of actions",
             ),
         }
@@ -177,18 +231,24 @@ class BenchmarkSuite:
 
     def _save(self):
         runs_file = self.data_dir / "runs.json"
-        runs_file.write_text(json.dumps({
-            "runs": [run.to_dict() for run in self.runs[-100:]],
-            "saved_at": datetime.utcnow().isoformat(),
-        }, indent=2))
+        runs_file.write_text(
+            json.dumps(
+                {
+                    "runs": [run.to_dict() for run in self.runs[-100:]],
+                    "saved_at": datetime.utcnow().isoformat(),
+                },
+                indent=2,
+            )
+        )
 
     def evaluate_code(self, task_id: str, code: str) -> BenchmarkResult:
         """Evaluate code solution."""
         start = time.time()
         task = self.tasks.get(task_id)
         if not task:
-            return BenchmarkResult(task_id=task_id, score=0, time_taken=0, correct=False,
-                                  error="Unknown task")
+            return BenchmarkResult(
+                task_id=task_id, score=0, time_taken=0, correct=False, error="Unknown task"
+            )
 
         try:
             score = 0.5
@@ -212,17 +272,21 @@ class BenchmarkSuite:
             )
         except Exception as e:
             return BenchmarkResult(
-                task_id=task_id, score=0, time_taken=time.time() - start,
-                correct=False, error=str(e),
+                task_id=task_id,
+                score=0,
+                time_taken=time.time() - start,
+                correct=False,
+                error=str(e),
             )
 
-    def evaluate_plan(self, task_id: str, plan: List[str]) -> BenchmarkResult:
+    def evaluate_plan(self, task_id: str, plan: list[str]) -> BenchmarkResult:
         """Evaluate a plan."""
         start = time.time()
         task = self.tasks.get(task_id)
         if not task:
-            return BenchmarkResult(task_id=task_id, score=0, time_taken=0, correct=False,
-                                  error="Unknown task")
+            return BenchmarkResult(
+                task_id=task_id, score=0, time_taken=0, correct=False, error="Unknown task"
+            )
 
         score = 0.3
         if len(plan) > 0:
@@ -242,13 +306,14 @@ class BenchmarkSuite:
             output=str(plan)[:200],
         )
 
-    def evaluate_reasoning(self, task_id: str, answer: str, chain: List[str]) -> BenchmarkResult:
+    def evaluate_reasoning(self, task_id: str, answer: str, chain: list[str]) -> BenchmarkResult:
         """Evaluate a reasoning answer."""
         start = time.time()
         task = self.tasks.get(task_id)
         if not task:
-            return BenchmarkResult(task_id=task_id, score=0, time_taken=0, correct=False,
-                                  error="Unknown task")
+            return BenchmarkResult(
+                task_id=task_id, score=0, time_taken=0, correct=False, error="Unknown task"
+            )
 
         score = 0.4
         if len(answer) > 10:
@@ -271,6 +336,7 @@ class BenchmarkSuite:
     def run_full_benchmark(self, agent_fn=None) -> BenchmarkRun:
         """Run a full benchmark suite."""
         import uuid
+
         run = BenchmarkRun(run_id=str(uuid.uuid4())[:8])
 
         for task_id, task in self.tasks.items():
@@ -278,8 +344,9 @@ class BenchmarkSuite:
                 try:
                     result = agent_fn(task)
                 except Exception:
-                    result = BenchmarkResult(task_id=task_id, score=0, time_taken=0,
-                                           correct=False, error="Agent failed")
+                    result = BenchmarkResult(
+                        task_id=task_id, score=0, time_taken=0, correct=False, error="Agent failed"
+                    )
             else:
                 result = BenchmarkResult(task_id=task_id, score=0.5, time_taken=0.1, correct=False)
 
@@ -295,8 +362,7 @@ class BenchmarkSuite:
                         category_scores[task.category] = []
                     category_scores[task.category].append(result.score)
             run.category_scores = {
-                cat: sum(scores) / len(scores)
-                for cat, scores in category_scores.items()
+                cat: sum(scores) / len(scores) for cat, scores in category_scores.items()
             }
 
         if self.runs:
@@ -307,17 +373,20 @@ class BenchmarkSuite:
                     run.regressions.append(task_id)
 
         for result in run.results:
-            if result.task_id not in self.best_scores or result.score > self.best_scores[result.task_id]:
+            if (
+                result.task_id not in self.best_scores
+                or result.score > self.best_scores[result.task_id]
+            ):
                 self.best_scores[result.task_id] = result.score
 
         self.runs.append(run)
         self._save()
         return run
 
-    def get_history(self, limit: int = 10) -> List[BenchmarkRun]:
+    def get_history(self, limit: int = 10) -> list[BenchmarkRun]:
         return self.runs[-limit:]
 
-    def get_trend(self, category: Optional[str] = None) -> List[float]:
+    def get_trend(self, category: str | None = None) -> list[float]:
         """Get score trend over time."""
         scores = []
         for run in self.runs[-20:]:
@@ -327,7 +396,7 @@ class BenchmarkSuite:
                 scores.append(run.overall_score)
         return scores
 
-    def get_recommendations(self) -> List[str]:
+    def get_recommendations(self) -> list[str]:
         """Get improvement recommendations."""
         recs = []
         if not self.runs:
@@ -349,6 +418,8 @@ class BenchmarkSuite:
         if not self.runs:
             return "Benchmarks: No runs yet"
         last = self.runs[-1]
-        return (f"Benchmarks: {len(self.runs)} runs, "
-                f"last score: {last.overall_score:.2f}, "
-                f"improvement: {last.improvement_since_last:+.2f}")
+        return (
+            f"Benchmarks: {len(self.runs)} runs, "
+            f"last score: {last.overall_score:.2f}, "
+            f"improvement: {last.improvement_since_last:+.2f}"
+        )

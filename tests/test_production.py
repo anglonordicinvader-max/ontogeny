@@ -1,4 +1,5 @@
 """Tests for Phase 5: Production Readiness (monitoring, triggers, resilience)."""
+
 import asyncio
 import json
 import time
@@ -7,9 +8,13 @@ from pathlib import Path
 import pytest
 
 from src.crawler_agent.cognitive.production import (
-    PerformanceMonitor, MetricType, MetricPoint,
-    RetrainingTrigger, CircuitBreaker, CircuitState,
+    CircuitBreaker,
+    CircuitState,
     GracefulDegradation,
+    MetricPoint,
+    MetricType,
+    PerformanceMonitor,
+    RetrainingTrigger,
 )
 
 

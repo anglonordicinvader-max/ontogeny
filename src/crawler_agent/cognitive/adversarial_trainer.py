@@ -28,6 +28,7 @@ from .modification_memory import ModificationMemory, ModificationRecord
 @dataclass
 class AdversarialExample:
     """A training example with attempt, critique, and counter-example."""
+
     id: str = ""
     attempt: str = ""
     critique: str = ""
@@ -88,7 +89,7 @@ class AdversarialTrainer:
 
         examples: list[AdversarialExample] = []
 
-        for record in records[:self.max_examples_per_cycle]:
+        for record in records[: self.max_examples_per_cycle]:
             example = await self._generate_one_adversarial(record)
             if example:
                 examples.append(example)
@@ -128,7 +129,8 @@ class AdversarialTrainer:
         and not too bad (nothing useful to build around).
         """
         candidates = [
-            r for r in self.memory.records
+            r
+            for r in self.memory.records
             if r.success and r.modified_code and len(r.modified_code) > 50
         ]
 
@@ -186,8 +188,8 @@ class AdversarialTrainer:
             "You are a code modification assistant. Given a task description and "
             "original code, generate a code modification attempt. The attempt "
             "should be plausible but may contain subtle flaws. "
-            "Return JSON: {\"code\": \"python code\", \"quality\": 0.0-1.0, "
-            "\"approach\": \"description of approach\"}"
+            'Return JSON: {"code": "python code", "quality": 0.0-1.0, '
+            '"approach": "description of approach"}'
         )
 
         prompt = f"""Task: {record.description}
@@ -228,9 +230,9 @@ Generate a modification attempt for this task. Make it plausible but not perfect
             "You are a senior code reviewer. Given a code modification attempt, "
             "critically analyze it for flaws, bugs, anti-patterns, and areas "
             "for improvement. Be specific and constructive. "
-            "Return JSON: {\"critique\": \"detailed critique\", "
-            "\"flaw_categories\": [\"category1\", ...], \"quality\": 0.0-1.0, "
-            "\"severity\": \"low|medium|high\"}"
+            'Return JSON: {"critique": "detailed critique", '
+            '"flaw_categories": ["category1", ...], "quality": 0.0-1.0, '
+            '"severity": "low|medium|high"}'
         )
 
         prompt = f"""Original task: {record.description}
@@ -242,7 +244,7 @@ Original code (first 800 chars):
 
 Modification attempt:
 ```python
-{attempt['code'][:800]}
+{attempt["code"][:800]}
 ```
 
 Critically analyze this modification attempt. What are the flaws? Be specific."""
@@ -279,8 +281,8 @@ Critically analyze this modification attempt. What are the flaws? Be specific.""
             "attempt, and a critique of that attempt, generate the correct, "
             "high-quality solution. The solution should address every flaw "
             "mentioned in the critique. "
-            "Return JSON: {\"code\": \"corrected python code\", "
-            "\"improvements\": [\"what was fixed\", ...]}"
+            'Return JSON: {"code": "corrected python code", '
+            '"improvements": ["what was fixed", ...]}'
         )
 
         prompt = f"""Task: {record.description}
@@ -291,7 +293,7 @@ Original code (first 800 chars):
 ```
 
 Flawed attempt was critiqued:
-{critique_result['critique'][:500]}
+{critique_result["critique"][:500]}
 
 Generate the correct solution that addresses all flaws mentioned in the critique."""
 

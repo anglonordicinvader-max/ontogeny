@@ -27,6 +27,7 @@ from .modification_memory import ModificationMemory, ModificationRecord
 @dataclass
 class CurriculumTask:
     """A generated training task targeting a specific weakness."""
+
     id: str = ""
     weakness_type: str = ""  # task_type, error_pattern, concept_gap
     instruction: str = ""
@@ -38,6 +39,7 @@ class CurriculumTask:
 @dataclass
 class WeaknessProfile:
     """Analysis of what the model is weak at."""
+
     task_type_failure_rates: dict[str, float] = field(default_factory=dict)
     common_error_patterns: list[str] = field(default_factory=list)
     low_quality_areas: list[str] = field(default_factory=list)
@@ -110,12 +112,14 @@ class EmergentCurriculum:
         rejected = len(tasks) - len(valid)
 
         # Add to memory
-        for task in valid[:self.max_tasks_per_cycle]:
+        for task in valid[: self.max_tasks_per_cycle]:
             self._add_to_memory(task)
 
         self.stats["curriculums_generated"] += 1
         self.stats["tasks_created"] += len(valid)
-        self.stats["weaknesses_identified"] += len(profile.common_error_patterns) + len(profile.low_quality_areas)
+        self.stats["weaknesses_identified"] += len(profile.common_error_patterns) + len(
+            profile.low_quality_areas
+        )
         self.stats["tasks_rejected"] += rejected
 
         self.logger.info(
@@ -131,7 +135,7 @@ class EmergentCurriculum:
         """Analyze modification history to find weaknesses."""
         all_records = self.memory.records
         failed = self.memory.get_failed_records()
-        successful = self.memory.get_successful_records()
+        self.memory.get_successful_records()
 
         # Calculate failure rates by task type
         task_type_counts: dict[str, dict[str, int]] = {}
@@ -155,7 +159,7 @@ class EmergentCurriculum:
         system_prompt = (
             "You are a performance analyst. Given a list of failed modifications "
             "and their descriptions, identify the most common error patterns. "
-            "Return JSON: {\"patterns\": [\"pattern1\", ...], \"recommendation\": \"what to focus on\"}"
+            'Return JSON: {"patterns": ["pattern1", ...], "recommendation": "what to focus on"}'
         )
 
         prompt = f"""Failed modification descriptions:
@@ -196,8 +200,8 @@ What are the most common error patterns? What should we focus training on?"""
             "You are a training data generator. Given an error pattern found in "
             "failed code modifications, generate 2-3 training examples that teach "
             "the model to avoid this specific mistake. "
-            "Return JSON: {\"tasks\": [{\"instruction\": \"problem\", \"output\": \"solution\", "
-            "\"explanation\": \"why this works\", \"quality\": 0.0-1.0}]}"
+            'Return JSON: {"tasks": [{"instruction": "problem", "output": "solution", '
+            '"explanation": "why this works", "quality": 0.0-1.0}]}'
         )
 
         prompt = f"""Error pattern to address: {pattern}
@@ -220,17 +224,19 @@ Each should present a problem where this error would naturally occur, and show t
             if not instruction or not output or len(output) < 30:
                 continue
 
-            tasks.append(CurriculumTask(
-                id=str(uuid.uuid4()),
-                weakness_type="error_pattern",
-                instruction=instruction,
-                output=output,
-                quality_score=item.get("quality", 0.6),
-                metadata={
-                    "pattern": pattern,
-                    "explanation": item.get("explanation", ""),
-                },
-            ))
+            tasks.append(
+                CurriculumTask(
+                    id=str(uuid.uuid4()),
+                    weakness_type="error_pattern",
+                    instruction=instruction,
+                    output=output,
+                    quality_score=item.get("quality", 0.6),
+                    metadata={
+                        "pattern": pattern,
+                        "explanation": item.get("explanation", ""),
+                    },
+                )
+            )
 
         return tasks
 
@@ -242,8 +248,8 @@ Each should present a problem where this error would naturally occur, and show t
         system_prompt = (
             "You are a training data generator. Given a task type where the model "
             "consistently performs poorly, generate targeted training examples. "
-            "Return JSON: {\"tasks\": [{\"instruction\": \"problem\", \"output\": \"solution\", "
-            "\"difficulty\": \"easy|medium|hard\", \"quality\": 0.0-1.0}]}"
+            'Return JSON: {"tasks": [{"instruction": "problem", "output": "solution", '
+            '"difficulty": "easy|medium|hard", "quality": 0.0-1.0}]}'
         )
 
         prompt = f"""Weak task type: {area}
@@ -270,14 +276,16 @@ Start with easier cases and progress to harder ones."""
             quality_map = {"easy": 0.5, "medium": 0.7, "hard": 0.9}
             quality = quality_map.get(difficulty, 0.6)
 
-            tasks.append(CurriculumTask(
-                id=str(uuid.uuid4()),
-                weakness_type="task_type",
-                instruction=f"[{difficulty}] {instruction}",
-                output=output,
-                quality_score=quality,
-                metadata={"area": area, "difficulty": difficulty},
-            ))
+            tasks.append(
+                CurriculumTask(
+                    id=str(uuid.uuid4()),
+                    weakness_type="task_type",
+                    instruction=f"[{difficulty}] {instruction}",
+                    output=output,
+                    quality_score=quality,
+                    metadata={"area": area, "difficulty": difficulty},
+                )
+            )
 
         return tasks
 
@@ -292,8 +300,8 @@ Start with easier cases and progress to harder ones."""
         system_prompt = (
             "You are a training data generator. Given a performance recommendation, "
             "create a comprehensive training example that addresses the core issue. "
-            "Return JSON: {\"instruction\": \"problem\", \"output\": \"solution\", "
-            "\"quality\": 0.0-1.0}"
+            'Return JSON: {"instruction": "problem", "output": "solution", '
+            '"quality": 0.0-1.0}'
         )
 
         prompt = f"""Performance recommendation: {profile.recommendation}

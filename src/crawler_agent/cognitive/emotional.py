@@ -17,6 +17,7 @@ import structlog
 @dataclass
 class EmotionalState:
     """Current emotional state."""
+
     valence: float = 0.0  # -1 (negative) to 1 (positive)
     arousal: float = 0.5  # 0 (calm) to 1 (excited)
     dominance: float = 0.5  # 0 (submissive) to 1 (dominant)
@@ -59,6 +60,7 @@ class EmotionalState:
 @dataclass
 class EmotionalEvent:
     """An event that triggers emotional response."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     event_type: str = ""  # success, failure, discovery, error, etc.
     description: str = ""
@@ -155,9 +157,9 @@ class EmotionalProcessor:
         # High frustration = more risk seeking (desperate)
         # Low confidence = risk averse
         risk_tolerance = (
-            self.state.confidence * 0.4 +
-            (self.state.valence + 1) / 2 * 0.3 +
-            self.state.frustration * 0.3
+            self.state.confidence * 0.4
+            + (self.state.valence + 1) / 2 * 0.3
+            + self.state.frustration * 0.3
         )
         return risk_tolerance > 0.6
 

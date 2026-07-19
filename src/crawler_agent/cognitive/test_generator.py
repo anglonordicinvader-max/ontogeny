@@ -15,6 +15,7 @@ from .backend import CognitiveBackend, CognitiveResponse
 @dataclass
 class TestCase:
     """A single test case."""
+
     name: str
     code: str
     expected_pass: bool = True
@@ -23,6 +24,7 @@ class TestCase:
 @dataclass
 class TestSuite:
     """Collection of test cases for a module."""
+
     module_path: str
     test_cases: list[TestCase] = field(default_factory=list)
     setup_code: str = ""
@@ -34,7 +36,7 @@ class TestSuite:
             "import pytest",
             "import sys",
             "from pathlib import Path",
-            f"sys.path.insert(0, str(Path(__file__).parent.parent))",
+            "sys.path.insert(0, str(Path(__file__).parent.parent))",
             "",
             self.setup_code,
             "",
@@ -52,6 +54,7 @@ class TestSuite:
 @dataclass
 class TestResult:
     """Result of running a test suite."""
+
     passed: int
     failed: int
     errors: list[str]
@@ -110,13 +113,15 @@ Requirements:
             suite.setup_code = data.get("setup_code", "")
             suite.teardown_code = data.get("teardown_code", "")
             for t in data.get("tests", []):
-                suite.test_cases.append(TestCase(
-                    name=t["name"],
-                    code=t["code"],
-                    expected_pass=t.get("expected_pass", True),
-                ))
+                suite.test_cases.append(
+                    TestCase(
+                        name=t["name"],
+                        code=t["code"],
+                        expected_pass=t.get("expected_pass", True),
+                    )
+                )
             return suite
-        except Exception as e:
+        except Exception:
             return TestSuite(module_path=module_name)
 
     async def run_tests_in_sandbox(self, suite: TestSuite) -> TestResult:
@@ -132,6 +137,7 @@ Requirements:
             src_path = Path(suite.module_path)
             if src_path.exists():
                 import shutil
+
                 dest = Path(tmpdir) / src_path.name
                 shutil.copy2(src_path, dest)
 
@@ -202,7 +208,7 @@ class SandboxTestRunner:
                     timeout=timeout,
                 )
                 return {"success": True, "output": output}
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 return {"success": False, "output": "Timeout", "error": "Test timed out"}
             except Exception as e:
                 return {"success": False, "output": "", "error": str(e)}
@@ -228,6 +234,7 @@ class SandboxTestRunner:
 
     def _parse_pytest_output(self, output: str) -> TestResult:
         import re
+
         passed = len(re.findall(r"PASSED", output))
         failed = len(re.findall(r"FAILED", output))
         errors = [line for line in output.split("\n") if "ERROR" in line]

@@ -16,7 +16,7 @@ export function ProductionPanel({ status }: ProductionPanelProps) {
 
   return (
     <div className="h-full overflow-y-auto p-4 space-y-4">
-      <Panel title="Performance Metrics">
+      <Panel title="Performance Metrics" accentGlow>
         <div className="grid grid-cols-2 gap-3">
           <MetricCard label="Latency" value={production?.latency?.toString() || '0'} unit="ms" />
           <MetricCard label="Quality" value={`${((production?.qualityScore || 0) * 100).toFixed(1)}%`} />
@@ -25,7 +25,7 @@ export function ProductionPanel({ status }: ProductionPanelProps) {
         </div>
       </Panel>
 
-      <Panel title="Health Status">
+      <Panel title="Health Status" accentGlow>
         <div className="space-y-2">
           <StatusBadge
             status={circuitColors[production?.circuitBreaker || 'closed']}

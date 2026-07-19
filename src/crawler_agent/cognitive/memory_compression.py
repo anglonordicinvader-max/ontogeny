@@ -13,6 +13,7 @@ from .memory import MemorySystem
 @dataclass
 class CompressedEpisode:
     """A compressed version of an episodic memory."""
+
     original_id: str
     timestamp: float
     summary: str
@@ -26,6 +27,7 @@ class CompressedEpisode:
 @dataclass
 class CompressionStats:
     """Statistics about compression."""
+
     episodes_compressed: int = 0
     tokens_saved: int = 0
     avg_compression_ratio: float = 0.0
@@ -69,7 +71,7 @@ class MemoryCompressor:
     ) -> CompressionStats:
         """Compress episodes older than threshold."""
         # Get old episodes from episodic memory
-        cutoff = time.time() - (self.compression_threshold_days * 86400)
+        time.time() - (self.compression_threshold_days * 86400)
 
         # This would query the memory system for old episodes
         # For now, return current stats
@@ -118,8 +120,8 @@ Return JSON:
 
         self.stats.episodes_compressed += 1
         self.stats.tokens_saved += original_tokens - summary_tokens
-        self.stats.avg_compression_ratio = (
-            self.stats.tokens_saved / max(self.stats.episodes_compressed * original_tokens, 1)
+        self.stats.avg_compression_ratio = self.stats.tokens_saved / max(
+            self.stats.episodes_compressed * original_tokens, 1
         )
         self.stats.last_compression = time.time()
         self._save_stats()

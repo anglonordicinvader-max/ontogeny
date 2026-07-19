@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from .base import Agent, AgentRole, AgentTask, AgentMessage
+from .base import Agent, AgentMessage, AgentRole, AgentTask
 
 
 class ResearcherAgent(Agent):
@@ -42,11 +42,13 @@ class ResearcherAgent(Agent):
         for name, crawler in self._crawlers.items():
             try:
                 async for result in crawler.search(query, limit=5):
-                    results["findings"].append({
-                        "title": result.title,
-                        "url": result.url,
-                        "source": name,
-                    })
+                    results["findings"].append(
+                        {
+                            "title": result.title,
+                            "url": result.url,
+                            "source": name,
+                        }
+                    )
                     results["sources"].append(result.url)
             except Exception:
                 continue
@@ -344,7 +346,7 @@ Provide:
 
         await self.send_message(
             recipient="Planner",
-            content=f"Summary complete",
+            content="Summary complete",
             msg_type="summary_result",
             metadata=results,
         )
@@ -418,11 +420,13 @@ class ExplorerAgent(Agent):
         for name, crawler in self._crawlers.items():
             try:
                 async for result in crawler.search(task.description, limit=3):
-                    discoveries.append({
-                        "source": name,
-                        "title": result.title,
-                        "url": result.url,
-                    })
+                    discoveries.append(
+                        {
+                            "source": name,
+                            "title": result.title,
+                            "url": result.url,
+                        }
+                    )
             except Exception:
                 continue
 

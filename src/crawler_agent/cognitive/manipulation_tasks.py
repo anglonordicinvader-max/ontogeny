@@ -19,7 +19,7 @@ class TaskState:
     progress: float = 0.0  # 0.0 to 1.0
     success: bool = False
     step: int = 0
-    data: Dict = field(default_factory=dict)
+    data: dict = field(default_factory=dict)
 
 
 class AssemblyTask:
@@ -41,7 +41,7 @@ class AssemblyTask:
             "tolerance": kwargs.get("tolerance", 0.005),
         }
 
-    def check_alignment(self, peg_pos: List[float], hole_pos: List[float]) -> float:
+    def check_alignment(self, peg_pos: list[float], hole_pos: list[float]) -> float:
         """Check alignment score (0=bad, 1=perfect)."""
         dx = peg_pos[0] - hole_pos[0]
         dy = peg_pos[1] - hole_pos[1]
@@ -49,13 +49,12 @@ class AssemblyTask:
         tolerance = self.state.data.get("tolerance", 0.005)
         return max(0, 1.0 - dist / (tolerance * 10))
 
-    def insert(self, peg_pos: List[float], hole_pos: List[float],
-               force: float = 0.0) -> TaskState:
+    def insert(self, peg_pos: list[float], hole_pos: list[float], force: float = 0.0) -> TaskState:
         """Attempt insertion."""
-        alignment = self.check_alignment(peg_pos, hole_pos)
+        self.check_alignment(peg_pos, hole_pos)
         tolerance = self.state.data.get("tolerance", 0.005)
-        dist_xy = math.sqrt((peg_pos[0] - hole_pos[0])**2 + (peg_pos[1] - hole_pos[1])**2)
-        depth = hole_pos[2] - peg_pos[2]
+        dist_xy = math.sqrt((peg_pos[0] - hole_pos[0]) ** 2 + (peg_pos[1] - hole_pos[1]) ** 2)
+        hole_pos[2] - peg_pos[2]
 
         if dist_xy < tolerance and force > 0:
             self.state.progress = min(1.0, self.state.progress + 0.1 * force)
@@ -80,11 +79,14 @@ class CuttingTask:
             "material": material,
             "thickness": thickness,
             "cut_line": kwargs.get("cut_line", [[0, 0], [1, 0]]),
-            "material_hardness": {"wood": 0.5, "metal": 0.9, "plastic": 0.3, "cloth": 0.1}.get(material, 0.5),
+            "material_hardness": {"wood": 0.5, "metal": 0.9, "plastic": 0.3, "cloth": 0.1}.get(
+                material, 0.5
+            ),
         }
 
-    def cut(self, tool_position: List[float], force: float = 1.0,
-            sharpness: float = 0.8) -> TaskState:
+    def cut(
+        self, tool_position: list[float], force: float = 1.0, sharpness: float = 0.8
+    ) -> TaskState:
         """Execute cutting action."""
         hardness = self.state.data.get("material_hardness", 0.5)
         cut_rate = (force * sharpness) / (hardness + 0.1)
@@ -104,8 +106,13 @@ class PouringTask:
         self.logger = structlog.get_logger(component="pouring")
         self.state = TaskState()
 
-    def setup(self, source_volume: float = 1.0, target_volume: float = 0.5,
-              viscosity: float = 0.5, **kwargs):
+    def setup(
+        self,
+        source_volume: float = 1.0,
+        target_volume: float = 0.5,
+        viscosity: float = 0.5,
+        **kwargs,
+    ):
         self.state = TaskState()
         self.state.data = {
             "source_volume": source_volume,
@@ -116,8 +123,13 @@ class PouringTask:
             "target_position": kwargs.get("target_position", [0.5, 0, 0]),
         }
 
-    def pour(self, source_pos: List[float], target_pos: List[float],
-             angle: float = 0.0, flow_rate: float = 0.5) -> TaskState:
+    def pour(
+        self,
+        source_pos: list[float],
+        target_pos: list[float],
+        angle: float = 0.0,
+        flow_rate: float = 0.5,
+    ) -> TaskState:
         """Execute pouring action."""
         if angle < 30:
             return self.state
@@ -153,7 +165,7 @@ class FoldingTask:
         self.logger = structlog.get_logger(component="folding")
         self.state = TaskState()
 
-    def setup(self, cloth_size: Tuple[float, float] = (0.5, 0.5), **kwargs):
+    def setup(self, cloth_size: tuple[float, float] = (0.5, 0.5), **kwargs):
         self.state = TaskState()
         self.state.data = {
             "cloth_size": cloth_size,
@@ -163,8 +175,9 @@ class FoldingTask:
             "smoothness": 1.0,
         }
 
-    def fold(self, grasp_point: List[float], target_point: List[float],
-             fold_axis: str = "x") -> TaskState:
+    def fold(
+        self, grasp_point: list[float], target_point: list[float], fold_axis: str = "x"
+    ) -> TaskState:
         """Execute folding action."""
         cloth_size = self.state.data.get("cloth_size", (0.5, 0.5))
         center = [cloth_size[0] / 2, cloth_size[1] / 2]
@@ -175,11 +188,13 @@ class FoldingTask:
 
         if grasp_dist > 0.05:
             self.state.data["fold_count"] = self.state.data.get("fold_count", 0) + 1
-            self.state.data["fold_points"].append({
-                "grasp": grasp_point,
-                "target": target_point,
-                "axis": fold_axis,
-            })
+            self.state.data["fold_points"].append(
+                {
+                    "grasp": grasp_point,
+                    "target": target_point,
+                    "axis": fold_axis,
+                }
+            )
 
             smoothness = self.state.data.get("smoothness", 1.0)
             self.state.data["smoothness"] = smoothness * 0.95
@@ -225,23 +240,27 @@ class ManipulationController:
             return self.assembly.insert(
                 kwargs.get("peg_pos", [0, 0, 0]),
                 kwargs.get("hole_pos", [0.5, 0, 0]),
-                kwargs.get("force", 1.0))
+                kwargs.get("force", 1.0),
+            )
         elif self.current_task == self.cutting:
             return self.cutting.cut(
                 kwargs.get("tool_pos", [0, 0, 0]),
                 kwargs.get("force", 1.0),
-                kwargs.get("sharpness", 0.8))
+                kwargs.get("sharpness", 0.8),
+            )
         elif self.current_task == self.pouring:
             return self.pouring.pour(
                 kwargs.get("source_pos", [0, 0, 1]),
                 kwargs.get("target_pos", [0.5, 0, 0]),
                 kwargs.get("angle", 45),
-                kwargs.get("flow_rate", 0.5))
+                kwargs.get("flow_rate", 0.5),
+            )
         elif self.current_task == self.folding:
             return self.folding.fold(
                 kwargs.get("grasp_point", [0.25, 0, 0]),
                 kwargs.get("target_point", [0.25, 0.5, 0]),
-                kwargs.get("fold_axis", "x"))
+                kwargs.get("fold_axis", "x"),
+            )
         return TaskState()
 
     def to_context(self) -> str:

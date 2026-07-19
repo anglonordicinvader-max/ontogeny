@@ -3,12 +3,13 @@
 Compares maldoror against the base model on self-modification tasks,
 manages rollback on regression, and enforces quality gates before deployment.
 """
+
 import asyncio
 import json
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +20,7 @@ from .custom_model_manager import CustomModelManager, ModelState
 from .modification_memory import ModificationMemory
 
 
-class EvalTaskType(str, Enum):
+class EvalTaskType(StrEnum):
     CODE_REWRITE = "code_rewrite"
     BUG_FIX = "bug_fix"
     OPTIMIZATION = "optimization"
@@ -152,9 +153,9 @@ class ModelEvaluator:
 
     def _save_reports(self) -> None:
         path = self.output_dir / "reports.json"
-        path.write_text(json.dumps(
-            {"reports": [r.__dict__ for r in self.reports]}, indent=2, default=str
-        ))
+        path.write_text(
+            json.dumps({"reports": [r.__dict__ for r in self.reports]}, indent=2, default=str)
+        )
 
     async def _evaluate_model(
         self, backend: CognitiveBackend, model_name: str, tasks: list[EvalTask]
@@ -176,9 +177,7 @@ class ModelEvaluator:
                 has_code = "```" in text or "def " in text or "async def " in text
                 has_diff = "---" in text or "+++" in text or "@@" in text
                 matches = (
-                    task.expected_pattern.lower() in text.lower()
-                    if task.expected_pattern
-                    else True
+                    task.expected_pattern.lower() in text.lower() if task.expected_pattern else True
                 )
 
                 # Score: 0.4 has_code + 0.3 has_diff + 0.3 matches_pattern
@@ -190,30 +189,34 @@ class ModelEvaluator:
                 if matches:
                     score += 0.3
 
-                results.append(EvalResult(
-                    task_name=task.name,
-                    model_name=model_name,
-                    response_text=text[:2000],
-                    score=score,
-                    latency_ms=latency,
-                    has_code=has_code,
-                    has_diff=has_diff,
-                    matches_pattern=matches,
-                    timestamp=datetime.utcnow().isoformat(),
-                ))
+                results.append(
+                    EvalResult(
+                        task_name=task.name,
+                        model_name=model_name,
+                        response_text=text[:2000],
+                        score=score,
+                        latency_ms=latency,
+                        has_code=has_code,
+                        has_diff=has_diff,
+                        matches_pattern=matches,
+                        timestamp=datetime.utcnow().isoformat(),
+                    )
+                )
             except Exception as e:
-                results.append(EvalResult(
-                    task_name=task.name,
-                    model_name=model_name,
-                    response_text="",
-                    score=0.0,
-                    latency_ms=(time.time() - start) * 1000,
-                    has_code=False,
-                    has_diff=False,
-                    matches_pattern=False,
-                    error=str(e),
-                    timestamp=datetime.utcnow().isoformat(),
-                ))
+                results.append(
+                    EvalResult(
+                        task_name=task.name,
+                        model_name=model_name,
+                        response_text="",
+                        score=0.0,
+                        latency_ms=(time.time() - start) * 1000,
+                        has_code=False,
+                        has_diff=False,
+                        matches_pattern=False,
+                        error=str(e),
+                        timestamp=datetime.utcnow().isoformat(),
+                    )
+                )
         return results
 
     async def compare(
@@ -270,11 +273,17 @@ class ModelEvaluator:
 
         # Save detailed results
         detail_path = self.output_dir / f"eval_{len(self.reports):04d}.json"
-        detail_path.write_text(json.dumps({
-            "report": report.__dict__,
-            "base_results": [r.__dict__ for r in base_results],
-            "maldoror_results": [r.__dict__ for r in mal_results],
-        }, indent=2, default=str))
+        detail_path.write_text(
+            json.dumps(
+                {
+                    "report": report.__dict__,
+                    "base_results": [r.__dict__ for r in base_results],
+                    "maldoror_results": [r.__dict__ for r in mal_results],
+                },
+                indent=2,
+                default=str,
+            )
+        )
 
         self.logger.info(
             "evaluation_complete",
@@ -300,7 +309,8 @@ class QualityGate:
             "maldoror_not_worse": report.improvement_pct >= -10,
             "maldoror_score_above_min": report.maldoror_avg >= self.min_score,
             "latency_acceptable": report.maldoror_latency_ms <= self.max_latency_ms,
-            "majority_tasks_pass": sum(1 for s in report.maldoror_scores if s > 0.3) > len(report.maldoror_scores) / 2,
+            "majority_tasks_pass": sum(1 for s in report.maldoror_scores if s > 0.3)
+            > len(report.maldoror_scores) / 2,
         }
         passed = all(checks.values())
         return {
@@ -332,9 +342,7 @@ class RollbackManager:
                 pass
 
     def _save_history(self) -> None:
-        self._history_path().write_text(json.dumps(
-            self.rollback_history, indent=2, default=str
-        ))
+        self._history_path().write_text(json.dumps(self.rollback_history, indent=2, default=str))
 
     async def should_rollback(self, gate_result: dict[str, Any]) -> bool:
         """Determine if we should rollback based on quality gate results."""
@@ -349,7 +357,9 @@ class RollbackManager:
         # Rollback if multiple checks failed
         failed = sum(1 for v in gate_result["checks"].values() if not v)
         if failed >= 2:
-            self.logger.warning("rollback_recommended", reason="multiple_gate_failures", failed=failed)
+            self.logger.warning(
+                "rollback_recommended", reason="multiple_gate_failures", failed=failed
+            )
             return True
 
         return False
@@ -415,7 +425,7 @@ class ABTestRunner:
         a_latencies = []
         b_latencies = []
 
-        for round_num in range(num_rounds):
+        for _round_num in range(num_rounds):
             # Model A
             start = time.time()
             try:

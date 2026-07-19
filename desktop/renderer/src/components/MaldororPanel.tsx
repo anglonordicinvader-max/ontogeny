@@ -10,7 +10,7 @@ export function MaldororPanel({ status }: MaldororPanelProps) {
 
   return (
     <div className="h-full overflow-y-auto p-4 space-y-4 animate-panel-in">
-      <Panel title="Model Status">
+      <Panel title="Model Status" accentGlow>
         <div className="grid grid-cols-2 gap-3">
           <MetricCard label="Version" value={maldoror?.version || '—'} />
           <MetricCard label="Quality Gate" value={maldoror?.qualityGate || 'pending'} />
@@ -35,7 +35,7 @@ export function MaldororPanel({ status }: MaldororPanelProps) {
         </div>
       </Panel>
 
-      <Panel title="Training Metrics">
+      <Panel title="Training Metrics" accentGlow>
         <div className="grid grid-cols-2 gap-3">
           <MetricCard label="Epochs" value="—" />
           <MetricCard label="Batch Size" value="—" />

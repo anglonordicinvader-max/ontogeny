@@ -3,17 +3,19 @@
 import asyncio
 import sys
 import tempfile
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
-import structlog
 import httpx
+import structlog
 
 
 @dataclass
 class Container:
     """Docker container info."""
+
     id: str
     name: str
     image: str
@@ -26,6 +28,7 @@ class Container:
 @dataclass
 class Volume:
     """Docker volume info."""
+
     name: str
     driver: str
     mountpoint: str
@@ -35,6 +38,7 @@ class Volume:
 @dataclass
 class ExecutionResult:
     """Result of code execution in a container."""
+
     success: bool
     output: str
     error: str
@@ -68,7 +72,9 @@ class DockerManager:
         if self._use_cli:
             return await self._cli_request(method, endpoint, **kwargs)
 
-        async with httpx.AsyncClient(transport=httpx.AsyncHTTPTransport(uds=self.socket_path)) as client:
+        async with httpx.AsyncClient(
+            transport=httpx.AsyncHTTPTransport(uds=self.socket_path)
+        ) as client:
             response = await client.request(method, f"http://localhost{endpoint}", **kwargs)
             response.raise_for_status()
             return response
@@ -122,8 +128,10 @@ class DockerManager:
             def __init__(self, data, status_code=200):
                 self._data = data
                 self.status_code = status_code
+
             def json(self):
                 return self._data
+
             def raise_for_status(self):
                 if self.status_code >= 400:
                     raise httpx.HTTPStatusError("CLI error", request=None, response=self)
@@ -166,19 +174,22 @@ class DockerManager:
                 return []
 
             import json as json_mod
+
             containers = []
             for line in output.split("\n"):
                 try:
                     c = json_mod.loads(line)
-                    containers.append(Container(
-                        id=c.get("ID", "")[:12],
-                        name=c.get("Names", ""),
-                        image=c.get("Image", ""),
-                        status=c.get("Status", ""),
-                        state=c.get("State", ""),
-                        ports=c.get("Ports", ""),
-                        created=c.get("CreatedAt", ""),
-                    ))
+                    containers.append(
+                        Container(
+                            id=c.get("ID", "")[:12],
+                            name=c.get("Names", ""),
+                            image=c.get("Image", ""),
+                            status=c.get("Status", ""),
+                            state=c.get("State", ""),
+                            ports=c.get("Ports", ""),
+                            created=c.get("CreatedAt", ""),
+                        )
+                    )
                 except (json_mod.JSONDecodeError, KeyError):
                     continue
             return containers
@@ -228,11 +239,11 @@ class DockerManager:
 
         if ports:
             for container_port, host_port in ports.items():
-                config["HostConfig"]["PortBindings"][container_port] = [
-                    {"HostPort": host_port}
-                ]
+                config["HostConfig"]["PortBindings"][container_port] = [{"HostPort": host_port}]
 
-        response = await self._request("POST", "/containers/create", params={"name": name}, json=config)
+        response = await self._request(
+            "POST", "/containers/create", params={"name": name}, json=config
+        )
         container_id = response.json()["Id"]
 
         await self._request("POST", f"/containers/{container_id}/start")
@@ -297,7 +308,9 @@ class DockerManager:
         """Stop a container."""
         if self._use_cli:
             proc = await asyncio.create_subprocess_exec(
-                "docker", "stop", container_id,
+                "docker",
+                "stop",
+                container_id,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -347,8 +360,12 @@ class DockerManager:
     async def _exec_cli(self, container_id: str, command: str) -> str:
         """Execute command using Docker CLI."""
         proc = await asyncio.create_subprocess_exec(
-            "docker", "exec", container_id,
-            "sh", "-c", command,
+            "docker",
+            "exec",
+            container_id,
+            "sh",
+            "-c",
+            command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -367,22 +384,30 @@ class DockerManager:
     ) -> ExecutionResult:
         """Execute command and capture full result."""
         import time
+
         start = time.monotonic()
 
         if self._use_cli:
             proc = await asyncio.create_subprocess_exec(
-                "docker", "exec", container_id,
-                "sh", "-c", command,
+                "docker",
+                "exec",
+                container_id,
+                "sh",
+                "-c",
+                command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
             try:
                 stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
                 return ExecutionResult(
-                    success=False, output="", error="Timeout",
-                    exit_code=-1, duration_ms=(time.monotonic() - start) * 1000,
+                    success=False,
+                    output="",
+                    error="Timeout",
+                    exit_code=-1,
+                    duration_ms=(time.monotonic() - start) * 1000,
                 )
 
             duration = (time.monotonic() - start) * 1000
@@ -406,32 +431,42 @@ class DockerManager:
 
         duration = (time.monotonic() - start) * 1000
         return ExecutionResult(
-            success=True, output=f"Executed: {command}",
-            error="", exit_code=0, duration_ms=duration,
+            success=True,
+            output=f"Executed: {command}",
+            error="",
+            exit_code=0,
+            duration_ms=duration,
         )
 
     async def list_volumes(self) -> list[Volume]:
         """List volumes."""
         if self._use_cli:
             proc = await asyncio.create_subprocess_exec(
-                "docker", "volume", "ls", "--format", "{{json .}}",
+                "docker",
+                "volume",
+                "ls",
+                "--format",
+                "{{json .}}",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, _ = await proc.communicate()
             import json as json_mod
+
             volumes = []
             for line in stdout.decode().strip().split("\n"):
                 if not line:
                     continue
                 try:
                     v = json_mod.loads(line)
-                    volumes.append(Volume(
-                        name=v.get("Name", ""),
-                        driver=v.get("Driver", ""),
-                        mountpoint="",
-                        created="",
-                    ))
+                    volumes.append(
+                        Volume(
+                            name=v.get("Name", ""),
+                            driver=v.get("Driver", ""),
+                            mountpoint="",
+                            created="",
+                        )
+                    )
                 except json_mod.JSONDecodeError:
                     continue
             return volumes
@@ -453,14 +488,19 @@ class DockerManager:
         """Create a volume."""
         if self._use_cli:
             proc = await asyncio.create_subprocess_exec(
-                "docker", "volume", "create", name,
+                "docker",
+                "volume",
+                "create",
+                name,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
             await proc.communicate()
             return Volume(name=name, driver=driver, mountpoint="", created="")
 
-        response = await self._request("POST", "/volumes/create", json={"Name": name, "Driver": driver})
+        response = await self._request(
+            "POST", "/volumes/create", json={"Name": name, "Driver": driver}
+        )
         data = response.json()
 
         return Volume(
@@ -474,7 +514,10 @@ class DockerManager:
         """Remove a volume."""
         if self._use_cli:
             proc = await asyncio.create_subprocess_exec(
-                "docker", "volume", "rm", name,
+                "docker",
+                "volume",
+                "rm",
+                name,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -487,7 +530,9 @@ class DockerManager:
         """Pull a Docker image."""
         if self._use_cli:
             proc = await asyncio.create_subprocess_exec(
-                "docker", "pull", image,
+                "docker",
+                "pull",
+                image,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -500,12 +545,16 @@ class DockerManager:
         """List images."""
         if self._use_cli:
             proc = await asyncio.create_subprocess_exec(
-                "docker", "images", "--format", "{{json .}}",
+                "docker",
+                "images",
+                "--format",
+                "{{json .}}",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, _ = await proc.communicate()
             import json as json_mod
+
             images = []
             for line in stdout.decode().strip().split("\n"):
                 if not line:
@@ -523,7 +572,9 @@ class DockerManager:
         """Get disk usage info."""
         if self._use_cli:
             proc = await asyncio.create_subprocess_exec(
-                "docker", "system", "df",
+                "docker",
+                "system",
+                "df",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -645,10 +696,15 @@ class CodeSandbox:
         if language == "python":
             # Write code via stdin, then run it
             write_cmd = "cat > /workspace/script.py"
-            await self.docker._exec_cli(container.id, f"mkdir -p /workspace")
+            await self.docker._exec_cli(container.id, "mkdir -p /workspace")
             proc = await asyncio.create_subprocess_exec(
-                "docker", "exec", "-i", container.id,
-                "sh", "-c", write_cmd,
+                "docker",
+                "exec",
+                "-i",
+                container.id,
+                "sh",
+                "-c",
+                write_cmd,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -664,8 +720,13 @@ class CodeSandbox:
             write_cmd = "cat > /workspace/script.sh"
             await self.docker._exec_cli(container.id, "mkdir -p /workspace")
             proc = await asyncio.create_subprocess_exec(
-                "docker", "exec", "-i", container.id,
-                "sh", "-c", write_cmd,
+                "docker",
+                "exec",
+                "-i",
+                container.id,
+                "sh",
+                "-c",
+                write_cmd,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -680,9 +741,11 @@ class CodeSandbox:
             )
         else:
             return ExecutionResult(
-                success=False, output="",
+                success=False,
+                output="",
                 error=f"Unsupported language: {language}",
-                exit_code=1, duration_ms=0,
+                exit_code=1,
+                duration_ms=0,
             )
 
         return result
@@ -692,9 +755,11 @@ class CodeSandbox:
         container = self._active_sandboxes.get(sandbox_name)
         if not container:
             return ExecutionResult(
-                success=False, output="",
+                success=False,
+                output="",
                 error="Sandbox not found",
-                exit_code=1, duration_ms=0,
+                exit_code=1,
+                duration_ms=0,
             )
 
         return await self.docker.exec_with_result(

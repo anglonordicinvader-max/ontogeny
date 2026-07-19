@@ -26,6 +26,7 @@ from .modification_memory import ModificationMemory, ModificationRecord
 @dataclass
 class ContrastiveExample:
     """A single contrastive training example."""
+
     id: str = ""
     example_type: str = ""  # prediction, diagnosis, comparison
     instruction: str = ""
@@ -126,8 +127,8 @@ class ContrastiveTrainer:
         system_prompt = (
             "You are a code modification expert. Given a failed code modification, "
             "explain why it would fail and predict the outcome. "
-            "Return JSON: {\"prediction\": \"fail\", \"reason\": \"explanation\", "
-            "\"confidence\": 0.0-1.0, \"warning_signs\": [\"sign1\", ...]}"
+            'Return JSON: {"prediction": "fail", "reason": "explanation", '
+            '"confidence": 0.0-1.0, "warning_signs": ["sign1", ...]}'
         )
 
         examples = []
@@ -180,18 +181,20 @@ Will this modification succeed or fail? Why?"""
                 f"Warning signs: {', '.join(warning_signs) if warning_signs else 'None identified'}"
             )
 
-            examples.append(ContrastiveExample(
-                id=str(uuid.uuid4()),
-                example_type="prediction",
-                instruction=instruction,
-                output=output,
-                quality_score=0.7,
-                metadata={
-                    "actual_outcome": "fail",
-                    "predicted_outcome": prediction,
-                    "warning_signs": warning_signs,
-                },
-            ))
+            examples.append(
+                ContrastiveExample(
+                    id=str(uuid.uuid4()),
+                    example_type="prediction",
+                    instruction=instruction,
+                    output=output,
+                    quality_score=0.7,
+                    metadata={
+                        "actual_outcome": "fail",
+                        "predicted_outcome": prediction,
+                        "warning_signs": warning_signs,
+                    },
+                )
+            )
 
         return examples
 
@@ -208,8 +211,8 @@ Will this modification succeed or fail? Why?"""
         system_prompt = (
             "You are a code debugging expert. Given a failed code modification, "
             "diagnose the root cause and suggest the correct fix. "
-            "Return JSON: {\"root_cause\": \"explanation\", \"correct_approach\": \"description\", "
-            "\"fixed_code\": \"python code\", \"lessons\": [\"lesson1\", ...]}"
+            'Return JSON: {"root_cause": "explanation", "correct_approach": "description", '
+            '"fixed_code": "python code", "lessons": ["lesson1", ...]}'
         )
 
         examples = []
@@ -262,17 +265,19 @@ What went wrong? What's the correct approach?"""
                 f"Fixed code:\n```python\n{fixed_code[:2000] if fixed_code else record.original_code[:2000]}\n```"
             )
 
-            examples.append(ContrastiveExample(
-                id=str(uuid.uuid4()),
-                example_type="diagnosis",
-                instruction=instruction,
-                output=output,
-                quality_score=0.75,
-                metadata={
-                    "root_cause": root_cause,
-                    "correct_approach": correct_approach,
-                },
-            ))
+            examples.append(
+                ContrastiveExample(
+                    id=str(uuid.uuid4()),
+                    example_type="diagnosis",
+                    instruction=instruction,
+                    output=output,
+                    quality_score=0.75,
+                    metadata={
+                        "root_cause": root_cause,
+                        "correct_approach": correct_approach,
+                    },
+                )
+            )
 
         return examples
 
@@ -292,14 +297,18 @@ What went wrong? What's the correct approach?"""
         system_prompt = (
             "You are a code review expert. Given two approaches to the same problem "
             "(one successful, one failed), explain which is correct and why. "
-            "Return JSON: {\"correct\": \"A\" or \"B\", \"explanation\": \"why\", "
-            "\"key_difference\": \"what matters\", \"takeaway\": \"general lesson\"}"
+            'Return JSON: {"correct": "A" or "B", "explanation": "why", '
+            '"key_difference": "what matters", "takeaway": "general lesson"}'
         )
 
         examples = []
         for success, failure in samples:
-            if (not success.modified_code or len(success.modified_code) < 20 or
-                not failure.modified_code or len(failure.modified_code) < 20):
+            if (
+                not success.modified_code
+                or len(success.modified_code) < 20
+                or not failure.modified_code
+                or len(failure.modified_code) < 20
+            ):
                 continue
 
             prompt = f"""Two approaches to the same problem. One succeeded, one failed.
@@ -348,18 +357,20 @@ Which approach is correct? What's the key difference?"""
                 f"Takeaway: {takeaway}"
             )
 
-            examples.append(ContrastiveExample(
-                id=str(uuid.uuid4()),
-                example_type="comparison",
-                instruction=instruction,
-                output=output,
-                quality_score=0.8,
-                metadata={
-                    "correct_approach": correct,
-                    "key_difference": key_difference,
-                    "takeaway": takeaway,
-                },
-            ))
+            examples.append(
+                ContrastiveExample(
+                    id=str(uuid.uuid4()),
+                    example_type="comparison",
+                    instruction=instruction,
+                    output=output,
+                    quality_score=0.8,
+                    metadata={
+                        "correct_approach": correct,
+                        "key_difference": key_difference,
+                        "takeaway": takeaway,
+                    },
+                )
+            )
 
         return examples
 

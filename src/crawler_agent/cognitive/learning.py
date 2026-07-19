@@ -1,22 +1,23 @@
 """Focused learning mode - quality over quantity."""
 
 import asyncio
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from enum import Enum
-from typing import Any, AsyncIterator
+from enum import Enum, StrEnum
+from typing import Any
 
 import structlog
 
-from ..crawlers.base import CrawlResult, ContentType
-from ..processing.llm import LLMProcessor
+from ..crawlers.base import ContentType, CrawlResult
 from ..processing.embeddings import EmbeddingGenerator
+from ..processing.llm import LLMProcessor
 from .memory import MemorySystem
 
 
-class LearningMode(str, Enum):
-    FOCUSED = "focused"      # Deep processing, few sources
-    BALANCED = "balanced"    # Mix of depth and breadth
+class LearningMode(StrEnum):
+    FOCUSED = "focused"  # Deep processing, few sources
+    BALANCED = "balanced"  # Mix of depth and breadth
     EXPLORATORY = "exploratory"  # Wide coverage, lighter processing
     INTENSIVE = "intensive"  # Deep dive on single topic
 
@@ -24,6 +25,7 @@ class LearningMode(str, Enum):
 @dataclass
 class SourceQuality:
     """Track quality metrics for a source."""
+
     url: str
     name: str
     domain: str
@@ -51,6 +53,7 @@ class SourceQuality:
 @dataclass
 class LearningSession:
     """A focused learning session."""
+
     id: str
     topic: str
     mode: LearningMode
@@ -90,21 +93,52 @@ class FocusedLearner:
         high_value = [
             # Code & AI
             SourceQuality("github.com", "GitHub", "github.com", priority=9, tags=["code", "ai"]),
-            SourceQuality("huggingface.co", "HuggingFace", "huggingface.co", priority=9, tags=["ai", "models"]),
-            SourceQuality("arxiv.org", "arXiv", "arxiv.org", priority=8, tags=["research", "papers"]),
-            SourceQuality("papers.semanticscholar.org", "Semantic Scholar", "semanticscholar.org", priority=8, tags=["research"]),
-            
+            SourceQuality(
+                "huggingface.co", "HuggingFace", "huggingface.co", priority=9, tags=["ai", "models"]
+            ),
+            SourceQuality(
+                "arxiv.org", "arXiv", "arxiv.org", priority=8, tags=["research", "papers"]
+            ),
+            SourceQuality(
+                "papers.semanticscholar.org",
+                "Semantic Scholar",
+                "semanticscholar.org",
+                priority=8,
+                tags=["research"],
+            ),
             # Knowledge
-            SourceQuality("en.wikipedia.org", "Wikipedia", "wikipedia.org", priority=7, tags=["knowledge", "reference"]),
-            SourceQuality("stackoverflow.com", "Stack Overflow", "stackoverflow.com", priority=7, tags=["programming", "qa"]),
-            
+            SourceQuality(
+                "en.wikipedia.org",
+                "Wikipedia",
+                "wikipedia.org",
+                priority=7,
+                tags=["knowledge", "reference"],
+            ),
+            SourceQuality(
+                "stackoverflow.com",
+                "Stack Overflow",
+                "stackoverflow.com",
+                priority=7,
+                tags=["programming", "qa"],
+            ),
             # News & Community
-            SourceQuality("news.ycombinator.com", "Hacker News", "hackernews.com", priority=6, tags=["tech", "news"]),
-            SourceQuality("reddit.com", "Reddit", "reddit.com", priority=5, tags=["community", "discussion"]),
-            
+            SourceQuality(
+                "news.ycombinator.com",
+                "Hacker News",
+                "hackernews.com",
+                priority=6,
+                tags=["tech", "news"],
+            ),
+            SourceQuality(
+                "reddit.com", "Reddit", "reddit.com", priority=5, tags=["community", "discussion"]
+            ),
             # Documentation
-            SourceQuality("docs.python.org", "Python Docs", "python.org", priority=7, tags=["docs", "python"]),
-            SourceQuality("developer.mozilla.org", "MDN", "mozilla.org", priority=7, tags=["docs", "web"]),
+            SourceQuality(
+                "docs.python.org", "Python Docs", "python.org", priority=7, tags=["docs", "python"]
+            ),
+            SourceQuality(
+                "developer.mozilla.org", "MDN", "mozilla.org", priority=7, tags=["docs", "web"]
+            ),
         ]
 
         for source in high_value:
@@ -119,6 +153,7 @@ class FocusedLearner:
     ) -> None:
         """Register a new source."""
         from urllib.parse import urlparse
+
         domain = urlparse(url).netloc
 
         self.sources[domain] = SourceQuality(
@@ -238,6 +273,7 @@ Return JSON with: insights (list of strings, max 5)""",
         )
 
         import json
+
         try:
             data = json.loads(response.choices[0].message.content or "{}")
             return data.get("insights", [])[:5]
@@ -292,14 +328,11 @@ Return JSON with: insights (list of strings, max 5)""",
 
     async def get_priority_sources(self, limit: int = 5) -> list[SourceQuality]:
         """Get sources that should be crawled next."""
-        candidates = [
-            s for s in self.sources.values()
-            if s.should_crawl
-        ]
+        candidates = [s for s in self.sources.values() if s.should_crawl]
 
         # Sort by priority and usefulness
         candidates.sort(
-            key=lambda s: (s.priority * 0.6 + s.usefulness_score * 0.4),
+            key=lambda s: s.priority * 0.6 + s.usefulness_score * 0.4,
             reverse=True,
         )
 
@@ -326,11 +359,13 @@ Return JSON with: insights (list of strings, max 5)""",
 
             # This would be called from the orchestrator's crawlers
             # For now, return the session info
-            results.append({
-                "source": source.name,
-                "priority": source.priority,
-                "topic": topic,
-            })
+            results.append(
+                {
+                    "source": source.name,
+                    "priority": source.priority,
+                    "topic": topic,
+                }
+            )
 
         session.end_time = datetime.utcnow()
 
@@ -350,5 +385,6 @@ Return JSON with: insights (list of strings, max 5)""",
             "high_priority": sum(1 for s in self.sources.values() if s.priority >= 7),
             "total_sessions": len(self.sessions),
             "active_session": self.current_session.id if self.current_session else None,
-            "avg_quality": sum(s.avg_quality for s in self.sources.values()) / max(len(self.sources), 1),
+            "avg_quality": sum(s.avg_quality for s in self.sources.values())
+            / max(len(self.sources), 1),
         }

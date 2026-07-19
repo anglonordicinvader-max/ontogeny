@@ -12,10 +12,11 @@ import json
 import random
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import structlog
 
@@ -23,6 +24,7 @@ import structlog
 @dataclass
 class BehavioralParams:
     """Behavioral parameters that vary between agent instances."""
+
     exploration_rate: float = 0.3  # How much to explore vs exploit
     risk_tolerance: float = 0.5  # Willingness to take risky actions
     creativity: float = 0.5  # Tendency to try novel approaches
@@ -32,7 +34,7 @@ class BehavioralParams:
     planning_horizon: int = 5  # Steps ahead to plan
     reflection_depth: int = 2  # How deeply to reflect on outcomes
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "exploration_rate": self.exploration_rate,
             "risk_tolerance": self.risk_tolerance,
@@ -59,15 +61,25 @@ class BehavioralParams:
         )
 
     @classmethod
-    def from_parent(cls, parent: "BehavioralParams", mutation_rate: float = 0.1) -> "BehavioralParams":
+    def from_parent(
+        cls, parent: "BehavioralParams", mutation_rate: float = 0.1
+    ) -> "BehavioralParams":
         """Create params from parent with mutation."""
         return cls(
-            exploration_rate=max(0.05, min(0.95, parent.exploration_rate + random.gauss(0, mutation_rate))),
-            risk_tolerance=max(0.05, min(0.95, parent.risk_tolerance + random.gauss(0, mutation_rate))),
+            exploration_rate=max(
+                0.05, min(0.95, parent.exploration_rate + random.gauss(0, mutation_rate))
+            ),
+            risk_tolerance=max(
+                0.05, min(0.95, parent.risk_tolerance + random.gauss(0, mutation_rate))
+            ),
             creativity=max(0.05, min(0.95, parent.creativity + random.gauss(0, mutation_rate))),
             persistence=max(0.05, min(0.95, parent.persistence + random.gauss(0, mutation_rate))),
-            social_learning=max(0.05, min(0.95, parent.social_learning + random.gauss(0, mutation_rate))),
-            memory_retention=max(0.1, min(0.95, parent.memory_retention + random.gauss(0, mutation_rate))),
+            social_learning=max(
+                0.05, min(0.95, parent.social_learning + random.gauss(0, mutation_rate))
+            ),
+            memory_retention=max(
+                0.1, min(0.95, parent.memory_retention + random.gauss(0, mutation_rate))
+            ),
             planning_horizon=max(1, min(15, parent.planning_horizon + random.randint(-1, 1))),
             reflection_depth=max(1, min(5, parent.reflection_depth + random.randint(-1, 1))),
         )
@@ -76,10 +88,11 @@ class BehavioralParams:
 @dataclass
 class AgentInstance:
     """An agent instance with unique behavioral parameters."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     name: str = ""
     params: BehavioralParams = field(default_factory=BehavioralParams)
-    parent_id: Optional[str] = None
+    parent_id: str | None = None
     generation: int = 0
     fitness: float = 0.0
     total_reward: float = 0.0
@@ -87,7 +100,7 @@ class AgentInstance:
     success_count: int = 0
     created_at: datetime = field(default_factory=datetime.utcnow)
     last_active: datetime = field(default_factory=datetime.utcnow)
-    metadata: Dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
 
     def update_fitness(self, reward: float, success: bool):
         """Update fitness based on outcome."""
@@ -104,7 +117,7 @@ class AgentInstance:
     def success_rate(self) -> float:
         return self.success_count / max(1, self.episodes)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "name": self.name,
@@ -127,7 +140,7 @@ class AgentPopulation:
     def __init__(self, data_dir: str = "data/agent_population"):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.agents: Dict[str, AgentInstance] = {}
+        self.agents: dict[str, AgentInstance] = {}
         self.logger = structlog.get_logger(component="agent_population")
         self._load()
 
@@ -168,8 +181,8 @@ class AgentPopulation:
     def create_agent(
         self,
         name: str = "",
-        params: Optional[BehavioralParams] = None,
-        parent_id: Optional[str] = None,
+        params: BehavioralParams | None = None,
+        parent_id: str | None = None,
     ) -> AgentInstance:
         """Create a new agent instance."""
         if params is None:
@@ -192,7 +205,7 @@ class AgentPopulation:
         self.logger.info("agent_created", id=agent.id, name=agent.name, generation=agent.generation)
         return agent
 
-    def select_parent(self, top_k: int = 3) -> Optional[AgentInstance]:
+    def select_parent(self, top_k: int = 3) -> AgentInstance | None:
         """Select a parent for reproduction based on fitness."""
         if not self.agents:
             return None
@@ -210,11 +223,11 @@ class AgentPopulation:
             )
         return self.create_agent()
 
-    def get_best(self, n: int = 5) -> List[AgentInstance]:
+    def get_best(self, n: int = 5) -> list[AgentInstance]:
         """Get the top N agents by fitness."""
         return sorted(self.agents.values(), key=lambda a: a.fitness, reverse=True)[:n]
 
-    def get_diverse_sample(self, n: int = 5) -> List[AgentInstance]:
+    def get_diverse_sample(self, n: int = 5) -> list[AgentInstance]:
         """Get a diverse sample of agents (maximize behavioral distance)."""
         if len(self.agents) <= n:
             return list(self.agents.values())
@@ -228,7 +241,7 @@ class AgentPopulation:
             best_candidate = None
             best_distance = -1
             for candidate in remaining:
-                min_distance = float('inf')
+                min_distance = float("inf")
                 for sel in selected:
                     distance = self._behavioral_distance(candidate.params, sel.params)
                     min_distance = min(min_distance, distance)
@@ -244,12 +257,12 @@ class AgentPopulation:
     def _behavioral_distance(self, p1: BehavioralParams, p2: BehavioralParams) -> float:
         """Calculate behavioral distance between two parameter sets."""
         return (
-            abs(p1.exploration_rate - p2.exploration_rate) +
-            abs(p1.risk_tolerance - p2.risk_tolerance) +
-            abs(p1.creativity - p2.creativity) +
-            abs(p1.persistence - p2.persistence) +
-            abs(p1.social_learning - p2.social_learning) +
-            abs(p1.memory_retention - p2.memory_retention)
+            abs(p1.exploration_rate - p2.exploration_rate)
+            + abs(p1.risk_tolerance - p2.risk_tolerance)
+            + abs(p1.creativity - p2.creativity)
+            + abs(p1.persistence - p2.persistence)
+            + abs(p1.social_learning - p2.social_learning)
+            + abs(p1.memory_retention - p2.memory_retention)
         ) / 6.0
 
     def propagate_successful_strategies(
@@ -257,7 +270,7 @@ class AgentPopulation:
         successful_agent_id: str,
         num_offspring: int = 2,
         mutation_rate: float = 0.05,
-    ) -> List[AgentInstance]:
+    ) -> list[AgentInstance]:
         """Propagate strategies from a successful agent."""
         if successful_agent_id not in self.agents:
             return []
@@ -278,7 +291,7 @@ class AgentPopulation:
         )
         return offspring
 
-    def get_population_stats(self) -> Dict:
+    def get_population_stats(self) -> dict:
         """Get population statistics."""
         if not self.agents:
             return {"count": 0}
@@ -311,5 +324,7 @@ class AgentPopulation:
         if best:
             lines.append("  Top Agents:")
             for agent in best:
-                lines.append(f"    {agent.name}: fitness={agent.fitness:.3f}, episodes={agent.episodes}")
+                lines.append(
+                    f"    {agent.name}: fitness={agent.fitness:.3f}, episodes={agent.episodes}"
+                )
         return "\n".join(lines)

@@ -1,18 +1,18 @@
 """Multi-agent system for collaborative intelligence."""
 
-from .base import Agent, AgentRole, AgentState, AgentMessage
-from .registry import AgentRegistry
+from .base import Agent, AgentMessage, AgentRole, AgentState
 from .orchestrator import MultiAgentOrchestrator
+from .registry import AgentRegistry
 from .specialized import (
-    ResearcherAgent,
-    CoderAgent,
     AnalystAgent,
-    PlannerAgent,
+    CoderAgent,
     CriticAgent,
     DataCleanerAgent,
-    SummarizerAgent,
-    OptimizerAgent,
     ExplorerAgent,
+    OptimizerAgent,
+    PlannerAgent,
+    ResearcherAgent,
+    SummarizerAgent,
     SynthesizerAgent,
 )
 

@@ -1,16 +1,20 @@
 # Ontogeny
 
-**Proto-AGI cognitive agent with recursive self-improvement, 35 web crawlers, multi-layer persistent memory, grounded physics simulation, sensor simulation, YOLOv8 vision, Maldoror custom fine-tuned model, and Monte Carlo Tree Search planning.**
+**Proto-AGI cognitive agent with recursive self-improvement, 30 acquisition engines, multi-layer persistent memory, grounded physics simulation, MuJoCo robotics, sensor simulation, YOLOv8 vision, Maldoror custom fine-tuned model, Monte Carlo Tree Search planning, and an Electron desktop UI.**
 
-Runs on Ollama with **four-tier hybrid LLM routing**: llama3.2 (routine), deepseek-coder-v2:16b (code), qwen2.5:72b (reasoning), **maldoror 7B** (self-modification). CLI-only. No web UI.
+Runs on Ollama with **four-tier hybrid LLM routing**: llama3.2 (routine), deepseek-coder-v2:16b (code), qwen2.5:72b (reasoning), **maldoror 7B** (self-modification).
 
 ---
 
 ## What It Does
 
-Ontogeny is a self-improving cognitive agent that autonomously explores the internet, learns from what it finds, and builds increasingly complex understanding over time. It operates in continuous autonomous cycles — setting its own goals, planning actions, executing crawls across 35 data sources, reasoning about results, reflecting on its own performance, and **modifying its own code and behavior** based on what works.
+Ontogeny is a self-improving cognitive agent that autonomously explores the internet, learns from what it finds, and builds increasingly complex understanding over time. It operates in continuous autonomous cycles — setting its own goals, planning actions, executing acquisition across 30 data sources, reasoning about results, reflecting on its own performance, and **modifying its own code and behavior** based on what works.
 
-It also trains in a Blender physics sandbox with **9 sensor types** (depth, LiDAR, IMU, force/torque, proximity, touch, thermal, night vision, YOLOv8), **5 locomotion modes** (wheeled, legged, tracked, flying, swimming), **4 manipulation tasks** (assembly, cutting, pouring, folding), **social simulation** with human crowd dynamics, and **41 world environments** (8 practical + 33 survival/critical).
+It trains in a Blender physics sandbox with **9 sensor types** (depth, LiDAR, IMU, force/torque, proximity, touch, thermal, night vision, YOLOv8), **5 locomotion modes** (wheeled, legged, tracked, flying, swimming), **4 manipulation tasks** (assembly, cutting, pouring, folding), **social simulation** with human crowd dynamics, and **39 world environments** (9 practical + 30 survival/critical).
+
+It also has a **MuJoCo robotics sandbox** with two robot models — **TOCABI** (33-DOF humanoid) and **Unitree G1** (29-DOF humanoid) — with real-time joint-state telemetry, standing/walking controllers, and sensor integration.
+
+An **Electron desktop UI** provides a real-time glassmorphic interface with 11 panels: Activity, Cognitive State, Memory, Goals, Knowledge Graph, Knowledge Acquisition, Maldoror, Production, Blender, MuJoCo, and Settings.
 
 ## Architecture
 
@@ -24,9 +28,9 @@ It also trains in a Blender physics sandbox with **9 sensor types** (depth, LiDA
 │                              (recursive)                          │
 │                                                                   │
 │  ┌───────────┐  ┌───────────┐  ┌────────────────────────────┐   │
-│  │ 35        │  │ Meta-     │  │ 24 Cognitive                │   │
-│  │ Crawlers  │  │ Cognition │  │ Learning Modules            │   │
-│  │ +Proxies  │  │           │  │                             │   │
+│  │ 30        │  │ Meta-     │  │ 24+ Cognitive               │   │
+│  │ Acquisition│ │ Cognition │  │ Learning Modules            │   │
+│  │ Engines   │  │           │  │                             │   │
 │  └───────────┘  └───────────┘  └────────────────────────────┘   │
 │                                                                   │
 │  ┌───────────────────────────────────────────────────────────┐   │
@@ -62,13 +66,36 @@ It also trains in a Blender physics sandbox with **9 sensor types** (depth, LiDA
 │  │  Performance monitoring · Drift detection · Circuit breaker │   │
 │  │  Smart retraining triggers · Quality gates · Rollback       │   │
 │  └───────────────────────────────────────────────────────────┘   │
+│                                                                   │
+│  ┌───────────────────────────────────────────────────────────┐   │
+│  │        Desktop UI (Electron + React)                        │   │
+│  │  Glassmorphic design · WebSocket real-time updates          │   │
+│  │  11 panels · Command palette · Dual themes                  │   │
+│  └───────────────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
 ## Features
 
-### 35 Web Crawlers
-GitHub, GitLab, Bitbucket, Codeberg/Gitea, SourceForge, Launchpad, Savannah, Apache, Pagure, PyPI, npm, Crates.io, Maven, NuGet, Go.dev, RubyGems, ArXiv, Semantic Scholar, Stack Overflow, Reddit, Hacker News, Wikipedia, RSS, Discord, Slack, Notion, Jira, Pastebin, HuggingFace, Web Scraper, Internet Archive, GitHub Code Search, Papers With Code, HuggingFace Hub, GitHub Trending — all with automatic proxy rotation across 12 free proxy sources.
+### 30 Acquisition Engines
+GitHub, GitLab, Bitbucket, Codeberg/Gitea, SourceForge, Launchpad, Savannah, Apache, Pagure, PyPI, npm, Crates.io, Maven, NuGet, Go.dev, RubyGems, ArXiv, Semantic Scholar, Stack Overflow, Reddit, Hacker News, Wikipedia, RSS, Discord, Notion, Jira, Pastebin, HuggingFace, Web Scraper, Internet Archive — all with automatic network routing across 12 free proxy sources.
+
+### Knowledge Acquisition System
+
+A 10-module subsystem under `crawlers/acquisition/` that transforms raw data retrieval into intelligent evidence acquisition:
+
+| Module | Purpose |
+|--------|---------|
+| **AcquisitionManager** | Central hub orchestrating all external knowledge requests |
+| **ResearchPlanner** | Goal-directed research plans with objectives, budgets, stop conditions |
+| **EvidenceStore** | Persistent document storage with full provenance and deduplication |
+| **SourceQualityScorer** | Weighted quality scoring across 11 source categories |
+| **DomainPolicies** | Per-domain policies: robots.txt, rate limits, allowlist/denylist |
+| **RequestManager** | Caching, dedup, rate limiting, budgets, retry with backoff |
+| **ClaimValidator** | Claims with confidence, supporting/contradictory sources, Bayesian updates |
+| **RevalidationScheduler** | Stale knowledge detection, broken links, version changes |
+| **NetworkTransportLayer** | Health tracking, regional routing, failover for network endpoints |
+| **AcquisitionObservability** | Real-time metrics dashboard for the acquisition pipeline |
 
 ### Four-Tier Hybrid LLM Backend
 
@@ -115,7 +142,7 @@ python scripts/maldoror_dashboard.py
 - **Self-Reflection** — post-action evaluator with blind spot detection and self-model
 - **Evolutionary Architecture** — architecture search using real benchmarks
 - **Causal Reasoning** — builds cause-effect graphs from experience, plans interventions
-- **Knowledge Graph** — extracts entities and relations from crawled data
+- **Knowledge Graph** — extracts entities and relations from acquired data
 - **Uncertainty Tracking** — tracks confidence intervals, epistemic gaps, information value
 - **Curiosity Engine** — intrinsic goals from knowledge gaps, novelty scoring
 - **World Model** — Bayesian belief tracking, prediction-error minimization, internal simulation
@@ -144,12 +171,12 @@ Depth camera, LiDAR (360° raycast), IMU (accelerometer + gyroscope), force/torq
 - **Weather System** — wind force, rain particles, day/night cycle, fog visibility
 - **Failure Injection** — battery drain, structural damage, sensor noise, actuator jamming, communication loss
 
-### 41 World Environments
-- **8 Practical Worlds** — small house, office building, warehouse, construction site, parkour course, truck loading, stair climb, indoor maze
-- **33 Survival Worlds** — 4 tiers (easy → expert): fire escape, flood escape, earthquake rubble, chemical zone, high wind, multi-hazard, damaged robot rescue, total system failure, and more
+### 39 World Environments
+- **9 Practical Worlds** — small house, office building, warehouse, construction site, parkour course, truck loading, stair climb, indoor maze, robot obstacle course
+- **30 Survival Worlds** — 4 tiers (easy → expert): grass field, gravel path, light rain, low obstacle, simple carry, basic door, basic tool, mud traverse, snow field, ice rink, rocky climb, sloped path, narrow passage, heavy carry, tool sequence, night navigation, fire escape, flood escape, earthquake rubble, chemical zone, high wind, multi-hazard, damaged robot rescue, rescue mission, total system failure, extreme weather rescue, hostile terrain mission, catastrophic failure, multi-robot rescue, unknown environment scan
 
 ### 24+ Learning Modules
-Pattern learning, reinforcement learning, curiosity-driven exploration, world modeling, knowledge transfer, sleep consolidation, attention management, meta-learning, skill composition, causal discovery, continual learning, cross-domain transfer, self-generated curriculum, persistent identity, physics experimentation, world memory, affordance learning, object permanence, scene understanding, benchmarks, architecture-aware modification, rollback, skill export, reliability, self-reflection, evolutionary architecture.
+Pattern learning, reinforcement learning, curiosity-driven exploration, world modeling, knowledge transfer, sleep consolidation, attention management, meta-learning, skill composition, causal discovery, continual learning, cross-domain transfer, self-generated curriculum, persistent identity, physics experimentation, world memory, affordance learning, object permanence, scene understanding, benchmarks, architecture-aware modification, rollback, skill export, reliability, self-reflection, evolutionary architecture, agent variety, knowledge distillation, memory compression, reward modeling, simulation library, skill library, test generation, CI validation.
 
 ### Memory System
 - **Working Memory** — current context window
@@ -160,6 +187,32 @@ Pattern learning, reinforcement learning, curiosity-driven exploration, world mo
 
 ### Multi-Agent Collaboration
 10 specialized agents (Researcher, Coder, Analyst, Planner, Critic, DataCleaner, Summarizer, Optimizer, Explorer, Synthesizer) with evolutionary selection and strategy propagation.
+
+### MuJoCo Robotics Sandbox
+
+Real-time physics simulation with two robot models:
+
+| Model | DOF | Type | Features |
+|-------|-----|------|----------|
+| **TOCABI** | 33 | Humanoid (URDF) | Standing balance controller, bipedal walking gait, 38 STL meshes, 37 joints |
+| **Unitree G1** | 29 | Humanoid (MJCF) | Official kp=500 position actuators, standing keyframe, sinusoidal walking, built-in IMU sensors |
+
+- **Real-time telemetry** — joint angles, velocities, torques, body positions streamed via WebSocket
+- **Sensor integration** — IMU (gyroscope + accelerometer), contact sensors, center-of-mass tracking
+- **Hot-swappable models** — switch between TOCABI and G1 at runtime
+- **CLI flag** — `--model tocabi` or `--model g1`
+- **Desktop UI** — MuJoCo panel with canvas rendering, telemetry display, Stand/Walk/Freeze/Reset controls
+
+### Electron Desktop UI
+
+A glassmorphic real-time interface built with Electron + React + TypeScript:
+
+- **11 panels** — Activity Timeline, Cognitive State, Memory Explorer, Goal Tree, Knowledge Graph, Knowledge Acquisition, Maldoror Pipeline, Production Metrics, Blender Sandbox, MuJoCo Robotics, Settings
+- **WebSocket real-time updates** — live data streaming from Python backend
+- **Command palette** — keyboard-driven navigation and control
+- **Dual themes** — light and dark with ambient bloom, SVG noise textures, Geist typography
+- **Auto-updater** — electron-updater for seamless updates
+- **Simulation mode** — `--simulate` flag runs without Python backend for UI development
 
 ### Production Readiness (Phase 5)
 - **Performance Monitoring** — tracks latency, quality scores, error rates, memory usage over time
@@ -195,6 +248,9 @@ Isolated code execution in Docker containers with resource limits and automatic 
 - Docker Desktop (for code execution sandbox + Blender sandbox + GPU training)
 - Ollama with llama3.2, deepseek-coder-v2:16b, qwen2.5:72b, and maldoror
 - NVIDIA Container Toolkit (optional, for GPU training)
+- Node.js 18+ (for desktop UI)
+- MuJoCo 3.10+ (for robotics sandbox)
+- Blender 5.2 (optional, for direct Blender integration)
 
 ```bash
 # Install Ollama and pull models
@@ -212,7 +268,7 @@ cd ontogeny
 pip install -e .
 ```
 
-### Run
+### Run — CLI
 
 ```bash
 # Menu mode (interactive / autonomous / demo)
@@ -229,6 +285,24 @@ python -m crawler_agent.main --demo
 
 # Maldoror pipeline dashboard
 python scripts/maldoror_dashboard.py
+```
+
+### Run — Desktop UI
+
+```bash
+# Install desktop dependencies (one-time)
+cd desktop/renderer && npm install && cd ../..
+
+# Start the full stack (Python backend + Electron UI)
+cd desktop && npx electron .
+
+# Dev mode (HMR, auto-reload)
+cd desktop/renderer && npx vite --port 5173
+# In another terminal:
+cd desktop && npx electron . --dev
+
+# Simulation mode (no Python backend needed)
+cd desktop && npx electron . --dev --simulate
 ```
 
 ### Blender Physics Sandbox (Optional)
@@ -329,8 +403,8 @@ ollama create maldoror -f Modelfile
 | Command | Description |
 |---------|-------------|
 | `ask <question>` | Ask the agent anything |
-| `search <source> <query>` | Search a specific crawler |
-| `crawl <source> <url>` | Crawl a URL |
+| `search <source> <query>` | Search a specific acquisition engine |
+| `crawl <source> <url>` | Acquire a URL |
 | `goal <description>` | Create a goal |
 | `goals` | List active goals |
 | `autonomous` | Start autonomous loop |
@@ -343,24 +417,28 @@ ollama create maldoror -f Modelfile
 | `task <description>` | Run a task |
 | `status` | Agent status |
 | `drives` | View intrinsic drives |
-| `blender_sim <spec>` | Run physics simulation |
-| `blender_render <spec>` | Render scene |
-| `blender_step <blend> <steps>` | Step physics in existing .blend |
-| `verify <task_type> <output>` | Verify outcome (code/plan/reason/sim) |
-| `mcts_plan <goal> <state>` | MCTS planning |
-| `skill_create <name> <code>` | Create new skill |
-| `skill_list` | List available skills |
-| `sensor_read <type>` | Read sensor (depth/lidar/imu/force/proximity/touch/thermal/night_vision) |
-| `yolo_detect <image>` | Detect objects with YOLOv8 |
-| `navigate <goal>` | Plan path (A*/RRT/Dijkstra) |
-| `weather_update` | Update weather simulation |
-| `locomotion <mode>` | Set locomotion mode (wheeled/legged/tracked/flying/swimming) |
-| `manipulate <task>` | Run manipulation task (assembly/cutting/pouring/folding) |
-| `social_update` | Update crowd simulation |
-| `failure_inject <type>` | Inject failure (battery/structural/sensor/actuator/comm) |
-| `maldoror_status` | View maldoror pipeline status |
-| `maldoror_train` | Trigger manual training |
-| `maldoror_evaluate` | Run evaluation benchmark |
+| `memory` | View memory summary |
+| `skills` | List available skills |
+| `proxy list` | List network endpoints |
+| `proxy refresh` | Refresh endpoint health |
+| `learn <topic>` | Focused learning mode |
+| `intensity <level>` | Set attention intensity |
+| `uncertainty` | View uncertainty tracker |
+| `compose <skills>` | Compose skills together |
+| `context` | View session context |
+| `simulate-plan <goal>` | Simulate a plan |
+| `intervene <cause>` | Plan causal intervention |
+| `counterfactual <event>` | What-if analysis |
+| `analogy <domain>` | Cross-domain analogy |
+| `paths <start> <end>` | Find paths between states |
+| `run-file <path>` | Execute Python file in sandbox |
+| `install <package>` | Install package in sandbox |
+| `sandboxes` | List active sandboxes |
+| `collaborate <task>` | Multi-agent collaboration |
+| `pipeline` | View Maldoror pipeline status |
+| `save` | Save agent state |
+| `load` | Load agent state |
+| `backups` | List state backups |
 
 ## Configuration
 
@@ -384,7 +462,7 @@ HEAVY_LLM_MODEL=qwen2.5:72b
 HEAVY_LLM_API_KEY=ollama
 HEAVY_LLM_API_BASE=http://localhost:11434/v1
 
-# Proxy (auto-fetches free proxies)
+# Network Routing (auto-fetches free proxies)
 PROXY_ENABLED=true
 PROXY_REQUIRED=true
 PROXY_AUTO_REFRESH=true
@@ -393,13 +471,16 @@ PROXY_FETCH_FREE_PROXIES=true
 # Storage
 STORAGE_DATABASE_URL=sqlite+aiosqlite:///./crawler.db
 
-# Crawler rates
+# Acquisition rates
 CRAWLER_REQUESTS_PER_SECOND=5.0
 CRAWLER_MIN_DELAY=1.0
 CRAWLER_MAX_DELAY=3.0
 
 # Blender Emotion Visualization (sphere | anatomy | both)
 EMOTION_VISUALIZER=anatomy
+
+# MuJoCo robot model (tocabi | g1)
+MUJOCO_MODEL=tocabi
 
 # Maldoror Training (via Docker GPU)
 MALDOROR_BASE_MODEL=Qwen/Qwen2.5-7B-Instruct
@@ -453,7 +534,7 @@ src/crawler_agent/
 │   ├── simulator.py         # Action simulation
 │   ├── memory.py            # Multi-layer persistent memory
 │   ├── learning.py          # Focused learning mode
-│   ├── scheduler.py         # Crawl scheduling
+│   ├── scheduler.py         # Acquisition scheduling
 │   ├── pattern_learner.py   # Pattern recognition
 │   ├── rl_agent.py          # Reinforcement learning
 │   ├── meta_learner.py      # Learning-to-learn
@@ -472,8 +553,8 @@ src/crawler_agent/
 │   ├── locomotion.py        # 5 locomotion modes
 │   ├── manipulation_tasks.py# Assembly, cutting, pouring, folding
 │   ├── social_sim.py        # Human crowd simulation
-│   ├── practical_worlds.py  # 8 practical environments
-│   ├── survival_worlds.py   # 33 survival worlds
+│   ├── practical_worlds.py  # 9 practical environments
+│   ├── survival_worlds.py   # 30 survival worlds
 │   ├── world_selector.py    # Skill-based world selection
 │   ├── world_memory.py      # Persistent world memory
 │   ├── anatomy_mode.py      # TOCABI humanoid, 38 STL meshes
@@ -493,8 +574,60 @@ src/crawler_agent/
 │   ├── self_audit.py        # Periodic self-audits
 │   ├── reliability.py       # Circuit breaker, retry logic
 │   ├── distillation.py      # Knowledge distillation, LoRA training
+│   ├── embodiment.py        # Embodiment abstraction (NeoCorpus)
+│   ├── sim_library.py       # Simulation backend registry
+│   ├── skill_library.py     # Skill registry & versioning
+│   ├── knowledge_distiller.py # Knowledge distillation
+│   ├── memory_compression.py  # Memory compression
+│   ├── reward_model.py      # Reward modeling
+│   ├── agent_variety.py     # Agent diversity management
+│   ├── benchmark.py         # Benchmark definitions
+│   ├── ci_validator.py      # CI/CD validation
+│   ├── test_generator.py    # Auto-generated tests
 │   └── tools.py             # GitHub/arXiv/ROS2 APIs
-├── crawlers/                # 35 data source crawlers
+├── crawlers/
+│   ├── base.py              # Base acquisition engine interface
+│   ├── academic.py          # ArXiv, Semantic Scholar
+│   ├── additional.py        # Papers With Code, GitHub Trending
+│   ├── apache.py            # Apache projects
+│   ├── bitbucket.py         # Bitbucket repos
+│   ├── codeberg.py          # Codeberg/Gitea repos
+│   ├── crates.py            # Rust crates.io
+│   ├── discord.py           # Discord channels
+│   ├── github.py            # GitHub repos, code search
+│   ├── gitlab.py            # GitLab repos
+│   ├── go_dev.py            # Go packages
+│   ├── hackernews.py        # Hacker News
+│   ├── huggingface.py       # HuggingFace datasets, models
+│   ├── internetarchive.py   # Internet Archive
+│   ├── jira.py              # Jira issues
+│   ├── launchpad.py         # Launchpad projects
+│   ├── maven.py             # Maven Central
+│   ├── notion.py            # Notion pages
+│   ├── npm_registry.py      # npm packages
+│   ├── nuget.py             # NuGet packages
+│   ├── pagure.py            # Pagure repos
+│   ├── pastebin.py          # Pastebin
+│   ├── pypi.py              # PyPI packages
+│   ├── reddit.py            # Reddit posts
+│   ├── rss.py               # RSS/Atom feeds
+│   ├── rubygems.py          # Ruby gems
+│   ├── savannah.py          # GNU Savannah
+│   ├── sourceforge.py       # SourceForge
+│   ├── stackoverflow.py     # Stack Overflow
+│   ├── webscraper.py        # Generic web scraper
+│   ├── wikipedia.py         # Wikipedia
+│   └── acquisition/         # Knowledge Acquisition System
+│       ├── manager.py       # Central acquisition hub
+│       ├── research_planner.py # Goal-directed research plans
+│       ├── evidence_store.py   # Document storage with provenance
+│       ├── source_scorer.py    # Quality scoring (11 categories)
+│       ├── domain_policies.py  # Per-domain policies
+│       ├── request_manager.py  # Caching, dedup, rate limiting
+│       ├── knowledge_validator.py # Claim validation
+│       ├── revalidation.py     # Stale knowledge detection
+│       ├── proxy_manager.py    # Network transport layer
+│       └── observability.py    # Real-time metrics
 ├── agents/                  # Multi-agent collaboration
 ├── processing/
 │   ├── llm.py               # LLM pipeline
@@ -504,28 +637,78 @@ src/crawler_agent/
 │   ├── docker_manager.py    # Docker sandbox
 │   └── vector.py            # ChromaDB vector store
 └── utils/
-    ├── proxy.py             # Proxy pool & rotation
+    ├── proxy.py             # Network transport pool & rotation
     ├── proxy_fetcher.py     # 12 free proxy sources
     └── rate_limiter.py      # Request rate limiting
+
+backend/
+├── main.py                  # FastAPI WebSocket server for desktop UI
+├── agent_manager.py         # Agent lifecycle management
+├── blender_simulation.py    # Direct Blender 5.2 Python integration
+├── blender_worlds.py        # 9 practical + 30 survival world definitions
+├── mujoco_simulation.py     # MuJoCo physics (TOCABI + Unitree G1)
+└── simulation.py            # Simulation utilities
+
+desktop/
+├── main/
+│   └── index.js             # Electron main process (auto-updater, backend)
+├── preload/
+│   └── preload.js           # Electron IPC bridge
+└── renderer/
+    ├── src/
+    │   ├── App.tsx           # Root component, tab routing
+    │   ├── main.tsx          # Entry point
+    │   ├── components/
+    │   │   ├── TitleBar.tsx        # Gradient title bar, monogram
+    │   │   ├── Sidebar.tsx         # 11-tab navigation
+    │   │   ├── StatusBar.tsx       # Connection status
+    │   │   ├── ActivityTimeline.tsx # Event timeline
+    │   │   ├── CognitiveState.tsx   # Brain visualization
+    │   │   ├── MemoryExplorer.tsx   # Memory layers
+    │   │   ├── GoalTree.tsx         # Goal hierarchy
+    │   │   ├── KnowledgeGraph.tsx   # D3 force graph
+    │   │   ├── CrawlerPanel.tsx     # Knowledge acquisition
+    │   │   ├── MaldororPanel.tsx    # Self-improvement pipeline
+    │   │   ├── ProductionPanel.tsx  # Monitoring metrics
+    │   │   ├── BlenderPanel.tsx     # Blender world selector
+    │   │   ├── BlenderEmbed.tsx     # Blender WebSocket canvas
+    │   │   ├── MuJoCoPanel.tsx      # MuJoCo info
+    │   │   ├── MuJoCoEmbed.tsx      # MuJoCo WebSocket canvas
+    │   │   ├── SettingsPanel.tsx    # Configuration
+    │   │   ├── CommandPalette.tsx   # Keyboard command palette
+    │   │   ├── Panel.tsx            # Reusable panel component
+    │   │   └── ErrorBoundary.tsx    # Error handling
+    │   ├── hooks/
+    │   │   └── useWebSocket.ts      # WebSocket connection hook
+    │   ├── types/
+    │   │   ├── index.ts             # TypeScript interfaces
+    │   │   └── electron.d.ts        # Electron API types
+    │   └── lib/
+    │       └── utils.ts             # Utility functions
+    ├── vite.config.ts        # Vite build config
+    ├── tailwind.config.js    # Tailwind theme
+    └── tsconfig.json         # TypeScript config
 
 data/
 ├── maldoror/
 │   ├── train_v0.jsonl       # Training data (ChatML format, 21KB)
-│   ├── train_v2.py          # QLoRA training script (fixed: BitsAndBytesConfig, bf16)
-│   ├── merge.py             # Merges LoRA adapters into full model for Ollama
+│   ├── train_v2.py          # QLoRA training script
+│   ├── merge.py             # Merges LoRA adapters for Ollama
 │   ├── models.json          # Deployed model registry
 │   ├── runs.json            # Training run history
 │   ├── rollback_history.json # Rollback log
-│   ├── adapters/            # LoRA adapter weights from training
+│   ├── adapters/            # LoRA adapter weights
 │   │   └── v0/              # First training run adapters
-│   ├── merged/              # Full merged model (14GB) for Ollama deployment
-│   ├── architecture/        # Architecture modification history & backups
-│   ├── eval/                # Evaluation reports & detailed results
-│   └── monitoring/          # Performance metrics & snapshots
+│   ├── merged/              # Full merged model for Ollama
+│   ├── architecture/        # Architecture modification history
+│   ├── eval/                # Evaluation reports
+│   └── monitoring/          # Performance metrics
 ├── modification_memory/
 │   └── memory.jsonl         # Aggregated training data
 ├── modification_training_log.jsonl # Raw self-modification logs
-└── maldoror/eval/           # Evaluation reports
+└── mujoco/
+    └── models/
+        └── unitree_g1/      # Unitree G1 MJCF + 35 STL meshes
 
 scripts/
 ├── train_maldoror.py         # End-to-end training pipeline
@@ -536,15 +719,21 @@ Modelfile                    # Ollama model definition for maldoror
 
 tests/
 ├── test_smoke.py            # 77 module import/instantiation/operation tests
+├── test_acquisition.py      # 59 knowledge acquisition system tests
 ├── test_maldoror_e2e.py     # 20 maldoror pipeline E2E tests
-├── test_evaluation.py       # 15 evaluation/gate/rollback/A/B tests
 ├── test_production.py       # 28 monitoring/trigger/circuit breaker tests
-├── test_self_training.py    # 13 self-training synthesizer tests
-├── test_contrastive.py      # 14 contrastive trainer tests
+├── test_architecture_modifier.py # 15 architecture modifier tests
+├── test_evaluation.py       # 15 evaluation/gate/rollback/A/B tests
 ├── test_population.py       # 16 population-based training tests
+├── test_contrastive.py      # 14 contrastive trainer tests
+├── test_backend_imports.py  # 13 backend import tests
+├── test_self_training.py    # 9 self-training synthesizer tests
+├── test_agent_memory.py     # 10 agent/memory tests
+├── test_api_server.py       # 8 API server tests
+├── test_world_selector.py   # 7 world selector tests
 ├── test_emergent_curriculum.py # 6 emergent curriculum tests
-├── test_adversarial_trainer.py # 5 adversarial trainer tests
-└── test_architecture_modifier.py # 15 architecture modifier tests
+├── test_blender_simulation.py  # 5 blender simulation tests
+└── test_adversarial_trainer.py # 5 adversarial trainer tests
 ```
 
 ## How Autonomous Mode Works
@@ -554,7 +743,7 @@ Each cycle:
 1. **Drive decay** — curiosity/mastery/novelty satisfaction drops 1%/cycle
 2. **Goal generation** — new goals created when drives fall below 50%
 3. **Plan creation** — LLM generates multi-step plan (or fallback: search + analyze)
-4. **Step execution** — one step per cycle (crawl, search, think, execute, navigate, manipulate)
+4. **Step execution** — one step per cycle (acquire, search, think, execute, navigate, manipulate)
 5. **Meta-cognition** — evaluates reasoning quality
 6. **Self-reflection** — post-action review with blind spot detection
 7. **Memory recording** — episodic + semantic memory updated
@@ -574,20 +763,26 @@ Each cycle:
 ## Testing
 
 ```bash
-# Run all tests (205 tests)
+# Run all tests (307 tests)
 python -m pytest tests/ -v
 
 # Run specific suites
 python -m pytest tests/test_smoke.py -v                    # 77 smoke tests
+python -m pytest tests/test_acquisition.py -v              # 59 acquisition tests
 python -m pytest tests/test_maldoror_e2e.py -v             # 20 E2E pipeline tests
-python -m pytest tests/test_evaluation.py -v               # 15 evaluation tests
 python -m pytest tests/test_production.py -v               # 28 production tests
-python -m pytest tests/test_self_training.py -v            # 13 self-training tests
-python -m pytest tests/test_contrastive.py -v              # 14 contrastive tests
-python -m pytest tests/test_population.py -v               # 16 population tests
-python -m pytest tests/test_emergent_curriculum.py -v      # 6 curriculum tests
-python -m pytest tests/test_adversarial_trainer.py -v      # 5 adversarial tests
 python -m pytest tests/test_architecture_modifier.py -v    # 15 architecture tests
+python -m pytest tests/test_evaluation.py -v               # 15 evaluation tests
+python -m pytest tests/test_population.py -v               # 16 population tests
+python -m pytest tests/test_contrastive.py -v              # 14 contrastive tests
+python -m pytest tests/test_backend_imports.py -v          # 13 backend import tests
+python -m pytest tests/test_self_training.py -v            # 9 self-training tests
+python -m pytest tests/test_agent_memory.py -v             # 10 agent/memory tests
+python -m pytest tests/test_api_server.py -v               # 8 API server tests
+python -m pytest tests/test_world_selector.py -v           # 7 world selector tests
+python -m pytest tests/test_emergent_curriculum.py -v      # 6 curriculum tests
+python -m pytest tests/test_blender_simulation.py -v       # 5 blender tests
+python -m pytest tests/test_adversarial_trainer.py -v      # 5 adversarial tests
 ```
 
 ## License

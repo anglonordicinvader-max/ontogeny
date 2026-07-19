@@ -16,7 +16,7 @@ import time
 import tracemalloc
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 import structlog
@@ -24,19 +24,20 @@ import structlog
 from .backend import CognitiveBackend
 
 
-class BenchmarkTaskType(str, Enum):
-    IMPORT = "import"              # Module import speed
+class BenchmarkTaskType(StrEnum):
+    IMPORT = "import"  # Module import speed
     INSTANTIATION = "instantiation"  # Object creation speed
-    REASONING = "reasoning"        # LLM reasoning quality
-    ATTENTION = "attention"        # Attention mechanism accuracy
-    MEMORY = "memory"              # Memory read/write speed
-    PLANNING = "planning"          # Plan generation quality
-    RECURSIVE = "recursive"        # Self-modification capability
+    REASONING = "reasoning"  # LLM reasoning quality
+    ATTENTION = "attention"  # Attention mechanism accuracy
+    MEMORY = "memory"  # Memory read/write speed
+    PLANNING = "planning"  # Plan generation quality
+    RECURSIVE = "recursive"  # Self-modification capability
 
 
 @dataclass
 class BenchmarkTask:
     """A single benchmark task."""
+
     name: str
     task_type: BenchmarkTaskType
     description: str = ""
@@ -47,6 +48,7 @@ class BenchmarkTask:
 @dataclass
 class BenchmarkResult:
     """Result of a single benchmark task."""
+
     task_name: str
     task_type: BenchmarkTaskType
     success: bool
@@ -61,6 +63,7 @@ class BenchmarkResult:
 @dataclass
 class BenchmarkSuite:
     """A complete benchmark suite result."""
+
     variant_id: str = ""
     results: list[BenchmarkResult] = field(default_factory=list)
     overall_score: float = 0.0
@@ -87,10 +90,7 @@ class BenchmarkSuite:
         memory_score = max(0, 1.0 - self.avg_memory_mb / 500)  # 500MB = 0 score
 
         self.overall_score = (
-            self.success_rate * 0.4 +
-            avg_score * 0.4 +
-            speed_score * 0.1 +
-            memory_score * 0.1
+            self.success_rate * 0.4 + avg_score * 0.4 + speed_score * 0.1 + memory_score * 0.1
         )
 
 
@@ -214,7 +214,7 @@ class BenchmarkRunner:
                 score=score,
                 details=details,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             duration = (time.monotonic() - start) * 1000
             tracemalloc.stop()
             return BenchmarkResult(
@@ -270,17 +270,17 @@ class BenchmarkRunner:
         return score, {
             "avg_import_ms": avg_time,
             "total_modules": len(modules),
-            "import_times": dict(zip(modules, import_times)),
+            "import_times": dict(zip(modules, import_times, strict=False)),
         }
 
     async def _benchmark_instantiation(self) -> tuple[float, dict]:
         """Benchmark module instantiation speed."""
         from .attention import AttentionMechanism
         from .curiosity import CuriosityEngine
-        from .world_model import BayesianWorldModel
-        from .self_reflection import SelfReflectionEngine
         from .emotional import EmotionalProcessor
         from .evo_architecture import EvoArchitecture
+        from .self_reflection import SelfReflectionEngine
+        from .world_model import BayesianWorldModel
 
         classes = [
             ("AttentionMechanism", AttentionMechanism),
@@ -292,10 +292,10 @@ class BenchmarkRunner:
         ]
 
         times = []
-        for name, cls in classes:
+        for _name, cls in classes:
             start = time.monotonic()
             try:
-                obj = cls()
+                cls()
                 elapsed = (time.monotonic() - start) * 1000
                 times.append(elapsed)
             except Exception:
@@ -306,7 +306,7 @@ class BenchmarkRunner:
 
         return score, {
             "avg_instantiation_ms": avg_time,
-            "times": dict(zip([c[0] for c in classes], times)),
+            "times": dict(zip([c[0] for c in classes], times, strict=False)),
         }
 
     async def _benchmark_attention(self) -> tuple[float, dict]:
@@ -355,8 +355,8 @@ class BenchmarkRunner:
 
     async def _benchmark_reasoning(self, task_name: str) -> tuple[float, dict]:
         """Benchmark reasoning modules (world model, curiosity)."""
-        from .world_model import BayesianWorldModel
         from .curiosity import CuriosityEngine
+        from .world_model import BayesianWorldModel
 
         if task_name == "world_model_predict":
             wm = BayesianWorldModel()
@@ -380,11 +380,13 @@ class BenchmarkRunner:
 
         elif task_name == "curiosity_generate":
             cur = CuriosityEngine()
-            goals = await cur.generate_intrinsic_goals({
-                "coding": 0.3,
-                "math": 0.1,
-                "research": 0.5,
-            })
+            goals = await cur.generate_intrinsic_goals(
+                {
+                    "coding": 0.3,
+                    "math": 0.1,
+                    "research": 0.5,
+                }
+            )
 
             score = min(1.0, len(goals) / 3)  # 3+ goals = perfect
             return score, {

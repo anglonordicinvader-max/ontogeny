@@ -1,12 +1,12 @@
 """Reddit crawler using official API."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 from datetime import datetime
 
 import httpx
 import structlog
 
-from .base import BaseCrawler, CrawlerConfig, CrawlResult, ContentType
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class RedditCrawler(BaseCrawler):
@@ -112,7 +112,12 @@ class RedditCrawler(BaseCrawler):
         limit: int = 50,
     ) -> AsyncIterator[CrawlResult]:
         async with httpx.AsyncClient() as client:
-            params = {"q": query, "sort": sort, "limit": min(limit, 100), "restrict_sr": bool(subreddit)}
+            params = {
+                "q": query,
+                "sort": sort,
+                "limit": min(limit, 100),
+                "restrict_sr": bool(subreddit),
+            }
             if subreddit:
                 params["restrict_sr"] = "on"
 

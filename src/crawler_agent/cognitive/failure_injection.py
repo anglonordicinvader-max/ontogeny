@@ -20,15 +20,29 @@ import structlog
 class FailureState:
     battery_level: float = 1.0  # 0.0 to 1.0
     structural_integrity: float = 1.0  # 0.0 to 1.0
-    sensor_health: Dict[str, float] = field(default_factory=lambda: {
-        "depth": 1.0, "lidar": 1.0, "imu": 1.0,
-        "force_torque": 1.0, "proximity": 1.0, "touch": 1.0, "thermal": 1.0,
-    })
-    actuator_health: Dict[str, float] = field(default_factory=lambda: {
-        "arm": 1.0, "gripper": 1.0, "wheel_left": 1.0, "wheel_right": 1.0,
-        "leg_front_left": 1.0, "leg_front_right": 1.0,
-        "leg_rear_left": 1.0, "leg_rear_right": 1.0,
-    })
+    sensor_health: dict[str, float] = field(
+        default_factory=lambda: {
+            "depth": 1.0,
+            "lidar": 1.0,
+            "imu": 1.0,
+            "force_torque": 1.0,
+            "proximity": 1.0,
+            "touch": 1.0,
+            "thermal": 1.0,
+        }
+    )
+    actuator_health: dict[str, float] = field(
+        default_factory=lambda: {
+            "arm": 1.0,
+            "gripper": 1.0,
+            "wheel_left": 1.0,
+            "wheel_right": 1.0,
+            "leg_front_left": 1.0,
+            "leg_front_right": 1.0,
+            "leg_rear_left": 1.0,
+            "leg_rear_right": 1.0,
+        }
+    )
     communication_quality: float = 1.0  # 0.0 to 1.0
     temperature: float = 25.0  # Celsius
     uptime: float = 0.0  # seconds
@@ -40,7 +54,7 @@ class FailureInjector:
     def __init__(self):
         self.state = FailureState()
         self.logger = structlog.get_logger(component="failure_injection")
-        self.failure_log: List[Dict] = []
+        self.failure_log: list[dict] = []
 
     def reset(self):
         """Reset all failure states."""
@@ -66,8 +80,9 @@ class FailureInjector:
         self._log_failure("structural_damage", f"Damage at {location}: -{damage:.1%}")
 
         if self.state.structural_integrity < 0.5:
-            affected_actuators = random.sample(list(self.state.actuator_health.keys()),
-                                               k=min(2, len(self.state.actuator_health)))
+            affected_actuators = random.sample(
+                list(self.state.actuator_health.keys()), k=min(2, len(self.state.actuator_health))
+            )
             for act in affected_actuators:
                 self.state.actuator_health[act] *= 0.8
 
@@ -76,8 +91,9 @@ class FailureInjector:
     def inject_sensor_noise(self, sensor_type: str, noise_level: float = 0.3):
         """Inject noise into a specific sensor."""
         if sensor_type in self.state.sensor_health:
-            self.state.sensor_health[sensor_type] = max(0.0,
-                self.state.sensor_health[sensor_type] - noise_level)
+            self.state.sensor_health[sensor_type] = max(
+                0.0, self.state.sensor_health[sensor_type] - noise_level
+            )
             self._log_failure("sensor_noise", f"{sensor_type} noise: +{noise_level:.1%}")
 
     def jam_actuator(self, actuator: str, jam_probability: float = 0.1):
@@ -110,11 +126,13 @@ class FailureInjector:
 
     def is_operational(self) -> bool:
         """Check if robot is still operational."""
-        return (self.state.battery_level > 0.0 and
-                self.state.structural_integrity > 0.1 and
-                self.state.communication_quality > 0.0)
+        return (
+            self.state.battery_level > 0.0
+            and self.state.structural_integrity > 0.1
+            and self.state.communication_quality > 0.0
+        )
 
-    def get_status(self) -> Dict:
+    def get_status(self) -> dict:
         """Get current failure state."""
         return {
             "battery": self.state.battery_level,
@@ -127,14 +145,18 @@ class FailureInjector:
         }
 
     def _log_failure(self, failure_type: str, description: str):
-        self.failure_log.append({
-            "type": failure_type,
-            "description": description,
-            "state": self.get_status(),
-        })
+        self.failure_log.append(
+            {
+                "type": failure_type,
+                "description": description,
+                "state": self.get_status(),
+            }
+        )
 
     def to_context(self) -> str:
-        return (f"Failure State: battery={self.state.battery_level:.0%}, "
-                f"structural={self.state.structural_integrity:.0%}, "
-                f"comm={self.state.communication_quality:.0%}, "
-                f"temp={self.state.temperature:.0f}°C")
+        return (
+            f"Failure State: battery={self.state.battery_level:.0%}, "
+            f"structural={self.state.structural_integrity:.0%}, "
+            f"comm={self.state.communication_quality:.0%}, "
+            f"temp={self.state.temperature:.0f}°C"
+        )

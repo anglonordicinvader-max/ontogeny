@@ -10,7 +10,7 @@ import sys
 import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -19,22 +19,23 @@ import structlog
 from .backend import CognitiveBackend
 
 
-class ModificationTarget(str, Enum):
-    ORCHESTRATOR = "orchestrator"      # Main cognitive loop
-    PLANNER = "planner"                # Planning logic
-    GOALS = "goals"                    # Goal generation
-    SELF_MODIFY = "self_modify"        # Self-modification engine
-    LEARNING = "learning"              # Learning modules
-    KNOWLEDGE = "knowledge"            # Knowledge graph
-    METACOGNITION = "metacognition"    # Self-evaluation
-    CAUSAL = "causal"                  # Causal reasoning
-    EMOTIONAL = "emotional"            # Emotional model
-    UNCERTAINTY = "uncertainty"        # Uncertainty tracking
+class ModificationTarget(StrEnum):
+    ORCHESTRATOR = "orchestrator"  # Main cognitive loop
+    PLANNER = "planner"  # Planning logic
+    GOALS = "goals"  # Goal generation
+    SELF_MODIFY = "self_modify"  # Self-modification engine
+    LEARNING = "learning"  # Learning modules
+    KNOWLEDGE = "knowledge"  # Knowledge graph
+    METACOGNITION = "metacognition"  # Self-evaluation
+    CAUSAL = "causal"  # Causal reasoning
+    EMOTIONAL = "emotional"  # Emotional model
+    UNCERTAINTY = "uncertainty"  # Uncertainty tracking
 
 
 @dataclass
 class SourceFile:
     """Represents a source file the agent can modify."""
+
     path: Path
     module: str
     content: str
@@ -46,6 +47,7 @@ class SourceFile:
 @dataclass
 class RecursiveModification:
     """A modification to the agent's own source code."""
+
     id: str
     target: ModificationTarget
     file_path: str
@@ -134,22 +136,26 @@ class SourceAnalyzer:
         # High error count = bottleneck
         for module, count in sorted(error_counts.items(), key=lambda x: -x[1]):
             if count >= 3:
-                bottlenecks.append({
-                    "module": module,
-                    "issue": "high_error_rate",
-                    "severity": min(1.0, count / 10),
-                    "details": f"{count} errors in recent cycles",
-                })
+                bottlenecks.append(
+                    {
+                        "module": module,
+                        "issue": "high_error_rate",
+                        "severity": min(1.0, count / 10),
+                        "details": f"{count} errors in recent cycles",
+                    }
+                )
 
         # Low success rate per module
         for module, rate in performance_metrics.get("module_success_rates", {}).items():
             if rate < 0.7:
-                bottlenecks.append({
-                    "module": module,
-                    "issue": "low_success_rate",
-                    "severity": 1.0 - rate,
-                    "details": f"Success rate: {rate:.0%}",
-                })
+                bottlenecks.append(
+                    {
+                        "module": module,
+                        "issue": "low_success_rate",
+                        "severity": 1.0 - rate,
+                        "details": f"Success rate: {rate:.0%}",
+                    }
+                )
 
         # Complex code with high error rate
         files = self.scan_source_files()
@@ -162,12 +168,14 @@ class SourceAnalyzer:
         for target, source in files.items():
             module_name = target_to_module.get(target, "")
             if module_name in error_counts and source.complexity > 0.6:
-                bottlenecks.append({
-                    "module": module_name,
-                    "issue": "complex_and_error_prone",
-                    "severity": source.complexity * (error_counts.get(module_name, 0) / 10),
-                    "details": f"Complexity: {source.complexity:.0%}, errors: {error_counts.get(module_name, 0)}",
-                })
+                bottlenecks.append(
+                    {
+                        "module": module_name,
+                        "issue": "complex_and_error_prone",
+                        "severity": source.complexity * (error_counts.get(module_name, 0) / 10),
+                        "details": f"Complexity: {source.complexity:.0%}, errors: {error_counts.get(module_name, 0)}",
+                    }
+                )
 
         return sorted(bottlenecks, key=lambda x: -x["severity"])
 
@@ -271,12 +279,14 @@ class RecursiveSelfModifier:
 
             # Target whichever has more room for improvement
             target = most_complex if most_complex.complexity > largest.line_count / 500 else largest
-            bottlenecks = [{
-                "module": target.module,
-                "issue": "proactive_optimization",
-                "severity": 0.3,  # Low severity — this is maintenance, not emergency
-                "details": f"Complexity: {target.complexity:.0%}, Lines: {target.line_count}",
-            }]
+            bottlenecks = [
+                {
+                    "module": target.module,
+                    "issue": "proactive_optimization",
+                    "severity": 0.3,  # Low severity — this is maintenance, not emergency
+                    "details": f"Complexity: {target.complexity:.0%}, Lines: {target.line_count}",
+                }
+            ]
 
         # 3. Pick highest severity bottleneck
         target_bottleneck = bottlenecks[0]
@@ -336,11 +346,11 @@ class RecursiveSelfModifier:
         self, files: dict[ModificationTarget, SourceFile], module: str
     ) -> SourceFile | None:
         """Find source file matching module name."""
-        for target, source in files.items():
+        for _target, source in files.items():
             if source.module == module:
                 return source
         # Fuzzy match
-        for target, source in files.items():
+        for _target, source in files.items():
             if module.lower() in source.module.lower():
                 return source
         return None
@@ -369,9 +379,9 @@ Return JSON with: improved_code, description of changes, reasoning, expected_ben
 Lines of code: {source.line_count}
 Complexity: {source.complexity:.0%}
 
-Identified issue: {bottleneck['issue']}
-Severity: {bottleneck['severity']:.0%}
-Details: {bottleneck['details']}
+Identified issue: {bottleneck["issue"]}
+Severity: {bottleneck["severity"]:.0%}
+Details: {bottleneck["details"]}
 
 Current code (first 200 lines):
 ```python
@@ -394,13 +404,15 @@ Generate improved code:"""
                 return None
 
             # Generate diff
-            diff = "\n".join(difflib.unified_diff(
-                source.content.split("\n")[:200],
-                new_code.split("\n")[:200],
-                fromfile=f"{source.module}.py (original)",
-                tofile=f"{source.module}.py (improved)",
-                lineterm="",
-            ))
+            diff = "\n".join(
+                difflib.unified_diff(
+                    source.content.split("\n")[:200],
+                    new_code.split("\n")[:200],
+                    fromfile=f"{source.module}.py (original)",
+                    tofile=f"{source.module}.py (improved)",
+                    lineterm="",
+                )
+            )
 
             return RecursiveModification(
                 id=f"recursive_{hashlib.md5(new_code.encode()).hexdigest()[:8]}",
@@ -446,13 +458,14 @@ Generate improved code:"""
 
     async def _test_module_import(self, new_code: str, module_name: str) -> bool:
         """Test that the modified module can be imported."""
+        escaped_code = new_code.replace("'", "\\'")
         test_code = f"""
 import sys
 sys.path.insert(0, 'src')
 try:
     # Write the modified code to a temp file and try to compile
     import ast
-    ast.parse('''{new_code.replace("'", "\\'")}''')
+    ast.parse('''{escaped_code}''')
     print("COMPILE_OK")
 except Exception as e:
     print(f"COMPILE_FAIL: {{e}}")

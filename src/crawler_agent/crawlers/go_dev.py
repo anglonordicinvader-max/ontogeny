@@ -1,11 +1,11 @@
 """pkg.go.dev crawler for Go packages."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import httpx
 import structlog
 
-from .base import BaseCrawler, CrawlerConfig, CrawlResult, ContentType
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class GoDevCrawler(BaseCrawler):
@@ -46,7 +46,9 @@ class GoDevCrawler(BaseCrawler):
                         url=f"{self.api_url}/{package_path}",
                         content_type=ContentType.REPOSITORY,
                         title=data.get("name", package_path),
-                        content=data.get("synopsis", "") + "\n\n" + data.get("description", "")[:2000],
+                        content=data.get("synopsis", "")
+                        + "\n\n"
+                        + data.get("description", "")[:2000],
                         metadata={
                             "import_path": package_path,
                             "module_path": data.get("module", {}).get("path"),
@@ -64,6 +66,7 @@ class GoDevCrawler(BaseCrawler):
 
     async def _scrape_package(self, package_path: str) -> AsyncIterator[CrawlResult]:
         from bs4 import BeautifulSoup
+
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{self.api_url}/{package_path}", follow_redirects=True)
             if response.status_code == 200:
@@ -92,6 +95,7 @@ class GoDevCrawler(BaseCrawler):
             )
             if response.status_code == 200:
                 from bs4 import BeautifulSoup
+
                 soup = BeautifulSoup(response.text, "lxml")
                 results = soup.select(".SearchSnippet")[:limit]
                 for result in results:

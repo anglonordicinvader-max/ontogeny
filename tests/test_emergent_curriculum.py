@@ -6,16 +6,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.crawler_agent.cognitive.backend import CognitiveBackend, CognitiveResponse
 from src.crawler_agent.cognitive.emergent_curriculum import (
-    EmergentCurriculum,
     CurriculumTask,
+    EmergentCurriculum,
     WeaknessProfile,
 )
 from src.crawler_agent.cognitive.modification_memory import (
     ModificationMemory,
     ModificationRecord,
 )
-from src.crawler_agent.cognitive.backend import CognitiveBackend, CognitiveResponse
 
 
 @pytest.fixture
@@ -29,17 +29,23 @@ def memory(tmp_storage):
     """Create a ModificationMemory with temp storage."""
     mm = ModificationMemory(storage_path=str(tmp_storage))
     for i in range(12):
-        mm.record(ModificationRecord(
-            id=f"rec-{i}",
-            timestamp="2026-01-01T00:00:00",
-            source_module="self_modify" if i < 8 else "self_training",
-            target_file="orchestrator.py" if i % 2 == 0 else "planner.py",
-            task_type="code_rewrite" if i % 3 == 0 else "optimization" if i % 3 == 1 else "bug_fix",
-            description=f"Test modification {i}",
-            modified_code=f"# Modified code for test {i}\nimport os",
-            success=i < 9,  # 9 successful, 3 failed
-            quality_score=0.3 + (i * 0.05),  # Some low quality ones
-        ))
+        mm.record(
+            ModificationRecord(
+                id=f"rec-{i}",
+                timestamp="2026-01-01T00:00:00",
+                source_module="self_modify" if i < 8 else "self_training",
+                target_file="orchestrator.py" if i % 2 == 0 else "planner.py",
+                task_type="code_rewrite"
+                if i % 3 == 0
+                else "optimization"
+                if i % 3 == 1
+                else "bug_fix",
+                description=f"Test modification {i}",
+                modified_code=f"# Modified code for test {i}\nimport os",
+                success=i < 9,  # 9 successful, 3 failed
+                quality_score=0.3 + (i * 0.05),  # Some low quality ones
+            )
+        )
     return mm
 
 
@@ -48,13 +54,17 @@ def mock_backend():
     """Create a mock CognitiveBackend."""
     backend = AsyncMock(spec=CognitiveBackend)
     # Mock weakness analysis response
-    backend.complete = AsyncMock(return_value=CognitiveResponse(
-        content=json.dumps({
-            "patterns": ["import ordering", "missing error handling"],
-            "recommendation": "Focus on error handling patterns in async code",
-        }),
-        confidence=0.8,
-    ))
+    backend.complete = AsyncMock(
+        return_value=CognitiveResponse(
+            content=json.dumps(
+                {
+                    "patterns": ["import ordering", "missing error handling"],
+                    "recommendation": "Focus on error handling patterns in async code",
+                }
+            ),
+            confidence=0.8,
+        )
+    )
     return backend
 
 

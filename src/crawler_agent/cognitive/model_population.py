@@ -19,14 +19,15 @@ from typing import Any
 import structlog
 
 from .backend import CognitiveBackend, CognitiveResponse
-from .modification_memory import ModificationMemory, ModificationRecord
+from .model_evaluation import ComparisonReport, ModelEvaluator
 from .model_trainer import ModelTrainer, TrainingRun
-from .model_evaluation import ModelEvaluator, ComparisonReport
+from .modification_memory import ModificationMemory, ModificationRecord
 
 
 @dataclass
 class VariantConfig:
     """Training configuration for a single variant."""
+
     id: str = ""
     name: str = ""
     # Data selection
@@ -47,6 +48,7 @@ class VariantConfig:
 @dataclass
 class VariantResult:
     """Result of evaluating a variant."""
+
     variant_id: str
     config: VariantConfig
     training_run: TrainingRun | None = None
@@ -133,67 +135,79 @@ class ModelPopulation:
         configs = []
 
         # Strategy 1: Balanced
-        configs.append(VariantConfig(
-            id=str(uuid.uuid4())[:8],
-            name="balanced",
-            min_quality=0.6,
-            data_strategy="balanced",
-            include_contrastive=True,
-            include_synthetic=True,
-        ))
-
-        # Strategy 2: Quality first
-        configs.append(VariantConfig(
-            id=str(uuid.uuid4())[:8],
-            name="quality_first",
-            min_quality=0.8,
-            data_strategy="quality_first",
-            include_contrastive=True,
-            include_synthetic=True,
-        ))
-
-        # Strategy 3: Diversity first
-        configs.append(VariantConfig(
-            id=str(uuid.uuid4())[:8],
-            name="diversity_first",
-            min_quality=0.5,
-            data_strategy="diversity_first",
-            include_contrastive=True,
-            include_synthetic=True,
-        ))
-
-        # Strategy 4: Contrastive focus (if we have enough contrastive data)
-        contrastive_count = len([
-            r for r in self.memory.records
-            if r.source_module in ("contrastive_training", "self_training")
-        ])
-        if contrastive_count >= 5:
-            configs.append(VariantConfig(
+        configs.append(
+            VariantConfig(
                 id=str(uuid.uuid4())[:8],
-                name="contrastive_focus",
-                min_quality=0.5,
-                data_strategy="contrastive_focus",
+                name="balanced",
+                min_quality=0.6,
+                data_strategy="balanced",
                 include_contrastive=True,
                 include_synthetic=True,
-            ))
+            )
+        )
+
+        # Strategy 2: Quality first
+        configs.append(
+            VariantConfig(
+                id=str(uuid.uuid4())[:8],
+                name="quality_first",
+                min_quality=0.8,
+                data_strategy="quality_first",
+                include_contrastive=True,
+                include_synthetic=True,
+            )
+        )
+
+        # Strategy 3: Diversity first
+        configs.append(
+            VariantConfig(
+                id=str(uuid.uuid4())[:8],
+                name="diversity_first",
+                min_quality=0.5,
+                data_strategy="diversity_first",
+                include_contrastive=True,
+                include_synthetic=True,
+            )
+        )
+
+        # Strategy 4: Contrastive focus (if we have enough contrastive data)
+        contrastive_count = len(
+            [
+                r
+                for r in self.memory.records
+                if r.source_module in ("contrastive_training", "self_training")
+            ]
+        )
+        if contrastive_count >= 5:
+            configs.append(
+                VariantConfig(
+                    id=str(uuid.uuid4())[:8],
+                    name="contrastive_focus",
+                    min_quality=0.5,
+                    data_strategy="contrastive_focus",
+                    include_contrastive=True,
+                    include_synthetic=True,
+                )
+            )
 
         # Strategy 5: Synthetic heavy
-        synthetic_count = len([
-            r for r in self.memory.records
-            if r.source_module == "self_training"
-        ])
+        synthetic_count = len(
+            [r for r in self.memory.records if r.source_module == "self_training"]
+        )
         if synthetic_count >= 5:
-            configs.append(VariantConfig(
-                id=str(uuid.uuid4())[:8],
-                name="synthetic_heavy",
-                min_quality=0.5,
-                data_strategy="synthetic_heavy",
-                include_contrastive=False,
-                include_synthetic=True,
-            ))
+            configs.append(
+                VariantConfig(
+                    id=str(uuid.uuid4())[:8],
+                    name="synthetic_heavy",
+                    min_quality=0.5,
+                    data_strategy="synthetic_heavy",
+                    include_contrastive=False,
+                    include_synthetic=True,
+                )
+            )
 
         # Trim to population size
-        configs = configs[:self.population_size]
+        configs = configs[: self.population_size]
 
         self.logger.info(
             "population_initialized",
@@ -229,20 +243,32 @@ class ModelPopulation:
                     by_type.setdefault(r.task_type, []).append(r)
 
             selected = []
-            for task_type, records in by_type.items():
+            for _task_type, records in by_type.items():
                 records.sort(key=lambda r: r.quality_score, reverse=True)
                 selected.append(records[0])
 
             # Fill remaining by quality
-            remaining = [r for r in all_records if r not in selected and r.quality_score >= config.min_quality]
+            remaining = [
+                r
+                for r in all_records
+                if r not in selected and r.quality_score >= config.min_quality
+            ]
             remaining.sort(key=lambda r: r.quality_score, reverse=True)
-            selected.extend(remaining[:50 - len(selected)])
+            selected.extend(remaining[: 50 - len(selected)])
             return selected[:50]
 
         elif config.data_strategy == "contrastive_focus":
             # 70% contrastive/synthetic, 30% regular
-            contrastive = [r for r in all_records if r.source_module in ("contrastive_training", "self_training")]
-            regular = [r for r in all_records if r.source_module not in ("contrastive_training", "self_training")]
+            contrastive = [
+                r
+                for r in all_records
+                if r.source_module in ("contrastive_training", "self_training")
+            ]
+            regular = [
+                r
+                for r in all_records
+                if r.source_module not in ("contrastive_training", "self_training")
+            ]
 
             contrastive.sort(key=lambda r: r.quality_score, reverse=True)
             regular.sort(key=lambda r: r.quality_score, reverse=True)
@@ -305,7 +331,7 @@ class ModelPopulation:
                     f.write(json.dumps(example) + "\n")
 
             # Train with variant-specific settings
-            run = TrainingRun(
+            TrainingRun(
                 version=f"pop_{config.id}",
                 timestamp=datetime.utcnow().isoformat(),
                 base_model=base_model,
@@ -350,6 +376,7 @@ class ModelPopulation:
         try:
             # Create a temporary backend for this variant
             from .backend import LLMBackend
+
             variant_backend = LLMBackend(
                 api_key="ollama",
                 model=f"maldoror:pop_{result.variant_id}",
@@ -387,7 +414,9 @@ class ModelPopulation:
         except Exception as e:
             result.benchmark_details["eval_error"] = str(e)
             result.fitness = 0.0
-            self.logger.warning("variant_evaluation_failed", variant=result.variant_id, error=str(e))
+            self.logger.warning(
+                "variant_evaluation_failed", variant=result.variant_id, error=str(e)
+            )
 
         return result
 
@@ -418,10 +447,12 @@ class ModelPopulation:
 
         # 4. Select winners
         ranked = sorted(results, key=lambda r: r.fitness, reverse=True)
-        survivors = ranked[:max(1, int(len(ranked) * self.survival_rate))]
+        survivors = ranked[: max(1, int(len(ranked) * self.survival_rate))]
 
         # 5. Update best
-        if survivors and survivors[0].fitness > (self.best_variant.fitness if self.best_variant else 0):
+        if survivors and survivors[0].fitness > (
+            self.best_variant.fitness if self.best_variant else 0
+        ):
             self.best_variant = survivors[0]
 
         # 6. Record generation stats
@@ -457,7 +488,7 @@ class ModelPopulation:
 
         # Get top performers
         ranked = sorted(self.variants.values(), key=lambda r: r.fitness, reverse=True)
-        top = ranked[:max(1, int(len(ranked) * self.survival_rate))]
+        top = ranked[: max(1, int(len(ranked) * self.survival_rate))]
 
         configs = []
         for variant in top:
@@ -471,7 +502,7 @@ class ModelPopulation:
             config = self._mutate_config(parent.config, heavy_mutation=True)
             configs.append(config)
 
-        return configs[:self.population_size]
+        return configs[: self.population_size]
 
     def _mutate_config(
         self,
@@ -506,13 +537,21 @@ class ModelPopulation:
         if random.random() < rate:
             child.max_steps = max(50, min(500, parent.max_steps + random.randint(-50, 50)))
         if random.random() < rate:
-            child.learning_rate = max(1e-5, min(1e-3, parent.learning_rate * random.uniform(0.5, 2.0)))
+            child.learning_rate = max(
+                1e-5, min(1e-3, parent.learning_rate * random.uniform(0.5, 2.0))
+            )
         if random.random() < rate:
             child.lora_r = max(4, min(64, parent.lora_r + random.choice([-4, 4, 8])))
 
         # Mutate strategy
         if heavy_mutation or random.random() < rate:
-            strategies = ["balanced", "quality_first", "diversity_first", "contrastive_focus", "synthetic_heavy"]
+            strategies = [
+                "balanced",
+                "quality_first",
+                "diversity_first",
+                "contrastive_focus",
+                "synthetic_heavy",
+            ]
             child.data_strategy = random.choice(strategies)
             child.name = f"gen{self.generation}_{child.data_strategy}"
 

@@ -12,6 +12,7 @@ from .backend import CognitiveBackend, CognitiveResponse
 @dataclass
 class PatchFeatures:
     """Features extracted from a patch for reward prediction."""
+
     lines_added: int
     lines_removed: int
     files_changed: int
@@ -28,6 +29,7 @@ class PatchFeatures:
 @dataclass
 class RewardPrediction:
     """Predicted quality of a patch."""
+
     score: float  # 0-1
     confidence: float  # 0-1
     breakdown: dict[str, float]
@@ -69,7 +71,9 @@ class RewardModel:
             "timestamp": time.time(),
         }
         train_file.write_text(
-            train_file.read_text() + json.dumps(example) + "\n" if train_file.exists() else json.dumps(example) + "\n"
+            train_file.read_text() + json.dumps(example) + "\n"
+            if train_file.exists()
+            else json.dumps(example) + "\n"
         )
 
     def extract_features(
@@ -109,6 +113,7 @@ class RewardModel:
     def _estimate_complexity(self, code: str) -> float:
         """Rough cyclomatic complexity."""
         import ast
+
         try:
             tree = ast.parse(code)
             complexity = 1
@@ -129,6 +134,7 @@ class RewardModel:
     def _check_new_imports(self, original: str, patched: str) -> bool:
         """Check if patch adds new imports."""
         import re
+
         orig_imports = set(re.findall(r"^(?:from|import)\s+(\S+)", original, re.MULTILINE))
         patch_imports = set(re.findall(r"^(?:from|import)\s+(\S+)", patched, re.MULTILINE))
         return len(patch_imports - orig_imports) > 0
@@ -141,7 +147,7 @@ class RewardModel:
         issue_description: str = "",
     ) -> RewardPrediction:
         """Predict patch quality."""
-        features = self.extract_features(original_code, patched_code, file_path)
+        self.extract_features(original_code, patched_code, file_path)
 
         # LLM-based evaluation
         prompt = f"""Evaluate this code patch quality.
@@ -201,11 +207,13 @@ Return JSON:
         actual_quality: float,
     ) -> None:
         """Record actual outcome for training."""
-        self.training_data.append({
-            "features": features.__dict__,
-            "quality": actual_quality,
-            "timestamp": time.time(),
-        })
+        self.training_data.append(
+            {
+                "features": features.__dict__,
+                "quality": actual_quality,
+                "timestamp": time.time(),
+            }
+        )
         self._save_training_example(features, actual_quality)
 
     def get_stats(self) -> dict[str, Any]:
@@ -231,9 +239,7 @@ class PatchRanker:
         """Rank patches by predicted quality."""
         results = []
         for patched_code, desc in patches:
-            pred = await self.reward_model.predict(
-                original_code, patched_code, file_path, issue
-            )
+            pred = await self.reward_model.predict(original_code, patched_code, file_path, issue)
             results.append((pred, desc))
 
         # Sort by score descending

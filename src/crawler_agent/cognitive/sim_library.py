@@ -9,20 +9,26 @@ import asyncio
 import json
 import time
 from dataclasses import dataclass, field
+from enum import Enum, StrEnum
 from typing import Any, Dict, List, Optional
-from enum import Enum
 
 import structlog
 
 from .blender_sandbox import (
-    BlenderSandbox, SimulationSpec, SimulationResult, SimulationType,
-    ObjectSpec, PhysicsConfig, SensorConfig, ExportFormat,
+    BlenderSandbox,
+    ExportFormat,
+    ObjectSpec,
+    PhysicsConfig,
+    SensorConfig,
+    SimulationResult,
+    SimulationSpec,
+    SimulationType,
 )
 
 logger = structlog.get_logger()
 
 
-class SimBackend(str, Enum):
+class SimBackend(StrEnum):
     BLENDER = "blender"
     PYBULLET = "pybullet"
     MUJOCO = "mujoco"
@@ -31,12 +37,13 @@ class SimBackend(str, Enum):
 @dataclass
 class ScenarioSpec:
     """A pre-built simulation scenario."""
+
     name: str
     description: str
     category: str  # mechanical, robotic, physics, emotion
     backend: SimBackend = SimBackend.BLENDER
     spec: SimulationSpec = field(default_factory=SimulationSpec)
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     difficulty: str = "medium"  # easy, medium, hard
 
 
@@ -52,6 +59,7 @@ class PyBulletBackend:
         try:
             import pybullet
             import pybullet_data
+
             self._pybullet = pybullet
             self._available = True
             self.logger.info("pybullet_available")
@@ -67,26 +75,27 @@ class PyBulletBackend:
             return SimulationResult(success=False, error="PyBullet not available")
         start = time.perf_counter()
         try:
-            physics_client = self._pybullet.connect(self._pybullet.DIRECT)
+            self._pybullet.connect(self._pybullet.DIRECT)
             self._pybullet.setAdditionalSearchPath(self._pybullet_data.getDataPath())
             self._pybullet.setGravity(*spec.gravity)
             self._pybullet.setTimeStep(1.0 / spec.fps)
 
             # Ground plane
             if spec.ground:
-                plane_id = self._pybullet.loadURDF("plane.urdf")
+                self._pybullet.loadURDF("plane.urdf")
 
             # Add objects
             object_ids = []
-            for i, obj in enumerate(spec.objects):
+            for _i, obj in enumerate(spec.objects):
                 if obj.type == "cube":
                     half_extents = [s / 2 for s in obj.scale]
                     col_id = self._pybullet.createCollisionShape(
                         self._pybullet.GEOM_BOX, halfExtents=half_extents
                     )
                     vis_id = self._pybullet.createVisualShape(
-                        self._pybullet.GEOM_BOX, halfExtents=half_extents,
-                        rgbaColor=[0.5, 0.5, 1.0, 1.0]
+                        self._pybullet.GEOM_BOX,
+                        halfExtents=half_extents,
+                        rgbaColor=[0.5, 0.5, 1.0, 1.0],
                     )
                 elif obj.type == "sphere":
                     radius = obj.scale[0] / 2
@@ -94,16 +103,16 @@ class PyBulletBackend:
                         self._pybullet.GEOM_SPHERE, radius=radius
                     )
                     vis_id = self._pybullet.createVisualShape(
-                        self._pybullet.GEOM_SPHERE, radius=radius,
-                        rgbaColor=[1.0, 0.5, 0.5, 1.0]
+                        self._pybullet.GEOM_SPHERE, radius=radius, rgbaColor=[1.0, 0.5, 0.5, 1.0]
                     )
                 else:
                     col_id = self._pybullet.createCollisionShape(
                         self._pybullet.GEOM_BOX, halfExtents=[0.5, 0.5, 0.5]
                     )
                     vis_id = self._pybullet.createVisualShape(
-                        self._pybullet.GEOM_BOX, halfExtents=[0.5, 0.5, 0.5],
-                        rgbaColor=[0.5, 1.0, 0.5, 1.0]
+                        self._pybullet.GEOM_BOX,
+                        halfExtents=[0.5, 0.5, 0.5],
+                        rgbaColor=[0.5, 1.0, 0.5, 1.0],
                     )
 
                 mass = 0 if obj.passive else obj.mass
@@ -125,11 +134,13 @@ class PyBulletBackend:
                     frame_data = {"frame": step, "objects": []}
                     for j, obj_id in enumerate(object_ids):
                         pos, orn = self._pybullet.getBasePositionAndOrientation(obj_id)
-                        frame_data["objects"].append({
-                            "name": f"Obj_{j}",
-                            "position": list(pos),
-                            "rotation": list(self._pybullet.getEulerFromQuaternion(orn)),
-                        })
+                        frame_data["objects"].append(
+                            {
+                                "name": f"Obj_{j}",
+                                "position": list(pos),
+                                "rotation": list(self._pybullet.getEulerFromQuaternion(orn)),
+                            }
+                        )
                     frames.append(frame_data)
 
             self._pybullet.disconnect()
@@ -156,6 +167,7 @@ class MuJoCoBackend:
     def _init_mujoco(self):
         try:
             import mujoco
+
             self._mujoco = mujoco
             self._available = True
             self.logger.info("mujoco_available")
@@ -172,36 +184,40 @@ class MuJoCoBackend:
         # MuJoCo requires XML model files - generate a simple one
         start = time.perf_counter()
         try:
-            import tempfile
             import os
+            import tempfile
 
             # Generate simple MuJoCo XML
             xml_parts = ['<mujoco model="ontogeny_sim">']
-            xml_parts.append('  <option gravity="{} {} {}" timestep="{}"/>'.format(
-                *spec.gravity, 1.0 / spec.fps
-            ))
-            xml_parts.append('  <worldbody>')
+            xml_parts.append(
+                '  <option gravity="{} {} {}" timestep="{}"/>'.format(*spec.gravity, 1.0 / spec.fps)
+            )
+            xml_parts.append("  <worldbody>")
             if spec.ground:
                 xml_parts.append('    <geom name="ground" type="plane" size="50 50 0.1"/>')
             for i, obj in enumerate(spec.objects):
                 pos = " ".join(str(x) for x in obj.position)
                 if obj.type == "cube":
                     size = " ".join(str(s / 2) for s in obj.scale)
-                    xml_parts.append(f'    <geom name="obj_{i}" type="box" size="{size}" pos="{pos}" mass="{obj.mass}"/>')
+                    xml_parts.append(
+                        f'    <geom name="obj_{i}" type="box" size="{size}" pos="{pos}" mass="{obj.mass}"/>'
+                    )
                 elif obj.type == "sphere":
                     radius = obj.scale[0] / 2
-                    xml_parts.append(f'    <geom name="obj_{i}" type="sphere" size="{radius}" pos="{pos}" mass="{obj.mass}"/>')
-            xml_parts.append('  </worldbody>')
-            xml_parts.append('</mujoco>')
+                    xml_parts.append(
+                        f'    <geom name="obj_{i}" type="sphere" size="{radius}" pos="{pos}" mass="{obj.mass}"/>'
+                    )
+            xml_parts.append("  </worldbody>")
+            xml_parts.append("</mujoco>")
 
             xml_content = "\n".join(xml_parts)
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as f:
                 f.write(xml_content)
                 model_path = f.name
 
             model = self._mujoco.MjModel.from_xml_path(model_path)
             data = self._mujoco.MjData(model)
-            renderer = self._mujoco.MjRenderContextOffscreen(model)
+            self._mujoco.MjRenderContextOffscreen(model)
 
             # Simulate
             frames = []
@@ -213,10 +229,12 @@ class MuJoCoBackend:
                     for i in range(model.ngeom):
                         geom = model.geom(i)
                         pos = data.geom_xpos[i].tolist()
-                        frame_data["objects"].append({
-                            "name": geom.name,
-                            "position": pos,
-                        })
+                        frame_data["objects"].append(
+                            {
+                                "name": geom.name,
+                                "position": pos,
+                            }
+                        )
                     frames.append(frame_data)
 
             os.unlink(model_path)
@@ -233,7 +251,7 @@ class MuJoCoBackend:
 
 
 # Pre-built simulation scenarios
-SIMULATION_SCENARIOS: Dict[str, ScenarioSpec] = {
+SIMULATION_SCENARIOS: dict[str, ScenarioSpec] = {
     # Mechanical scenarios
     "pendulum": ScenarioSpec(
         name="pendulum",
@@ -260,7 +278,9 @@ SIMULATION_SCENARIOS: Dict[str, ScenarioSpec] = {
         spec=SimulationSpec(
             type=SimulationType.SOFT_BODY,
             objects=[
-                ObjectSpec(type="cube", position=(0, 0, 5), scale=(1, 1, 1), mass=2.0, soft_body=True),
+                ObjectSpec(
+                    type="cube", position=(0, 0, 5), scale=(1, 1, 1), mass=2.0, soft_body=True
+                ),
             ],
             duration=10.0,
             fps=60,
@@ -282,7 +302,6 @@ SIMULATION_SCENARIOS: Dict[str, ScenarioSpec] = {
             fps=60,
         ),
     ),
-
     # Robotic scenarios
     "robot_arm_reach": ScenarioSpec(
         name="robot_arm_reach",
@@ -293,9 +312,17 @@ SIMULATION_SCENARIOS: Dict[str, ScenarioSpec] = {
         spec=SimulationSpec(
             type=SimulationType.RIGID_BODY,
             objects=[
-                ObjectSpec(type="cylinder", position=(0, 0, 0.5), scale=(0.3, 0.3, 1), mass=10.0, passive=True),
+                ObjectSpec(
+                    type="cylinder",
+                    position=(0, 0, 0.5),
+                    scale=(0.3, 0.3, 1),
+                    mass=10.0,
+                    passive=True,
+                ),
                 ObjectSpec(type="cylinder", position=(0, 0, 1.5), scale=(0.2, 0.2, 1), mass=2.0),
-                ObjectSpec(type="cylinder", position=(0, 0, 2.5), scale=(0.15, 0.15, 0.8), mass=1.0),
+                ObjectSpec(
+                    type="cylinder", position=(0, 0, 2.5), scale=(0.15, 0.15, 0.8), mass=1.0
+                ),
                 ObjectSpec(type="sphere", position=(1, 1, 1), scale=(0.2, 0.2, 0.2), mass=0.5),
             ],
             duration=10.0,
@@ -312,10 +339,18 @@ SIMULATION_SCENARIOS: Dict[str, ScenarioSpec] = {
             type=SimulationType.RIGID_BODY,
             objects=[
                 ObjectSpec(type="cube", position=(0, 0, 1), scale=(1, 0.6, 0.4), mass=5.0),
-                ObjectSpec(type="cylinder", position=(-0.3, -0.2, 0.3), scale=(0.1, 0.1, 0.5), mass=0.5),
-                ObjectSpec(type="cylinder", position=(0.3, -0.2, 0.3), scale=(0.1, 0.1, 0.5), mass=0.5),
-                ObjectSpec(type="cylinder", position=(-0.3, 0.2, 0.3), scale=(0.1, 0.1, 0.5), mass=0.5),
-                ObjectSpec(type="cylinder", position=(0.3, 0.2, 0.3), scale=(0.1, 0.1, 0.5), mass=0.5),
+                ObjectSpec(
+                    type="cylinder", position=(-0.3, -0.2, 0.3), scale=(0.1, 0.1, 0.5), mass=0.5
+                ),
+                ObjectSpec(
+                    type="cylinder", position=(0.3, -0.2, 0.3), scale=(0.1, 0.1, 0.5), mass=0.5
+                ),
+                ObjectSpec(
+                    type="cylinder", position=(-0.3, 0.2, 0.3), scale=(0.1, 0.1, 0.5), mass=0.5
+                ),
+                ObjectSpec(
+                    type="cylinder", position=(0.3, 0.2, 0.3), scale=(0.1, 0.1, 0.5), mass=0.5
+                ),
             ],
             duration=10.0,
             fps=60,
@@ -332,14 +367,17 @@ SIMULATION_SCENARIOS: Dict[str, ScenarioSpec] = {
             objects=[
                 ObjectSpec(type="cube", position=(0, 0, 1.5), scale=(0.4, 0.3, 0.8), mass=10.0),
                 ObjectSpec(type="sphere", position=(0, 0, 2.2), scale=(0.3, 0.3, 0.3), mass=3.0),
-                ObjectSpec(type="cylinder", position=(-0.15, 0, 0.5), scale=(0.1, 0.1, 0.8), mass=2.0),
-                ObjectSpec(type="cylinder", position=(0.15, 0, 0.5), scale=(0.1, 0.1, 0.8), mass=2.0),
+                ObjectSpec(
+                    type="cylinder", position=(-0.15, 0, 0.5), scale=(0.1, 0.1, 0.8), mass=2.0
+                ),
+                ObjectSpec(
+                    type="cylinder", position=(0.15, 0, 0.5), scale=(0.1, 0.1, 0.8), mass=2.0
+                ),
             ],
             duration=10.0,
             fps=60,
         ),
     ),
-
     # Physics scenarios
     "fluid_dam": ScenarioSpec(
         name="fluid_dam",
@@ -350,9 +388,15 @@ SIMULATION_SCENARIOS: Dict[str, ScenarioSpec] = {
         spec=SimulationSpec(
             type=SimulationType.FLUID,
             objects=[
-                ObjectSpec(type="cube", position=(0, 0, 0.5), scale=(5, 5, 1), mass=100.0, passive=True),
-                ObjectSpec(type="cube", position=(2, 0, 1), scale=(0.2, 5, 2), mass=50.0, passive=True),
-                ObjectSpec(type="cube", position=(-1, 0, 2), scale=(3, 3, 0.5), mass=10.0, fluid=True),
+                ObjectSpec(
+                    type="cube", position=(0, 0, 0.5), scale=(5, 5, 1), mass=100.0, passive=True
+                ),
+                ObjectSpec(
+                    type="cube", position=(2, 0, 1), scale=(0.2, 5, 2), mass=50.0, passive=True
+                ),
+                ObjectSpec(
+                    type="cube", position=(-1, 0, 2), scale=(3, 3, 0.5), mass=10.0, fluid=True
+                ),
             ],
             duration=5.0,
             fps=60,
@@ -367,7 +411,9 @@ SIMULATION_SCENARIOS: Dict[str, ScenarioSpec] = {
         spec=SimulationSpec(
             type=SimulationType.CLOTH,
             objects=[
-                ObjectSpec(type="sphere", position=(0, 0, 2), scale=(1, 1, 1), mass=5.0, passive=True),
+                ObjectSpec(
+                    type="sphere", position=(0, 0, 2), scale=(1, 1, 1), mass=5.0, passive=True
+                ),
                 ObjectSpec(type="plane", position=(0, 0, 4), scale=(3, 3, 1), mass=0.5, cloth=True),
             ],
             duration=5.0,
@@ -383,7 +429,9 @@ SIMULATION_SCENARIOS: Dict[str, ScenarioSpec] = {
         spec=SimulationSpec(
             type=SimulationType.PARTICLES,
             objects=[
-                ObjectSpec(type="cone", position=(0, 0, 0), scale=(0.5, 0.5, 1), mass=1.0, passive=True),
+                ObjectSpec(
+                    type="cone", position=(0, 0, 0), scale=(0.5, 0.5, 1), mass=1.0, passive=True
+                ),
             ],
             duration=5.0,
             fps=60,
@@ -400,14 +448,14 @@ SIMULATION_SCENARIOS: Dict[str, ScenarioSpec] = {
             objects=[
                 ObjectSpec(type="cube", position=(i * 0.5, 0, 1), scale=(0.1, 0.3, 1.5), mass=0.5)
                 for i in range(10)
-            ] + [
+            ]
+            + [
                 ObjectSpec(type="sphere", position=(-1, 0, 1.5), scale=(0.3, 0.3, 0.3), mass=2.0),
             ],
             duration=5.0,
             fps=60,
         ),
     ),
-
     # Emotion visualization scenarios
     "emotion_happy": ScenarioSpec(
         name="emotion_happy",
@@ -454,29 +502,31 @@ SIMULATION_SCENARIOS: Dict[str, ScenarioSpec] = {
 class SimulationLibrary:
     """Library of pre-built simulation scenarios with multi-backend support."""
 
-    def __init__(self, blender_sandbox: Optional[BlenderSandbox] = None):
+    def __init__(self, blender_sandbox: BlenderSandbox | None = None):
         self.blender = blender_sandbox
         self.pybullet = PyBulletBackend()
         self.mujoco = MuJoCoBackend()
         self.scenarios = dict(SIMULATION_SCENARIOS)
         self.logger = logger.bind(component="sim_library")
 
-    def list_scenarios(self, category: Optional[str] = None) -> List[Dict]:
+    def list_scenarios(self, category: str | None = None) -> list[dict]:
         scenarios = []
-        for key, scenario in self.scenarios.items():
+        for _key, scenario in self.scenarios.items():
             if category and scenario.category != category:
                 continue
-            scenarios.append({
-                "name": scenario.name,
-                "description": scenario.description,
-                "category": scenario.category,
-                "backend": scenario.backend.value,
-                "tags": scenario.tags,
-                "difficulty": scenario.difficulty,
-            })
+            scenarios.append(
+                {
+                    "name": scenario.name,
+                    "description": scenario.description,
+                    "category": scenario.category,
+                    "backend": scenario.backend.value,
+                    "tags": scenario.tags,
+                    "difficulty": scenario.difficulty,
+                }
+            )
         return scenarios
 
-    def get_scenario(self, name: str) -> Optional[ScenarioSpec]:
+    def get_scenario(self, name: str) -> ScenarioSpec | None:
         return self.scenarios.get(name)
 
     def add_scenario(self, scenario: ScenarioSpec):
@@ -485,8 +535,8 @@ class SimulationLibrary:
     async def run_scenario(
         self,
         name: str,
-        backend: Optional[SimBackend] = None,
-        modifications: Optional[Dict] = None,
+        backend: SimBackend | None = None,
+        modifications: dict | None = None,
     ) -> SimulationResult:
         scenario = self.scenarios.get(name)
         if not scenario:
@@ -543,7 +593,7 @@ class SimulationLibrary:
 
         return SimulationResult(success=False, error="No simulation backend available")
 
-    def get_backend_status(self) -> Dict[str, bool]:
+    def get_backend_status(self) -> dict[str, bool]:
         return {
             "blender": self.blender is not None,
             "pybullet": self.pybullet.is_available,

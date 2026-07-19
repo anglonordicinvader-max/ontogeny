@@ -10,16 +10,16 @@ export function CrawlerPanel({ status }: CrawlerPanelProps) {
 
   return (
     <div className="h-full overflow-y-auto p-4 space-y-4">
-      <Panel title="Crawler Overview">
+      <Panel title="Knowledge Acquisition" accentGlow>
         <div className="grid grid-cols-2 gap-3">
-          <MetricCard label="Active" value={crawlers.active} />
-          <MetricCard label="Total" value={crawlers.total} />
+          <MetricCard label="Active Engines" value={crawlers.active} />
+          <MetricCard label="Total Engines" value={crawlers.total} />
           <MetricCard label="Requests Today" value={crawlers.requestsToday} />
           <MetricCard label="Bandwidth" value={`${(crawlers.bandwidthUsed / 1024 / 1024).toFixed(1)}MB`} />
         </div>
       </Panel>
 
-      <Panel title="Budget Usage">
+      <Panel title="Budget Usage" accentGlow>
         <div className="space-y-3">
           <div className="space-y-1">
             <div className="flex items-center justify-between">
@@ -40,7 +40,7 @@ export function CrawlerPanel({ status }: CrawlerPanelProps) {
 
       <Panel title="Active Sources">
         <div className="text-sm text-text-tertiary py-4 text-center">
-          {crawlers.active > 0 ? `${crawlers.active} active crawlers` : 'No active crawlers'}
+          {crawlers.active > 0 ? `${crawlers.active} active acquisition engines` : 'No active acquisition engines'}
         </div>
       </Panel>
     </div>

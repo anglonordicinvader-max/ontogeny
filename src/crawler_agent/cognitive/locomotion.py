@@ -17,10 +17,10 @@ import structlog
 
 @dataclass
 class LocomotionState:
-    position: List[float] = field(default_factory=lambda: [0, 0, 0])
-    velocity: List[float] = field(default_factory=lambda: [0, 0, 0])
-    orientation: List[float] = field(default_factory=lambda: [0, 0, 0])  # roll, pitch, yaw
-    angular_velocity: List[float] = field(default_factory=lambda: [0, 0, 0])
+    position: list[float] = field(default_factory=lambda: [0, 0, 0])
+    velocity: list[float] = field(default_factory=lambda: [0, 0, 0])
+    orientation: list[float] = field(default_factory=lambda: [0, 0, 0])  # roll, pitch, yaw
+    angular_velocity: list[float] = field(default_factory=lambda: [0, 0, 0])
     on_ground: bool = True
     in_water: bool = False
 
@@ -28,8 +28,7 @@ class LocomotionState:
 class WheeledLocomotion:
     """Wheeled robot (differential drive)."""
 
-    def __init__(self, wheel_radius: float = 0.1, wheel_base: float = 0.5,
-                 max_speed: float = 2.0):
+    def __init__(self, wheel_radius: float = 0.1, wheel_base: float = 0.5, max_speed: float = 2.0):
         self.wheel_radius = wheel_radius
         self.wheel_base = wheel_base
         self.max_speed = max_speed
@@ -63,8 +62,7 @@ class WheeledLocomotion:
 class LeggedLocomotion:
     """Legged robot (quadruped with gait control)."""
 
-    def __init__(self, num_legs: int = 4, leg_length: float = 0.3,
-                 max_speed: float = 1.5):
+    def __init__(self, num_legs: int = 4, leg_length: float = 0.3, max_speed: float = 1.5):
         self.num_legs = num_legs
         self.leg_length = leg_length
         self.max_speed = max_speed
@@ -93,8 +91,12 @@ class LeggedLocomotion:
             lift = max(0, math.sin(leg_phase)) * self.leg_length * 0.3
             swing = math.cos(leg_phase) * stride_length * 0.5
 
-            self.leg_positions[i][0] = self.state.position[0] + swing * math.cos(self.state.orientation[2])
-            self.leg_positions[i][1] = self.state.position[1] + swing * math.sin(self.state.orientation[2])
+            self.leg_positions[i][0] = self.state.position[0] + swing * math.cos(
+                self.state.orientation[2]
+            )
+            self.leg_positions[i][1] = self.state.position[1] + swing * math.sin(
+                self.state.orientation[2]
+            )
             self.leg_positions[i][2] = lift
 
         return self.state
@@ -164,8 +166,7 @@ class FlyingLocomotion:
 class SwimmingLocomotion:
     """Underwater ROV dynamics."""
 
-    def __init__(self, max_speed: float = 2.0, max_depth: float = 100.0,
-                 buoyancy: float = 0.5):
+    def __init__(self, max_speed: float = 2.0, max_depth: float = 100.0, buoyancy: float = 0.5):
         self.max_speed = max_speed
         self.max_depth = max_depth
         self.buoyancy = buoyancy
@@ -181,8 +182,9 @@ class SwimmingLocomotion:
             max(-1, min(1, right)),
         ]
 
-    def update(self, dt: float, water_density: float = 1025.0,
-               drag_coeff: float = 0.5) -> LocomotionState:
+    def update(
+        self, dt: float, water_density: float = 1025.0, drag_coeff: float = 0.5
+    ) -> LocomotionState:
         forward = (self.thrusters[0] - self.thrusters[1]) * self.max_speed
         lateral = (self.thrusters[2] - self.thrusters[3]) * self.max_speed * 0.5
 
@@ -230,8 +232,11 @@ class LocomotionController:
             self.flying.set_cmd(kwargs.get("vx", 0), kwargs.get("vy", 0), kwargs.get("vz", 0))
         elif self.mode == "swimming":
             self.swimming.set_thrusters(
-                kwargs.get("front", 0), kwargs.get("back", 0),
-                kwargs.get("left", 0), kwargs.get("right", 0))
+                kwargs.get("front", 0),
+                kwargs.get("back", 0),
+                kwargs.get("left", 0),
+                kwargs.get("right", 0),
+            )
 
     def update(self, dt: float, **kwargs) -> LocomotionState:
         if self.mode == "wheeled":
@@ -246,7 +251,7 @@ class LocomotionController:
             return self.swimming.update(dt)
         return LocomotionState()
 
-    def get_position(self) -> List[float]:
+    def get_position(self) -> list[float]:
         if self.mode == "wheeled":
             return self.wheeled.state.position
         elif self.mode == "legged":

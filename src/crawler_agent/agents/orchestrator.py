@@ -5,18 +5,18 @@ from typing import Any
 
 import structlog
 
-from .base import Agent, AgentRole, AgentState, AgentMessage, AgentTask
+from .base import Agent, AgentMessage, AgentRole, AgentState, AgentTask
 from .registry import AgentRegistry
 from .specialized import (
-    ResearcherAgent,
-    CoderAgent,
     AnalystAgent,
-    PlannerAgent,
+    CoderAgent,
     CriticAgent,
     DataCleanerAgent,
-    SummarizerAgent,
-    OptimizerAgent,
     ExplorerAgent,
+    OptimizerAgent,
+    PlannerAgent,
+    ResearcherAgent,
+    SummarizerAgent,
     SynthesizerAgent,
 )
 
@@ -204,7 +204,8 @@ class MultiAgentOrchestrator:
         if critic:
             final_task = AgentTask(
                 id=f"final_{self._task_counter}",
-                description=f"Final assessment of collaborative solution to: {problem}\n\nDiscussion:\n" + "\n".join(discussion),
+                description=f"Final assessment of collaborative solution to: {problem}\n\nDiscussion:\n"
+                + "\n".join(discussion),
             )
             await critic.assign_task(final_task)
             final_result = await critic.execute_task(final_task)

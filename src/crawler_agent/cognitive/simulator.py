@@ -3,7 +3,7 @@
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 import structlog
@@ -11,17 +11,18 @@ import structlog
 from .backend import CognitiveBackend
 
 
-class SimulationType(str, Enum):
-    PLANNING = "planning"          # Simulate before acting
-    REFLECTION = "reflection"      # Simulate past events
+class SimulationType(StrEnum):
+    PLANNING = "planning"  # Simulate before acting
+    REFLECTION = "reflection"  # Simulate past events
     COUNTERFACTUAL = "counterfactual"  # What-if scenarios
-    PREDICTION = "prediction"      # Future state prediction
-    DREAM = "dream"                # Unconstrained exploration
+    PREDICTION = "prediction"  # Future state prediction
+    DREAM = "dream"  # Unconstrained exploration
 
 
 @dataclass
 class SimulationState:
     """State in a simulation."""
+
     description: str
     variables: dict[str, Any] = field(default_factory=dict)
     confidence: float = 1.0
@@ -31,6 +32,7 @@ class SimulationState:
 @dataclass
 class Simulation:
     """A simulation run."""
+
     id: str
     simulation_type: SimulationType
     goal: str
@@ -45,6 +47,7 @@ class Simulation:
 @dataclass
 class Dream:
     """A dream-like simulation for creative exploration."""
+
     id: str
     theme: str
     associations: list[str] = field(default_factory=list)
@@ -110,7 +113,9 @@ Simulate:"""
                 final_state=SimulationState(
                     description=str(data.get("final_state", "")),
                     variables=data.get("final_state", {}),
-                ) if data.get("final_state") else None,
+                )
+                if data.get("final_state")
+                else None,
                 outcomes=data.get("outcomes", []),
                 confidence=data.get("confidence", 0.5),
                 metadata={"risks": data.get("risks", [])},
@@ -240,7 +245,7 @@ Predict future:"""
         knowledge_context: str = "",
     ) -> Dream:
         """Generate a dream-like exploration for creative insights."""
-        system_prompt = """Generate a dream-like exploration. Connect disparate ideas, 
+        system_prompt = """Generate a dream-like exploration. Connect disparate ideas,
 find novel associations, and generate creative insights.
 
 Dreams are not bound by practical constraints - explore freely.
@@ -337,6 +342,7 @@ Imagine a novel approach:"""
                 t.value: sum(1 for s in self.simulations if s.simulation_type == t)
                 for t in SimulationType
             },
-            "avg_confidence": sum(s.confidence for s in self.simulations) / max(len(self.simulations), 1),
+            "avg_confidence": sum(s.confidence for s in self.simulations)
+            / max(len(self.simulations), 1),
             "world_model_size": len(self.world_model),
         }

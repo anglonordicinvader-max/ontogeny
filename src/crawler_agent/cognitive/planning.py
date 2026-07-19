@@ -3,15 +3,16 @@
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 import structlog
 
-from .backend import CognitiveBackend, extract_json as _extract_json
+from .backend import CognitiveBackend
+from .backend import extract_json as _extract_json
 
 
-class PlanStatus(str, Enum):
+class PlanStatus(StrEnum):
     DRAFT = "draft"
     ACTIVE = "active"
     EXECUTING = "executing"
@@ -20,7 +21,7 @@ class PlanStatus(str, Enum):
     NEEDS_REPLAN = "needs_replan"
 
 
-class StepStatus(str, Enum):
+class StepStatus(StrEnum):
     PENDING = "pending"
     READY = "ready"
     EXECUTING = "executing"
@@ -32,6 +33,7 @@ class StepStatus(str, Enum):
 @dataclass
 class PlanStep:
     """A step in a plan."""
+
     id: str
     description: str
     action: str
@@ -57,6 +59,7 @@ class PlanStep:
 @dataclass
 class Plan:
     """A plan for achieving a goal."""
+
     id: str
     goal_id: str
     goal_description: str
@@ -84,7 +87,7 @@ class Plan:
 
     def to_context(self) -> str:
         steps_str = "\n".join(
-            f"  {i+1}. [{s.status.value}] {s.description} (action: {s.action})"
+            f"  {i + 1}. [{s.status.value}] {s.description} (action: {s.action})"
             for i, s in enumerate(self.steps)
         )
         return f"""Plan: {self.goal_description}
@@ -121,7 +124,7 @@ class Planner:
             skills_hint = f"\nLearned skills you can use: {', '.join(self.available_skills.keys())}"
 
         system_prompt = f"""Create a detailed plan to achieve the goal. Break it into concrete steps.
-Each step should have: description, action (from available actions or 'think', 'search', 'execute', 'verify'), 
+Each step should have: description, action (from available actions or 'think', 'search', 'execute', 'verify'),
 dependencies (step ids), estimated_duration (seconds).
 
 Return JSON with: steps (list), estimated_total_time, success_probability, reasoning{actions_hint}"""
@@ -188,6 +191,7 @@ Create a plan:"""
                 else:
                     # Try "Step N" pattern -> step_{N-1}
                     import re
+
                     m = re.match(r"Step\s+(\d+)", dep, re.IGNORECASE)
                     if m:
                         idx = int(m.group(1)) - 1
@@ -339,13 +343,15 @@ Evaluate:"""
         if not success:
             step.error = str(result) if result else "Unknown error"
 
-        self.plan_history.append({
-            "plan_id": plan.id,
-            "step_id": step.id,
-            "success": success,
-            "actual_time": actual_time,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        self.plan_history.append(
+            {
+                "plan_id": plan.id,
+                "step_id": step.id,
+                "success": success,
+                "actual_time": actual_time,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
 
         if not success:
             plan.status = PlanStatus.NEEDS_REPLAN

@@ -18,18 +18,18 @@ import structlog
 @dataclass
 class Domain:
     name: str
-    concepts: List[str] = field(default_factory=list)
-    relations: List[Dict] = field(default_factory=list)
-    skills: List[str] = field(default_factory=list)
-    abstractions: List[str] = field(default_factory=list)
+    concepts: list[str] = field(default_factory=list)
+    relations: list[dict] = field(default_factory=list)
+    skills: list[str] = field(default_factory=list)
+    abstractions: list[str] = field(default_factory=list)
 
 
 @dataclass
 class TransferMapping:
     source_domain: str
     target_domain: str
-    concept_mappings: Dict[str, str] = field(default_factory=dict)
-    relation_mappings: Dict[str, str] = field(default_factory=dict)
+    concept_mappings: dict[str, str] = field(default_factory=dict)
+    relation_mappings: dict[str, str] = field(default_factory=dict)
     confidence: float = 0.0
 
 
@@ -41,8 +41,8 @@ class TransferLearner:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.logger = structlog.get_logger(component="transfer")
 
-        self.domains: Dict[str, Domain] = {}
-        self.transfer_history: List[TransferMapping] = []
+        self.domains: dict[str, Domain] = {}
+        self.transfer_history: list[TransferMapping] = []
 
         self._setup_domains()
         self._load()
@@ -79,7 +79,14 @@ class TransferLearner:
             ),
             "social": Domain(
                 name="social",
-                concepts=["person", "communication", "agreement", "conflict", "trust", "cooperation"],
+                concepts=[
+                    "person",
+                    "communication",
+                    "agreement",
+                    "conflict",
+                    "trust",
+                    "cooperation",
+                ],
                 relations=[
                     {"source": "communication", "target": "person", "type": "between"},
                     {"source": "trust", "target": "cooperation", "type": "enables"},
@@ -100,18 +107,23 @@ class TransferLearner:
 
     def _save(self):
         domains_file = self.data_dir / "domains.json"
-        domains_file.write_text(json.dumps({
-            "domains": {
-                name: {
-                    "name": d.name,
-                    "concepts": d.concepts,
-                    "relations": d.relations,
-                    "skills": d.skills,
-                    "abstractions": d.abstractions,
-                }
-                for name, d in self.domains.items()
-            },
-        }, indent=2))
+        domains_file.write_text(
+            json.dumps(
+                {
+                    "domains": {
+                        name: {
+                            "name": d.name,
+                            "concepts": d.concepts,
+                            "relations": d.relations,
+                            "skills": d.skills,
+                            "abstractions": d.abstractions,
+                        }
+                        for name, d in self.domains.items()
+                    },
+                },
+                indent=2,
+            )
+        )
 
     def find_analogies(self, source_domain: str, target_domain: str) -> TransferMapping:
         """Find analogies between two domains."""
@@ -166,7 +178,7 @@ class TransferLearner:
         source_domain: str,
         target_domain: str,
         skill: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Transfer a skill from one domain to another."""
         mapping = self.find_analogies(source_domain, target_domain)
 
@@ -176,7 +188,7 @@ class TransferLearner:
         transferred = f"Adapted '{skill}' from {source_domain} to {target_domain}"
         return transferred
 
-    def abstract_domain(self, domain_name: str) -> List[str]:
+    def abstract_domain(self, domain_name: str) -> list[str]:
         """Create abstract principles from a domain."""
         domain = self.domains.get(domain_name)
         if not domain:
@@ -192,4 +204,6 @@ class TransferLearner:
         return abstractions
 
     def to_context(self) -> str:
-        return f"Transfer Learner: {len(self.domains)} domains, {len(self.transfer_history)} transfers"
+        return (
+            f"Transfer Learner: {len(self.domains)} domains, {len(self.transfer_history)} transfers"
+        )

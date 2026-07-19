@@ -21,22 +21,23 @@ import structlog
 @dataclass
 class WorldObject:
     """An object in the persistent world."""
+
     id: str
     name: str
     object_type: str  # cube, sphere, cylinder, robot, etc.
-    position: List[float] = field(default_factory=lambda: [0, 0, 0])
-    rotation: List[float] = field(default_factory=lambda: [0, 0, 0])
-    scale: List[float] = field(default_factory=lambda: [1, 1, 1])
+    position: list[float] = field(default_factory=lambda: [0, 0, 0])
+    rotation: list[float] = field(default_factory=lambda: [0, 0, 0])
+    scale: list[float] = field(default_factory=lambda: [1, 1, 1])
     mass: float = 1.0
     is_static: bool = False
     last_seen: datetime = field(default_factory=datetime.utcnow)
     first_seen: datetime = field(default_factory=datetime.utcnow)
     times_observed: int = 1
     times_interacted: int = 0
-    affordances: List[str] = field(default_factory=list)
-    metadata: Dict = field(default_factory=dict)
+    affordances: list[str] = field(default_factory=list)
+    metadata: dict = field(default_factory=dict)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "name": self.name,
@@ -55,7 +56,7 @@ class WorldObject:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict) -> "WorldObject":
+    def from_dict(cls, data: dict) -> "WorldObject":
         data = dict(data)
         for date_field in ["last_seen", "first_seen"]:
             if date_field in data and isinstance(data[date_field], str):
@@ -66,16 +67,17 @@ class WorldObject:
 @dataclass
 class ExperimentRecord:
     """Record of a physics experiment."""
+
     id: str
     timestamp: datetime = field(default_factory=datetime.utcnow)
     hypothesis: str = ""
-    objects_involved: List[str] = field(default_factory=list)
-    actions_taken: List[str] = field(default_factory=list)
+    objects_involved: list[str] = field(default_factory=list)
+    actions_taken: list[str] = field(default_factory=list)
     outcome: str = ""
     learned: str = ""
     confidence: float = 0.0
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "timestamp": self.timestamp.isoformat(),
@@ -91,13 +93,14 @@ class ExperimentRecord:
 @dataclass
 class Affordance:
     """Learned affordance of an object type."""
+
     object_type: str
     affordance: str  # pushable, throwable, stackable, climbable, graspable, rotatable, movable
     confidence: float = 0.0
     examples: int = 0
     last_tested: datetime = field(default_factory=datetime.utcnow)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "object_type": self.object_type,
             "affordance": self.affordance,
@@ -115,10 +118,10 @@ class PersistentWorldMemory:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.logger = structlog.get_logger(component="world_memory")
 
-        self.objects: Dict[str, WorldObject] = {}
-        self.experiments: List[ExperimentRecord] = []
-        self.affordances: Dict[str, List[Affordance]] = {}  # object_type -> affordances
-        self.scene_history: List[Dict] = []
+        self.objects: dict[str, WorldObject] = {}
+        self.experiments: list[ExperimentRecord] = []
+        self.affordances: dict[str, list[Affordance]] = {}  # object_type -> affordances
+        self.scene_history: list[dict] = []
 
         self._load()
 
@@ -138,15 +141,17 @@ class PersistentWorldMemory:
             try:
                 data = json.loads(experiments_file.read_text())
                 for exp_data in data.get("experiments", []):
-                    self.experiments.append(ExperimentRecord(
-                        id=exp_data["id"],
-                        hypothesis=exp_data.get("hypothesis", ""),
-                        objects_involved=exp_data.get("objects_involved", []),
-                        actions_taken=exp_data.get("actions_taken", []),
-                        outcome=exp_data.get("outcome", ""),
-                        learned=exp_data.get("learned", ""),
-                        confidence=exp_data.get("confidence", 0.0),
-                    ))
+                    self.experiments.append(
+                        ExperimentRecord(
+                            id=exp_data["id"],
+                            hypothesis=exp_data.get("hypothesis", ""),
+                            objects_involved=exp_data.get("objects_involved", []),
+                            actions_taken=exp_data.get("actions_taken", []),
+                            outcome=exp_data.get("outcome", ""),
+                            learned=exp_data.get("learned", ""),
+                            confidence=exp_data.get("confidence", 0.0),
+                        )
+                    )
             except Exception as e:
                 self.logger.warning("experiments_load_failed", error=str(e))
 
@@ -155,42 +160,57 @@ class PersistentWorldMemory:
             try:
                 data = json.loads(affordances_file.read_text())
                 for obj_type, aff_list in data.get("affordances", {}).items():
-                    self.affordances[obj_type] = [
-                        Affordance(**aff) for aff in aff_list
-                    ]
+                    self.affordances[obj_type] = [Affordance(**aff) for aff in aff_list]
             except Exception as e:
                 self.logger.warning("affordances_load_failed", error=str(e))
 
     def _save(self):
         objects_file = self.data_dir / "objects.json"
-        objects_file.write_text(json.dumps({
-            "objects": [obj.to_dict() for obj in self.objects.values()],
-            "saved_at": datetime.utcnow().isoformat(),
-        }, indent=2))
+        objects_file.write_text(
+            json.dumps(
+                {
+                    "objects": [obj.to_dict() for obj in self.objects.values()],
+                    "saved_at": datetime.utcnow().isoformat(),
+                },
+                indent=2,
+            )
+        )
 
         experiments_file = self.data_dir / "experiments.json"
-        experiments_file.write_text(json.dumps({
-            "experiments": [exp.to_dict() for exp in self.experiments[-100:]],  # Keep last 100
-            "saved_at": datetime.utcnow().isoformat(),
-        }, indent=2))
+        experiments_file.write_text(
+            json.dumps(
+                {
+                    "experiments": [
+                        exp.to_dict() for exp in self.experiments[-100:]
+                    ],  # Keep last 100
+                    "saved_at": datetime.utcnow().isoformat(),
+                },
+                indent=2,
+            )
+        )
 
         affordances_file = self.data_dir / "affordances.json"
-        affordances_file.write_text(json.dumps({
-            "affordances": {
-                obj_type: [aff.to_dict() for aff in affs]
-                for obj_type, affs in self.affordances.items()
-            },
-            "saved_at": datetime.utcnow().isoformat(),
-        }, indent=2))
+        affordances_file.write_text(
+            json.dumps(
+                {
+                    "affordances": {
+                        obj_type: [aff.to_dict() for aff in affs]
+                        for obj_type, affs in self.affordances.items()
+                    },
+                    "saved_at": datetime.utcnow().isoformat(),
+                },
+                indent=2,
+            )
+        )
 
     def update_object(
         self,
         obj_id: str,
         name: str,
         object_type: str,
-        position: List[float] = None,
-        rotation: List[float] = None,
-        scale: List[float] = None,
+        position: list[float] = None,
+        rotation: list[float] = None,
+        scale: list[float] = None,
         mass: float = None,
         is_static: bool = None,
     ) -> WorldObject:
@@ -199,11 +219,16 @@ class PersistentWorldMemory:
             obj = self.objects[obj_id]
             obj.times_observed += 1
             obj.last_seen = datetime.utcnow()
-            if position: obj.position = position
-            if rotation: obj.rotation = rotation
-            if scale: obj.scale = scale
-            if mass is not None: obj.mass = mass
-            if is_static is not None: obj.is_static = is_static
+            if position:
+                obj.position = position
+            if rotation:
+                obj.rotation = rotation
+            if scale:
+                obj.scale = scale
+            if mass is not None:
+                obj.mass = mass
+            if is_static is not None:
+                obj.is_static = is_static
         else:
             obj = WorldObject(
                 id=obj_id,
@@ -241,20 +266,22 @@ class PersistentWorldMemory:
                 self._save()
                 return
 
-        self.affordances[object_type].append(Affordance(
-            object_type=object_type,
-            affordance=affordance,
-            confidence=confidence,
-            examples=1,
-        ))
+        self.affordances[object_type].append(
+            Affordance(
+                object_type=object_type,
+                affordance=affordance,
+                confidence=confidence,
+                examples=1,
+            )
+        )
         self._save()
 
-    def get_affordances(self, object_type: str) -> List[str]:
+    def get_affordances(self, object_type: str) -> list[str]:
         """Get learned affordances for an object type."""
         affs = self.affordances.get(object_type, [])
         return [aff.affordance for aff in affs if aff.confidence > 0.3]
 
-    def predict_affordances(self, object_type: str) -> Dict[str, float]:
+    def predict_affordances(self, object_type: str) -> dict[str, float]:
         """Predict affordances for an object type."""
         affs = self.affordances.get(object_type, [])
         return {aff.affordance: aff.confidence for aff in affs}
@@ -262,14 +289,15 @@ class PersistentWorldMemory:
     def record_experiment(
         self,
         hypothesis: str,
-        objects_involved: List[str],
-        actions_taken: List[str],
+        objects_involved: list[str],
+        actions_taken: list[str],
         outcome: str,
         learned: str,
         confidence: float = 0.5,
     ) -> ExperimentRecord:
         """Record a physics experiment."""
         import uuid
+
         exp = ExperimentRecord(
             id=str(uuid.uuid4())[:8],
             hypothesis=hypothesis,
@@ -283,20 +311,20 @@ class PersistentWorldMemory:
         self._save()
         return exp
 
-    def get_object(self, obj_id: str) -> Optional[WorldObject]:
+    def get_object(self, obj_id: str) -> WorldObject | None:
         return self.objects.get(obj_id)
 
-    def get_objects_by_type(self, object_type: str) -> List[WorldObject]:
+    def get_objects_by_type(self, object_type: str) -> list[WorldObject]:
         return [obj for obj in self.objects.values() if obj.object_type == object_type]
 
-    def get_recent_experiments(self, limit: int = 10) -> List[ExperimentRecord]:
+    def get_recent_experiments(self, limit: int = 10) -> list[ExperimentRecord]:
         return self.experiments[-limit:]
 
-    def get_hidden_objects(self, visible_ids: List[str]) -> List[WorldObject]:
+    def get_hidden_objects(self, visible_ids: list[str]) -> list[WorldObject]:
         """Get objects not currently visible (object permanence)."""
         return [obj for obj in self.objects.values() if obj.id not in visible_ids]
 
-    def predict_object_location(self, obj_id: str) -> Optional[List[float]]:
+    def predict_object_location(self, obj_id: str) -> list[float] | None:
         """Predict location of a hidden object based on last known state."""
         obj = self.objects.get(obj_id)
         if obj:

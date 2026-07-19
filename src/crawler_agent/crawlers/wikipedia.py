@@ -1,11 +1,11 @@
 """Wikipedia crawler using MediaWiki API."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import httpx
 import structlog
 
-from .base import BaseCrawler, CrawlerConfig, CrawlResult, ContentType
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class WikipediaCrawler(BaseCrawler):
@@ -68,7 +68,9 @@ class WikipediaCrawler(BaseCrawler):
                 if page_id == "-1":
                     continue
 
-                categories = [c["title"].replace("Category:", "") for c in page.get("categories", [])]
+                categories = [
+                    c["title"].replace("Category:", "") for c in page.get("categories", [])
+                ]
                 links = [l["title"] for l in page.get("links", [])]
 
                 yield CrawlResult(
@@ -131,7 +133,9 @@ class WikipediaCrawler(BaseCrawler):
                 async for article in self._fetch_article(page["title"]):
                     yield article
 
-    async def get_category_members(self, category: str, limit: int = 100) -> AsyncIterator[CrawlResult]:
+    async def get_category_members(
+        self, category: str, limit: int = 100
+    ) -> AsyncIterator[CrawlResult]:
         """Get articles in a category."""
         await self.rate_limiter.wait_and_acquire()
 
@@ -172,7 +176,7 @@ class WikipediaCrawler(BaseCrawler):
             response.raise_for_status()
             pages = response.json().get("query", {}).get("pages", {})
 
-            for page_id, page in pages.items():
+            for _page_id, page in pages.items():
                 links = page.get("links", [])
                 for link in links[:limit]:
                     async for article in self._fetch_article(link["title"]):

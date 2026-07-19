@@ -1,4 +1,5 @@
 """Maldoror model trainer - orchestrates QLoRA fine-tuning via Docker GPU."""
+
 import asyncio
 import json
 import time
@@ -68,9 +69,9 @@ class ModelTrainer:
 
     def _save_runs(self) -> None:
         runs_file = self.output_dir / "runs.json"
-        runs_file.write_text(json.dumps(
-            {"runs": [r.__dict__ for r in self.runs]}, indent=2, default=str
-        ))
+        runs_file.write_text(
+            json.dumps({"runs": [r.__dict__ for r in self.runs]}, indent=2, default=str)
+        )
 
     def prepare_dataset(self, min_quality: float = 0.6) -> Path:
         """Export training data in chatml format for the training script."""
@@ -104,15 +105,25 @@ class ModelTrainer:
 
             start = time.time()
             proc = await asyncio.create_subprocess_exec(
-                "docker", "run", "--rm", "--runtime=nvidia",
-                "-v", f"{dataset_path.parent}:/workspace",
-                "-v", f"{adapter_dir}:/output",
-                "-e", f"MALDOROR_BASE_MODEL={base_model}",
-                "-e", f"MALDOROR_ADAPTER_DIR=/output",
-                "-e", f"MALDOROR_DATASET=/workspace/{dataset_path.name}",
-                "-e", f"MALDOROR_MAX_STEPS={max_steps}",
+                "docker",
+                "run",
+                "--rm",
+                "--runtime=nvidia",
+                "-v",
+                f"{dataset_path.parent}:/workspace",
+                "-v",
+                f"{adapter_dir}:/output",
+                "-e",
+                f"MALDOROR_BASE_MODEL={base_model}",
+                "-e",
+                "MALDOROR_ADAPTER_DIR=/output",
+                "-e",
+                f"MALDOROR_DATASET=/workspace/{dataset_path.name}",
+                "-e",
+                f"MALDOROR_MAX_STEPS={max_steps}",
                 self.docker_image,
-                "python", "/workspace/train.py",
+                "python",
+                "/workspace/train.py",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -137,7 +148,7 @@ class ModelTrainer:
                 self.current_version = self._next_version()
             return run
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             run.error = "timeout"
             run.success = False
             self.runs.append(run)
@@ -153,10 +164,11 @@ class ModelTrainer:
     def _extract_loss(self, output: str) -> float:
         """Extract final training loss from output."""
         import re
+
         matches = re.findall(r'"loss":\s*([\d.]+)', output)
         if matches:
             return float(matches[-1])
-        matches = re.findall(r'loss[=:]\s*([\d.]+)', output)
+        matches = re.findall(r"loss[=:]\s*([\d.]+)", output)
         if matches:
             return float(matches[-1])
         return 0.0
@@ -176,9 +188,15 @@ class ModelTrainer:
             "successful": len(successful),
             "current_version": self.current_version,
             "latest_adapter": self.get_latest_adapter(),
-            "avg_loss": sum(r.loss for r in successful) / max(len(successful), 1) if successful else 0.0,
-            "avg_duration": sum(r.duration_seconds for r in successful) / max(len(successful), 1) if successful else 0.0,
-            "runs": [{"version": r.version, "success": r.success, "loss": r.loss} for r in self.runs[-5:]],
+            "avg_loss": sum(r.loss for r in successful) / max(len(successful), 1)
+            if successful
+            else 0.0,
+            "avg_duration": sum(r.duration_seconds for r in successful) / max(len(successful), 1)
+            if successful
+            else 0.0,
+            "runs": [
+                {"version": r.version, "success": r.success, "loss": r.loss} for r in self.runs[-5:]
+            ],
         }
 
     def to_context(self) -> str:

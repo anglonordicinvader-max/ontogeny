@@ -35,26 +35,34 @@ BG_BLUE = "\033[44m"
 def red(text: str) -> str:
     return f"{RED}{text}{RESET}"
 
+
 def green(text: str) -> str:
     return f"{GREEN}{text}{RESET}"
+
 
 def yellow(text: str) -> str:
     return f"{YELLOW}{text}{RESET}"
 
+
 def blue(text: str) -> str:
     return f"{BLUE}{text}{RESET}"
+
 
 def magenta(text: str) -> str:
     return f"{MAGENTA}{text}{RESET}"
 
+
 def cyan(text: str) -> str:
     return f"{CYAN}{text}{RESET}"
+
 
 def bright_red(text: str) -> str:
     return f"{BRIGHT_RED}{text}{RESET}"
 
+
 def bold(text: str) -> str:
     return f"{BOLD}{text}{RESET}"
+
 
 def dim(text: str) -> str:
     return f"{DIM}{text}{RESET}"
@@ -69,7 +77,7 @@ ONTOGENY_LOGO = f"""{BRIGHT_RED}{BOLD}
 ##     ## ##   ###    ##    ##     ## ##    ##  ##       ##   ###    ##
  #######  ##    ##    ##     #######   ######   ######## ##    ##    ##
 
-{RESET}{BRIGHT_RED}    +--[{('=' * 48)}]--+
-{RESET}{BRIGHT_RED}    | {'  >> PROTO-AGI <<  ':^{48}} |
-{RESET}{BRIGHT_RED}    +--[{('=' * 48)}]--+
+{RESET}{BRIGHT_RED}    +--[{("=" * 48)}]--+
+{RESET}{BRIGHT_RED}    | {"  >> PROTO-AGI <<  ":^{48}} |
+{RESET}{BRIGHT_RED}    +--[{("=" * 48)}]--+
 {RESET}"""

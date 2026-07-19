@@ -2,15 +2,16 @@
 
 import asyncio
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
-from typing import Any, Callable
+from enum import Enum, StrEnum
+from typing import Any
 
 import structlog
 
 
-class AgentRole(str, Enum):
+class AgentRole(StrEnum):
     RESEARCHER = "researcher"
     CODER = "coder"
     ANALYST = "analyst"
@@ -19,7 +20,7 @@ class AgentRole(str, Enum):
     COORDINATOR = "coordinator"
 
 
-class AgentState(str, Enum):
+class AgentState(StrEnum):
     IDLE = "idle"
     THINKING = "thinking"
     WORKING = "working"
@@ -30,6 +31,7 @@ class AgentState(str, Enum):
 @dataclass
 class AgentMessage:
     """Message between agents."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     sender: str = ""
     recipient: str = ""
@@ -42,6 +44,7 @@ class AgentMessage:
 @dataclass
 class AgentTask:
     """Task assigned to an agent."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     description: str = ""
     assigned_to: str = ""
@@ -159,12 +162,14 @@ class Agent:
 
     async def process_message(self, message: AgentMessage) -> AgentMessage | None:
         """Process an incoming message and optionally respond."""
-        self._memory.append({
-            "type": "message",
-            "sender": message.sender,
-            "content": message.content[:200],
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        self._memory.append(
+            {
+                "type": "message",
+                "sender": message.sender,
+                "content": message.content[:200],
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
         return None
 
     async def execute_task(self, task: AgentTask) -> Any:

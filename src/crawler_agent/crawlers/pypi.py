@@ -1,11 +1,11 @@
 """PyPI crawler for Python packages."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import httpx
 import structlog
 
-from .base import BaseCrawler, CrawlerConfig, CrawlResult, ContentType
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class PyPICrawler(BaseCrawler):
@@ -27,7 +27,9 @@ class PyPICrawler(BaseCrawler):
         depth: int = 0,
         content_types: list[str] | None = None,
     ) -> AsyncIterator[CrawlResult]:
-        package_name = url.rstrip("/").split("/")[-2] if "/project/" in url else url.rstrip("/").split("/")[-1]
+        package_name = (
+            url.rstrip("/").split("/")[-2] if "/project/" in url else url.rstrip("/").split("/")[-1]
+        )
         async for result in self._get_package(package_name):
             yield result
 

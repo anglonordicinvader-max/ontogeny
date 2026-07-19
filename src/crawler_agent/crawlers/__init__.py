@@ -1,102 +1,136 @@
-"""Crawler modules."""
+"""Ontogeny Knowledge Acquisition System — modular acquisition engines for external evidence.
 
-from .base import BaseCrawler, CrawlResult, ContentType, CrawlerConfig
+This package provides the acquisition engine layer for Ontogeny's cognitive architecture.
+Each module implements an evidence acquisition adapter for a specific data source.
+"""
 
-# Code Hosting
-from .github import GitHubCrawler
-from .gitlab import GitLabCrawler
-from .bitbucket import BitbucketCrawler
-from .codeberg import GiteaCrawler, CodebergCrawler, GiteaDotComCrawler
-from .sourceforge import SourceForgeCrawler
-from .launchpad import LaunchpadCrawler
-from .savannah import SavannahCrawler
-from .apache import ApacheCrawler
-from .pagure import PagureCrawler
-
-# AI/ML Platforms
-from .huggingface import HuggingFaceCrawler
-from .pastebin import PastebinCrawler
+# Acquisition system
+from .acquisition import (
+    AcquisitionManager,
+    ClaimValidator,
+    CrawlObservability,
+    DomainPolicies,
+    DomainPolicy,
+    EvidenceDocument,
+    EvidenceStore,
+    ProxyEndpoint,
+    ProxyManager,
+    RequestManager,
+    ResearchObjective,
+    ResearchPlan,
+    ResearchPlanner,
+    RevalidationScheduler,
+    SourceCategory,
+    SourceQualityScorer,
+)
 
 # Academic
 from .academic import ArxivCrawler, SemanticScholarCrawler
 
-# Q&A/Community
-from .stackoverflow import StackOverflowCrawler
-from .reddit import RedditCrawler
-from .hackernews import HackerNewsCrawler
-
-# Documentation/Content
-from .rss import RSSCrawler
-from .wikipedia import WikipediaCrawler
+# Additional
+from .additional import (
+    GitHubCodeSearchCrawler,
+    GitHubTrendingCrawler,
+    HuggingFaceHubCrawler,
+    PapersWithCodeCrawler,
+)
+from .apache import ApacheCrawler
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
+from .bitbucket import BitbucketCrawler
+from .codeberg import CodebergCrawler, GiteaCrawler, GiteaDotComCrawler
+from .crates import CratesCrawler
 
 # Messaging
 from .discord import DiscordCrawler, SlackCrawler
 
-# Productivity
-from .notion import NotionCrawler
-from .jira import JiraCrawler
-
-# Web
-from .webscraper import WebScraperCrawler
-
-# Package Registries
-from .pypi import PyPICrawler
-from .npm_registry import NpmCrawler
-from .crates import CratesCrawler
+# Code Hosting
+from .github import GitHubCrawler
+from .gitlab import GitLabCrawler
 from .go_dev import GoDevCrawler
-from .maven import MavenCrawler
-from .nuget import NugetCrawler
-from .rubygems import RubyGemsCrawler
+from .hackernews import HackerNewsCrawler
+
+# AI/ML Platforms
+from .huggingface import HuggingFaceCrawler
 
 # Archives
 from .internetarchive import InternetArchiveCrawler
+from .jira import JiraCrawler
+from .launchpad import LaunchpadCrawler
+from .maven import MavenCrawler
 
-# Additional
-from .additional import (
-    GitHubCodeSearchCrawler,
-    PapersWithCodeCrawler,
-    HuggingFaceHubCrawler,
-    GitHubTrendingCrawler,
-)
+# Productivity
+from .notion import NotionCrawler
+from .npm_registry import NpmCrawler
+from .nuget import NugetCrawler
+from .pagure import PagureCrawler
+from .pastebin import PastebinCrawler
+
+# Package Registries
+from .pypi import PyPICrawler
+from .reddit import RedditCrawler
+
+# Documentation/Content
+from .rss import RSSCrawler
+from .rubygems import RubyGemsCrawler
+from .savannah import SavannahCrawler
+from .sourceforge import SourceForgeCrawler
+
+# Q&A/Community
+from .stackoverflow import StackOverflowCrawler
+
+# Web
+from .webscraper import WebScraperCrawler
+from .wikipedia import WikipediaCrawler
 
 __all__ = [
     # Base
-    "BaseCrawler", "CrawlResult", "ContentType", "CrawlerConfig",
-    
+    "BaseCrawler",
+    "CrawlResult",
+    "ContentType",
+    "CrawlerConfig",
     # Code Hosting
-    "GitHubCrawler", "GitLabCrawler", "BitbucketCrawler",
-    "GiteaCrawler", "CodebergCrawler", "GiteaDotComCrawler",
-    "SourceForgeCrawler", "LaunchpadCrawler", "SavannahCrawler",
-    "ApacheCrawler", "PagureCrawler",
-    
+    "GitHubCrawler",
+    "GitLabCrawler",
+    "BitbucketCrawler",
+    "GiteaCrawler",
+    "CodebergCrawler",
+    "GiteaDotComCrawler",
+    "SourceForgeCrawler",
+    "LaunchpadCrawler",
+    "SavannahCrawler",
+    "ApacheCrawler",
+    "PagureCrawler",
     # AI/ML
-    "HuggingFaceCrawler", "PastebinCrawler",
-    
+    "HuggingFaceCrawler",
+    "PastebinCrawler",
     # Academic
-    "ArxivCrawler", "SemanticScholarCrawler",
-    
+    "ArxivCrawler",
+    "SemanticScholarCrawler",
     # Q&A/Community
-    "StackOverflowCrawler", "RedditCrawler", "HackerNewsCrawler",
-    
+    "StackOverflowCrawler",
+    "RedditCrawler",
+    "HackerNewsCrawler",
     # Documentation
-    "RSSCrawler", "WikipediaCrawler",
-    
+    "RSSCrawler",
+    "WikipediaCrawler",
     # Messaging
-    "DiscordCrawler", "SlackCrawler",
-    
+    "DiscordCrawler",
+    "SlackCrawler",
     # Productivity
-    "NotionCrawler", "JiraCrawler",
-    
+    "NotionCrawler",
+    "JiraCrawler",
     # Web
     "WebScraperCrawler",
-    
     # Package Registries
-    "PyPICrawler", "NpmCrawler", "CratesCrawler",
-    "GoDevCrawler", "MavenCrawler", "NugetCrawler", "RubyGemsCrawler",
-    
+    "PyPICrawler",
+    "NpmCrawler",
+    "CratesCrawler",
+    "GoDevCrawler",
+    "MavenCrawler",
+    "NugetCrawler",
+    "RubyGemsCrawler",
     # Archives
     "InternetArchiveCrawler",
-    
     # Additional
     "GitHubCodeSearchCrawler",
     "PapersWithCodeCrawler",

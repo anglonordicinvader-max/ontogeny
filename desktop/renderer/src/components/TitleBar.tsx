@@ -11,13 +11,24 @@ export function TitleBar({ title = 'Ontogeny' }: TitleBarProps) {
 
   return (
     <div
-      className="flex items-center justify-between h-11 glass-overlay select-none drag"
+      className="flex items-center justify-between h-11 glass-titlebar select-none drag"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
-      <div className="flex items-center gap-3 px-4">
+      <div className="flex items-center gap-2.5 px-4">
+        {/* Subtle monogram logo */}
+        <div
+          className="flex items-center justify-center w-5 h-5 rounded-[4px] text-[10px] font-bold tracking-tight"
+          style={{
+            background: 'rgba(255, 255, 255, 0.06)',
+            color: 'var(--text-tertiary)',
+            fontFamily: "'Geist Mono', monospace",
+          }}
+        >
+          O
+        </div>
         <span
-          className="text-sm font-bold tracking-widest text-text-primary"
-          style={{ fontFamily: "'Geist', 'Geist Sans', sans-serif", letterSpacing: '0.2em' }}
+          className="text-[13px] font-semibold tracking-[0.18em] text-text-secondary"
+          style={{ fontFamily: "'Geist', 'Geist Sans', sans-serif" }}
         >
           {title.toUpperCase()}
         </span>
@@ -30,23 +41,23 @@ export function TitleBar({ title = 'Ontogeny' }: TitleBarProps) {
         <button
           onClick={handleMinimize}
           aria-label="Minimize"
-          className="flex items-center justify-center w-11 h-11 hover:bg-surface-3/60 transition-colors rounded-md"
+          className="flex items-center justify-center w-11 h-11 hover:bg-white/[0.05] transition-colors rounded-md"
         >
-          <Minus className="w-4 h-4 text-text-secondary" />
+          <Minus className="w-3.5 h-3.5 text-text-tertiary hover:text-text-secondary transition-colors" />
         </button>
         <button
           onClick={handleMaximize}
           aria-label="Maximize"
-          className="flex items-center justify-center w-11 h-11 hover:bg-surface-3/60 transition-colors rounded-md"
+          className="flex items-center justify-center w-11 h-11 hover:bg-white/[0.05] transition-colors rounded-md"
         >
-          <Square className="w-3 h-3 text-text-secondary" />
+          <Square className="w-2.5 h-2.5 text-text-tertiary hover:text-text-secondary transition-colors" />
         </button>
         <button
           onClick={handleClose}
           aria-label="Close"
-          className="flex items-center justify-center w-11 h-11 hover:bg-status-error/20 hover:text-status-error transition-colors rounded-md"
+          className="flex items-center justify-center w-11 h-11 hover:bg-white/[0.08] transition-colors rounded-md group"
         >
-          <X className="w-4 h-4 text-text-secondary" />
+          <X className="w-3.5 h-3.5 text-text-tertiary group-hover:text-text-secondary transition-colors" />
         </button>
       </div>
     </div>

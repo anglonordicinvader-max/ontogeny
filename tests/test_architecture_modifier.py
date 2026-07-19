@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 
 from src.crawler_agent.cognitive.architecture_modifier import (
-    ArchitectureModifier,
     ArchitectureModification,
+    ArchitectureModifier,
     ArchitectureState,
     ModificationResult,
     ModificationType,
@@ -83,12 +83,14 @@ class TestArchitectureModifier:
 
     def test_recommendation_after_success(self, modifier):
         """Test recommendation after successful modification."""
-        modifier.modification_history.append(ModificationResult(
-            success=True,
-            modification=ArchitectureModification(
-                mod_type=ModificationType.ADD_LAYER,
-            ),
-        ))
+        modifier.modification_history.append(
+            ModificationResult(
+                success=True,
+                modification=ArchitectureModification(
+                    mod_type=ModificationType.ADD_LAYER,
+                ),
+            )
+        )
         rec = modifier.recommend_modification()
         assert rec is not None
         # Should prefer add_layer since it succeeded before
@@ -96,12 +98,14 @@ class TestArchitectureModifier:
 
     def test_recommendation_after_failure(self, modifier):
         """Test recommendation avoids failed types."""
-        modifier.modification_history.append(ModificationResult(
-            success=False,
-            modification=ArchitectureModification(
-                mod_type=ModificationType.ADD_LAYER,
-            ),
-        ))
+        modifier.modification_history.append(
+            ModificationResult(
+                success=False,
+                modification=ArchitectureModification(
+                    mod_type=ModificationType.ADD_LAYER,
+                ),
+            )
+        )
         rec = modifier.recommend_modification()
         assert rec is not None
         # Should not recommend add_layer since it failed

@@ -7,15 +7,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.crawler_agent.cognitive.self_training import (
-    SelfTrainingSynthesizer,
-    SynthesizedExample,
-)
+from src.crawler_agent.cognitive.backend import CognitiveResponse
 from src.crawler_agent.cognitive.modification_memory import (
     ModificationMemory,
     ModificationRecord,
 )
-from src.crawler_agent.cognitive.backend import CognitiveResponse
+from src.crawler_agent.cognitive.self_training import (
+    SelfTrainingSynthesizer,
+    SynthesizedExample,
+)
 
 
 @pytest.fixture
@@ -112,52 +112,60 @@ class TestSelfTrainingSynthesizer:
         mock_backend.complete.side_effect = [
             # Variations response
             CognitiveResponse(
-                content=json.dumps({
-                    "variations": [
-                        {
-                            "approach": "Use absolute imports",
-                            "code": "import os\nimport sys\nfrom foo import bar\nimport pathlib",
-                            "quality": 0.7,
-                        },
-                        {
-                            "approach": "Use __all__ to control exports",
-                            "code": "import os\nimport sys\nfrom foo import bar\n__all__ = ['bar']",
-                            "quality": 0.65,
-                        },
-                    ]
-                }),
+                content=json.dumps(
+                    {
+                        "variations": [
+                            {
+                                "approach": "Use absolute imports",
+                                "code": "import os\nimport sys\nfrom foo import bar\nimport pathlib",
+                                "quality": 0.7,
+                            },
+                            {
+                                "approach": "Use __all__ to control exports",
+                                "code": "import os\nimport sys\nfrom foo import bar\n__all__ = ['bar']",
+                                "quality": 0.65,
+                            },
+                        ]
+                    }
+                ),
                 confidence=0.8,
             ),
             # Inverse response
             CognitiveResponse(
-                content=json.dumps({
-                    "mistake": "Importing before defining module",
-                    "bad_code": "from mymodule import something\nimport mymodule",
-                    "why_wrong": "Circular import because mymodule tries to import itself",
-                }),
+                content=json.dumps(
+                    {
+                        "mistake": "Importing before defining module",
+                        "bad_code": "from mymodule import something\nimport mymodule",
+                        "why_wrong": "Circular import because mymodule tries to import itself",
+                    }
+                ),
                 confidence=0.7,
             ),
             # Reasoning chain response
             CognitiveResponse(
-                content=json.dumps({
-                    "chain": [
-                        "Python imports execute top-to-bottom",
-                        "Standard library imports should come first",
-                        "Third-party imports come next",
-                        "Local imports come last",
-                    ],
-                    "key_insight": "Import ordering follows a convention that prevents circular dependencies",
-                }),
+                content=json.dumps(
+                    {
+                        "chain": [
+                            "Python imports execute top-to-bottom",
+                            "Standard library imports should come first",
+                            "Third-party imports come next",
+                            "Local imports come last",
+                        ],
+                        "key_insight": "Import ordering follows a convention that prevents circular dependencies",
+                    }
+                ),
                 confidence=0.75,
             ),
             # Generalization response
             CognitiveResponse(
-                content=json.dumps({
-                    "pattern_name": "Import Ordering",
-                    "description": "Fix import ordering to prevent circular dependencies",
-                    "template": "import stdlib\nimport third_party\nimport local",
-                    "applicable_when": ["circular import errors", "import ordering issues"],
-                }),
+                content=json.dumps(
+                    {
+                        "pattern_name": "Import Ordering",
+                        "description": "Fix import ordering to prevent circular dependencies",
+                        "template": "import stdlib\nimport third_party\nimport local",
+                        "applicable_when": ["circular import errors", "import ordering issues"],
+                    }
+                ),
                 confidence=0.7,
             ),
         ]
@@ -174,9 +182,7 @@ class TestSelfTrainingSynthesizer:
             assert ex.quality_score >= synthesizer.min_quality
 
     @pytest.mark.asyncio
-    async def test_synthesize_adds_to_memory(
-        self, synthesizer, mock_backend, success_record
-    ):
+    async def test_synthesize_adds_to_memory(self, synthesizer, mock_backend, success_record):
         """Test that synthesized examples are added to modification memory."""
         mock_backend.complete.side_effect = [
             CognitiveResponse(
@@ -184,27 +190,33 @@ class TestSelfTrainingSynthesizer:
                 confidence=0.8,
             ),
             CognitiveResponse(
-                content=json.dumps({
-                    "mistake": "test mistake",
-                    "bad_code": "x = 1\ny = 2",
-                    "why_wrong": "test reason",
-                }),
+                content=json.dumps(
+                    {
+                        "mistake": "test mistake",
+                        "bad_code": "x = 1\ny = 2",
+                        "why_wrong": "test reason",
+                    }
+                ),
                 confidence=0.7,
             ),
             CognitiveResponse(
-                content=json.dumps({
-                    "chain": ["step 1", "step 2"],
-                    "key_insight": "test insight",
-                }),
+                content=json.dumps(
+                    {
+                        "chain": ["step 1", "step 2"],
+                        "key_insight": "test insight",
+                    }
+                ),
                 confidence=0.75,
             ),
             CognitiveResponse(
-                content=json.dumps({
-                    "pattern_name": "Test Pattern",
-                    "description": "test description",
-                    "template": "test template code here",
-                    "applicable_when": ["test condition"],
-                }),
+                content=json.dumps(
+                    {
+                        "pattern_name": "Test Pattern",
+                        "description": "test description",
+                        "template": "test template code here",
+                        "applicable_when": ["test condition"],
+                    }
+                ),
                 confidence=0.7,
             ),
         ]
@@ -216,21 +228,27 @@ class TestSelfTrainingSynthesizer:
         assert len(synthesizer.memory.records) > initial_count
 
         # Check that records have the self_training source module
-        synth_records = [r for r in synthesizer.memory.records if r.source_module == "self_training"]
+        synth_records = [
+            r for r in synthesizer.memory.records if r.source_module == "self_training"
+        ]
         assert len(synth_records) > 0
 
     @pytest.mark.asyncio
-    async def test_synthesize_filters_low_quality(
-        self, synthesizer, mock_backend, success_record
-    ):
+    async def test_synthesize_filters_low_quality(self, synthesizer, mock_backend, success_record):
         """Test that low-quality examples are filtered out."""
         mock_backend.complete.side_effect = [
             CognitiveResponse(
-                content=json.dumps({
-                    "variations": [
-                        {"approach": "bad", "code": "x = 1  # bad quality code here", "quality": 0.1},  # Too low
-                    ]
-                }),
+                content=json.dumps(
+                    {
+                        "variations": [
+                            {
+                                "approach": "bad",
+                                "code": "x = 1  # bad quality code here",
+                                "quality": 0.1,
+                            },  # Too low
+                        ]
+                    }
+                ),
                 confidence=0.8,
             ),
             CognitiveResponse(

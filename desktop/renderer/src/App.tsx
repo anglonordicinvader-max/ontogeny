@@ -11,8 +11,10 @@ import { CrawlerPanel } from './components/CrawlerPanel';
 import { MaldororPanel } from './components/MaldororPanel';
 import { ProductionPanel } from './components/ProductionPanel';
 import { BlenderPanel } from './components/BlenderPanel';
+import { MuJoCoPanel } from './components/MuJoCoPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { CommandPalette } from './components/CommandPalette';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { useWebSocket } from './hooks/useWebSocket';
 
 function App() {
@@ -21,6 +23,7 @@ function App() {
   const { status, events, connected, send } = useWebSocket();
   const [backendPort, setBackendPort] = useState(8765);
   const [themeTransitioning, setThemeTransitioning] = useState(false);
+  const [tabKey, setTabKey] = useState(0);
 
   useEffect(() => {
     window.electronAPI?.getBackendPort().then((port) => {
@@ -62,6 +65,7 @@ function App() {
     setThemeTransitioning(true);
     setTimeout(() => {
       setActiveTab(tab);
+      setTabKey((k) => k + 1);
       setTimeout(() => setThemeTransitioning(false), 50);
     }, 150);
   }, []);
@@ -77,7 +81,7 @@ function App() {
       case 'goals':
         return <GoalTree status={status} />;
       case 'knowledge':
-        return <KnowledgeGraph status={status} />;
+        return <ErrorBoundary><KnowledgeGraph status={status} /></ErrorBoundary>;
       case 'crawlers':
         return <CrawlerPanel status={status} />;
       case 'maldoror':
@@ -86,6 +90,8 @@ function App() {
         return <ProductionPanel status={status} />;
       case 'blender':
         return <BlenderPanel backendPort={backendPort + 1} />;
+      case 'mujoco':
+        return <MuJoCoPanel backendPort={backendPort + 2} />;
       case 'settings':
         return <SettingsPanel />;
       default:
@@ -94,16 +100,24 @@ function App() {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden" style={{ background: 'var(--surface-0)' }}>
+    <div className="h-screen w-screen flex flex-col overflow-hidden" style={{ background: 'var(--surface-2)' }}>
       <TitleBar />
       <div className="flex flex-1 min-h-0">
-        <Sidebar activeTab={activeTab} onTabChange={setActiveTab} connected={connected} />
+        <Sidebar
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          onSearchOpen={() => setCommandPaletteOpen(true)}
+          connected={connected}
+        />
         <main
           className={`flex-1 min-w-0 overflow-hidden transition-opacity duration-200 ${
             themeTransitioning ? 'opacity-0' : 'opacity-100'
           }`}
+          style={{ background: 'var(--surface-2)' }}
         >
-          {renderWorkspace()}
+          <div key={tabKey} className="h-full animate-panel-in">
+            {renderWorkspace()}
+          </div>
         </main>
       </div>
       <StatusBar status={status} connected={connected} />

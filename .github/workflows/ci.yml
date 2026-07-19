@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  python:
+    name: Python Checks
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff pytest pytest-asyncio
+          pip install -e ".[dev]" 2>/dev/null || pip install pydantic structlog networkx
+
+      - name: Ruff lint
+        run: python -m ruff check src/ backend/ tests/
+
+      - name: Ruff format check
+        run: python -m ruff format --check src/ backend/ tests/
+
+      - name: Smoke tests
+        run: python -m pytest tests/ -v --tb=short -x
+
+  frontend:
+    name: Frontend Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: desktop/renderer/package-lock.json
+
+      - name: Install renderer dependencies
+        working-directory: desktop/renderer
+        run: npm ci --legacy-peer-deps
+
+      - name: TypeScript type check
+        working-directory: desktop/renderer
+        run: npx tsc --noEmit
+
+      - name: ESLint
+        working-directory: desktop/renderer
+        run: npx eslint src/ --max-warnings 50
+
+      - name: Production build
+        working-directory: desktop/renderer
+        run: npm run build

@@ -99,3 +99,11 @@ export interface KnowledgeEdge {
   type: string;
   weight: number;
 }
+
+export interface MuJoCoStats {
+  connected: boolean;
+  bodies: number;
+  joints: number;
+  fps: number;
+  robotModel: string;
+}

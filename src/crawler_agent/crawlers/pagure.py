@@ -1,11 +1,11 @@
 """Pagure crawler for Fedora/Red Hat projects."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import httpx
 import structlog
 
-from .base import BaseCrawler, CrawlerConfig, CrawlResult, ContentType
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class PagureCrawler(BaseCrawler):

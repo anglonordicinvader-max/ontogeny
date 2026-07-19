@@ -1,11 +1,11 @@
 """RubyGems crawler for Ruby packages."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import httpx
 import structlog
 
-from .base import BaseCrawler, CrawlerConfig, CrawlResult, ContentType
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class RubyGemsCrawler(BaseCrawler):
@@ -50,8 +50,14 @@ class RubyGemsCrawler(BaseCrawler):
                         "documentation_uri": data.get("documentation_uri"),
                         "licenses": data.get("licenses", []),
                         "dependencies": {
-                            "runtime": [d["name"] for d in data.get("dependencies", {}).get("runtime", [])[:10]],
-                            "development": [d["name"] for d in data.get("dependencies", {}).get("development", [])[:5]],
+                            "runtime": [
+                                d["name"]
+                                for d in data.get("dependencies", {}).get("runtime", [])[:10]
+                            ],
+                            "development": [
+                                d["name"]
+                                for d in data.get("dependencies", {}).get("development", [])[:5]
+                            ],
                         },
                         "downloads": data.get("downloads"),
                         "version_downloads": data.get("version_downloads"),

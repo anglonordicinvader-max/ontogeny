@@ -1,28 +1,35 @@
-"""Base crawler interface and common functionality."""
+"""Base acquisition engine interface and common functionality.
+
+Provides the foundational interface that all evidence acquisition adapters
+must implement. Handles rate limiting, network transport, and reliability.
+"""
 
 import asyncio
 import random
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
-from typing import Any, AsyncIterator
+from enum import Enum, StrEnum
+from typing import Any
 
 import httpx
 import structlog
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from ..utils.rate_limiter import TokenBucket, SlidingWindowRateLimiter
-from ..utils.proxy import ProxyPool, ProxyAwareClient, Proxy
+from ..utils.proxy import Proxy, ProxyAwareClient, ProxyPool
+from ..utils.rate_limiter import SlidingWindowRateLimiter, TokenBucket
+
 
 # Lazy import to avoid circular dependency
 def _get_reliability():
-    from ..cognitive.reliability import get_reliability_manager, RetryConfig
+    from ..cognitive.reliability import RetryConfig, get_reliability_manager
+
     return get_reliability_manager, RetryConfig
 
 
-class ContentType(str, Enum):
+class ContentType(StrEnum):
     CODE = "code"
     DOCUMENTATION = "documentation"
     REPOSITORY = "repository"
@@ -36,6 +43,7 @@ class ContentType(str, Enum):
 
 class CrawlResult(BaseModel):
     """Result from a crawl operation."""
+
     url: str
     content_type: ContentType
     title: str = ""
@@ -45,13 +53,13 @@ class CrawlResult(BaseModel):
     crawled_at: datetime = Field(default_factory=datetime.utcnow)
     checksum: str = ""
 
-    class Config:
-        json_encoders = {datetime: lambda v: v.isoformat()}
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
 
 
 @dataclass
 class CrawlerConfig:
     """Configuration for a crawler."""
+
     requests_per_second: float = 10.0
     burst_size: int = 50
     max_retries: int = 3
@@ -64,7 +72,11 @@ class CrawlerConfig:
 
 
 class BaseCrawler(ABC):
-    """Abstract base crawler class."""
+    """Abstract base acquisition engine.
+
+    All evidence acquisition adapters inherit from this class and implement
+    the crawl() and discover_urls() methods.
+    """
 
     def __init__(
         self,
@@ -95,12 +107,12 @@ class BaseCrawler(ABC):
             retries=self.config.max_retries,
         )
         await self._setup()
-        self.logger.info("crawler_initialized", proxy_enabled=bool(self.proxy_pool))
+        self.logger.info("acquisition_engine_initialized", proxy_enabled=bool(self.proxy_pool))
 
     async def cleanup(self) -> None:
         """Cleanup crawler resources."""
         await self._cleanup()
-        self.logger.info("crawler_cleanup")
+        self.logger.info("acquisition_engine_cleanup")
 
     @abstractmethod
     async def _setup(self) -> None:
@@ -142,7 +154,11 @@ class BaseCrawler(ABC):
             base_delay=1.0,
             max_delay=30.0,
             jitter=True,
-            retryable_exceptions=(httpx.HTTPStatusError, httpx.ConnectError, httpx.TimeoutException),
+            retryable_exceptions=(
+                httpx.HTTPStatusError,
+                httpx.ConnectError,
+                httpx.TimeoutException,
+            ),
         )
 
         async def _do_fetch():
@@ -156,7 +172,9 @@ class BaseCrawler(ABC):
         )
         return response
 
-    async def _fetch_with_proxy(self, url: str, proxy: Proxy | None = None, **kwargs) -> httpx.Response:
+    async def _fetch_with_proxy(
+        self, url: str, proxy: Proxy | None = None, **kwargs
+    ) -> httpx.Response:
         """Fetch URL with specific proxy."""
         await self.rate_limiter.wait_and_acquire()
 

@@ -59,7 +59,7 @@ class LLMProcessor:
                 {
                     "role": "user",
                     "content": f"""Extract metadata from this {content_type}:
-                    
+
 {content[:8000]}
 
 Return JSON with: title, description, topics (list), key_entities (list), sentiment (positive/negative/neutral),
@@ -71,6 +71,7 @@ quality_score (1-10), relevance_score (1-10).""",
         )
 
         import json
+
         return json.loads(response.choices[0].message.content or "{}")
 
     async def generate_embedding_text(
@@ -139,7 +140,7 @@ Return a 200-500 word summary that captures the key information for semantic sea
                 {
                     "role": "user",
                     "content": f"""Context from crawled data:
-                    
+
 {context}
 
 Question: {query}""",
@@ -164,13 +165,15 @@ Question: {query}""",
                 summary = await self.summarize(result.content, max_tokens=300)
                 embedding_text = await self.generate_embedding_text(result)
 
-                processed.append({
-                    "url": result.url,
-                    "title": result.title,
-                    "summary": summary,
-                    "metadata": metadata,
-                    "embedding_text": embedding_text,
-                })
+                processed.append(
+                    {
+                        "url": result.url,
+                        "title": result.title,
+                        "summary": summary,
+                        "metadata": metadata,
+                        "embedding_text": embedding_text,
+                    }
+                )
             except Exception as e:
                 self.logger.error("processing_failed", url=result.url, error=str(e))
                 continue

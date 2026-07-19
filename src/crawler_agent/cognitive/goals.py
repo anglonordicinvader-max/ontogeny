@@ -2,22 +2,23 @@
 
 import json
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
-from typing import Any, Callable
+from enum import Enum, StrEnum
+from typing import Any
 
 import structlog
 
 
-class GoalPriority(str, Enum):
+class GoalPriority(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
 
 
-class GoalStatus(str, Enum):
+class GoalStatus(StrEnum):
     PENDING = "pending"
     ACTIVE = "active"
     COMPLETED = "completed"
@@ -26,15 +27,16 @@ class GoalStatus(str, Enum):
     BLOCKED = "blocked"
 
 
-class GoalSource(str, Enum):
-    INTRINSIC = "intrinsic"    # Self-generated (curiosity, mastery)
-    EXTRINSIC = "extrinsic"    # User-provided
-    META = "meta"              # Self-improvement goals
+class GoalSource(StrEnum):
+    INTRINSIC = "intrinsic"  # Self-generated (curiosity, mastery)
+    EXTRINSIC = "extrinsic"  # User-provided
+    META = "meta"  # Self-improvement goals
 
 
 @dataclass
 class Goal:
     """A goal to pursue."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     description: str = ""
     source: GoalSource = GoalSource.EXTRINSIC
@@ -83,6 +85,7 @@ class Goal:
 @dataclass
 class IntrinsicDrive:
     """Intrinsic motivation drive."""
+
     name: str
     description: str
     satisfaction: float = 0.0  # 0-1, current satisfaction level
@@ -214,8 +217,7 @@ class GoalManager:
     async def get_active_goals(self) -> list[Goal]:
         """Get all active goals sorted by priority."""
         active = [
-            g for g in self.goals.values()
-            if g.status in (GoalStatus.PENDING, GoalStatus.ACTIVE)
+            g for g in self.goals.values() if g.status in (GoalStatus.PENDING, GoalStatus.ACTIVE)
         ]
 
         priority_order = {
@@ -261,10 +263,10 @@ class GoalManager:
         }
 
         score = (
-            priority_weights[goal.priority] * 0.4 +
-            goal.importance * 0.3 +
-            goal.confidence * 0.2 +
-            source_weights[goal.source] * 0.1
+            priority_weights[goal.priority] * 0.4
+            + goal.importance * 0.3
+            + goal.confidence * 0.2
+            + source_weights[goal.source] * 0.1
         )
 
         # Boost if goal has been waiting
@@ -290,13 +292,15 @@ class GoalManager:
             goal.status = GoalStatus.ACTIVE
             goal.started_at = datetime.utcnow()
 
-        self.goal_history.append({
-            "goal_id": goal_id,
-            "event": "progress_update",
-            "progress": progress,
-            "notes": notes,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        self.goal_history.append(
+            {
+                "goal_id": goal_id,
+                "event": "progress_update",
+                "progress": progress,
+                "notes": notes,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
 
         if progress >= 1.0:
             await self.complete_goal(goal_id)
@@ -332,12 +336,14 @@ class GoalManager:
         goal.status = GoalStatus.FAILED
         goal.metadata["failure_reason"] = reason
 
-        self.goal_history.append({
-            "goal_id": goal_id,
-            "event": "failed",
-            "reason": reason,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        self.goal_history.append(
+            {
+                "goal_id": goal_id,
+                "event": "failed",
+                "reason": reason,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
 
         self.logger.info("goal_failed", goal_id=goal_id, reason=reason)
 

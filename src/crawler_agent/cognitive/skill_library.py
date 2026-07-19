@@ -2,7 +2,7 @@
 
 import json
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +12,7 @@ from .backend import CognitiveBackend
 @dataclass
 class Skill:
     """A verified, reusable skill."""
+
     id: str
     name: str
     description: str
@@ -104,7 +105,9 @@ class SkillLibrary:
             results.append(skill)
 
         # Sort by relevance (usage + verification)
-        results.sort(key=lambda s: s.verification_score * 0.7 + min(s.usage_count, 100) * 0.003, reverse=True)
+        results.sort(
+            key=lambda s: s.verification_score * 0.7 + min(s.usage_count, 100) * 0.003, reverse=True
+        )
         return results[:limit]
 
     def get_skill_for_task(
@@ -143,22 +146,13 @@ class SkillLibrary:
         if not candidates:
             return None
 
-        skill_summaries = "\n".join(
-            f"- {s.id}: {s.name} - {s.description} (tags: {', '.join(s.tags)})"
-            for s in candidates
+        "\n".join(
+            f"- {s.id}: {s.name} - {s.description} (tags: {', '.join(s.tags)})" for s in candidates
         )
-
-        prompt = f"""Select the best skill for this task.
-
-Task: {task}
-
-Available skills:
-{skill_summaries}
-
-Return ONLY the skill ID that best matches, or "NONE" if no skill is relevant."""
 
         # Use backend to select
         import asyncio
+
         # This would be async in real usage - for now return best match by verification
         best = max(candidates, key=lambda s: s.verification_score)
         return best

@@ -1,12 +1,12 @@
 """Savannah crawler for GNU projects."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import httpx
 import structlog
 from bs4 import BeautifulSoup
 
-from .base import BaseCrawler, CrawlerConfig, CrawlResult, ContentType
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class SavannahCrawler(BaseCrawler):

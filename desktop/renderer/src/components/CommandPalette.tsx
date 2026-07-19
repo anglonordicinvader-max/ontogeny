@@ -32,7 +32,7 @@ export function CommandPalette({ open, onClose, onCommand, onNavigate }: Command
     { id: 'nav-memory', label: 'Go to Memory', category: 'Navigation', icon: <Database className="w-4 h-4" />, action: () => { onNavigate('memory'); onClose(); }, keywords: ['memory', 'episodic', 'semantic', 'nav'] },
     { id: 'nav-goals', label: 'Go to Goals', category: 'Navigation', icon: <Target className="w-4 h-4" />, action: () => { onNavigate('goals'); onClose(); }, keywords: ['goals', 'targets', 'objectives', 'nav'] },
     { id: 'nav-knowledge', label: 'Go to Knowledge Graph', category: 'Navigation', icon: <GitBranch className="w-4 h-4" />, action: () => { onNavigate('knowledge'); onClose(); }, keywords: ['knowledge', 'graph', 'concepts', 'nav'] },
-    { id: 'nav-crawlers', label: 'Go to Crawlers', category: 'Navigation', icon: <Workflow className="w-4 h-4" />, action: () => { onNavigate('crawlers'); onClose(); }, keywords: ['crawlers', 'scraping', 'sources', 'nav'] },
+    { id: 'nav-crawlers', label: 'Go to Knowledge Acquisition', category: 'Navigation', icon: <Workflow className="w-4 h-4" />, action: () => { onNavigate('crawlers'); onClose(); }, keywords: ['knowledge', 'acquisition', 'sources', 'evidence', 'nav'] },
     { id: 'nav-maldoror', label: 'Go to Maldoror', category: 'Navigation', icon: <Cpu className="w-4 h-4" />, action: () => { onNavigate('maldoror'); onClose(); }, keywords: ['maldoror', 'model', 'training', 'nav'] },
     { id: 'nav-production', label: 'Go to Production', category: 'Navigation', icon: <Monitor className="w-4 h-4" />, action: () => { onNavigate('production'); onClose(); }, keywords: ['production', 'monitoring', 'health', 'nav'] },
     { id: 'nav-blender', label: 'Go to Blender Sandbox', category: 'Navigation', icon: <Eye className="w-4 h-4" />, action: () => { onNavigate('blender'); onClose(); }, keywords: ['blender', 'sandbox', '3d', 'simulation', 'nav'] },
@@ -120,7 +120,9 @@ export function CommandPalette({ open, onClose, onCommand, onNavigate }: Command
                 aria-selected={i === selectedIndex}
                 className={cn(
                   'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
-                  i === selectedIndex ? 'bg-surface-3 text-text-primary' : 'text-text-secondary hover:bg-surface-2'
+                  i === selectedIndex
+                    ? 'bg-surface-3 text-text-primary border-l-2 border-accent shadow-[inset_4px_0_12px_-4px_var(--bloom-color)]'
+                    : 'text-text-secondary hover:bg-surface-2 border-l-2 border-transparent'
                 )}
               >
                 <span className="text-text-tertiary">{cmd.icon}</span>

@@ -1,10 +1,11 @@
 """Intelligent crawl scheduling with adaptive proxy management."""
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from enum import Enum
-from typing import Any, Callable
+from enum import Enum, StrEnum
+from typing import Any
 
 import structlog
 
@@ -12,16 +13,17 @@ from ..utils.proxy import ProxyPool
 from ..utils.proxy_fetcher import RotatingProxyManager
 
 
-class CrawlIntensity(str, Enum):
-    LIGHT = "light"        # 1-5 requests/min, focused sources
+class CrawlIntensity(StrEnum):
+    LIGHT = "light"  # 1-5 requests/min, focused sources
     MODERATE = "moderate"  # 5-20 requests/min, balanced
-    HEAVY = "heavy"        # 20-100 requests/min, broad coverage
-    BURST = "burst"        # Temporary high intensity
+    HEAVY = "heavy"  # 20-100 requests/min, broad coverage
+    BURST = "burst"  # Temporary high intensity
 
 
 @dataclass
 class CrawlSchedule:
     """Schedule for crawl operations."""
+
     intensity: CrawlIntensity
     requests_per_minute: float
     min_delay: float
@@ -36,13 +38,16 @@ class CrawlSchedule:
 @dataclass
 class CrawlBudget:
     """Budget for crawl resources."""
+
     max_requests_today: int = 1000
     max_bandwidth_mb: float = 100.0
     max_proxy_usage: int = 100
     requests_today: int = 0
     bandwidth_used_mb: float = 0.0
     proxy_rotations: int = 0
-    reset_time: datetime = field(default_factory=lambda: datetime.utcnow().replace(hour=0, minute=0))
+    reset_time: datetime = field(
+        default_factory=lambda: datetime.utcnow().replace(hour=0, minute=0)
+    )
 
     @property
     def requests_remaining(self) -> int:
@@ -183,6 +188,7 @@ class AdaptiveScheduler:
     def get_delay(self) -> float:
         """Get appropriate delay between requests."""
         import random
+
         return random.uniform(self.schedule.min_delay, self.schedule.max_delay)
 
     def can_crawl(self) -> bool:
@@ -197,7 +203,7 @@ class AdaptiveScheduler:
             self._success_rate = (self._success_rate * 0.9) + 0.1
             self._recent_errors = max(0, self._recent_errors - 1)
         else:
-            self._success_rate = (self._success_rate * 0.9)
+            self._success_rate = self._success_rate * 0.9
             self._recent_errors += 1
 
         if response_time > 0:
@@ -253,12 +259,14 @@ class CrawlOrchestrator:
     ) -> None:
         """Queue a source for crawling."""
         import heapq
+
         heapq.heappush(self._source_queue, (-priority, url, metadata or {}))
         self.logger.debug("source_queued", url=url, priority=priority)
 
     async def get_next_source(self) -> tuple[str, dict] | None:
         """Get next source to crawl."""
         import heapq
+
         while self._source_queue:
             priority, url, metadata = heapq.heappop(self._source_queue)
             if url not in self._active_sources:

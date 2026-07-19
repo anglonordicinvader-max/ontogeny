@@ -16,6 +16,7 @@ import structlog
 @dataclass
 class AttentionFocus:
     """Current attention focus."""
+
     topic: str = ""
     focus_level: float = 0.5  # 0-1, how focused
     started_at: datetime = field(default_factory=datetime.utcnow)
@@ -30,6 +31,7 @@ class AttentionFocus:
 @dataclass
 class AttentionTarget:
     """Something that could attract attention."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     content: str = ""
     relevance: float = 0.5  # How relevant to current goals
@@ -41,10 +43,10 @@ class AttentionTarget:
     def attention_score(self) -> float:
         """Calculate overall attention score."""
         return (
-            self.relevance * 0.4 +
-            self.novelty * 0.3 +
-            self.urgency * 0.2 +
-            abs(self.emotional_charge) * 0.1
+            self.relevance * 0.4
+            + self.novelty * 0.3
+            + self.urgency * 0.2
+            + abs(self.emotional_charge) * 0.1
         )
 
 
@@ -153,9 +155,13 @@ class AttentionMechanism:
         # Check against current goals
         goals = context.get("goals", [])
         for goal in goals:
-            if isinstance(goal, str) and any(word in content.lower() for word in goal.lower().split()):
+            if isinstance(goal, str) and any(
+                word in content.lower() for word in goal.lower().split()
+            ):
                 relevance += 0.2
-            elif isinstance(goal, dict) and any(word in content.lower() for word in str(goal).lower().split()):
+            elif isinstance(goal, dict) and any(
+                word in content.lower() for word in str(goal).lower().split()
+            ):
                 relevance += 0.2
 
         # Check against current focus
@@ -181,7 +187,14 @@ class AttentionMechanism:
 
     def _calculate_emotional_charge(self, content: str) -> float:
         """Calculate emotional charge of content."""
-        positive_words = {"success", "breakthrough", "discovery", "innovation", "excellent", "amazing"}
+        positive_words = {
+            "success",
+            "breakthrough",
+            "discovery",
+            "innovation",
+            "excellent",
+            "amazing",
+        }
         negative_words = {"failure", "error", "problem", "issue", "critical", "warning"}
 
         words = set(content.lower().split())
@@ -202,9 +215,10 @@ class AttentionMechanism:
             "total_switches": self.switch_count,
             "total_suppressed": self.total_suppressed,
             "focus_distribution": {
-                topic: time / max(1, total_time)
-                for topic, time in self.focus_duration.items()
-            } if self.focus_duration else {},
+                topic: time / max(1, total_time) for topic, time in self.focus_duration.items()
+            }
+            if self.focus_duration
+            else {},
         }
 
     def to_context(self) -> str:
@@ -214,9 +228,11 @@ class AttentionMechanism:
         lines.append(f"  Current Focus: {stats['current_focus'] or 'None'}")
         lines.append(f"  Total Switches: {stats['total_switches']}")
         lines.append(f"  Items Suppressed: {stats['total_suppressed']}")
-        if stats['focus_distribution']:
+        if stats["focus_distribution"]:
             lines.append("  Focus Distribution:")
-            for topic, pct in sorted(stats['focus_distribution'].items(), key=lambda x: x[1], reverse=True)[:3]:
+            for topic, pct in sorted(
+                stats["focus_distribution"].items(), key=lambda x: x[1], reverse=True
+            )[:3]:
                 lines.append(f"    - {topic}: {pct:.0%}")
         return "\n".join(lines)
 
@@ -225,6 +241,7 @@ class AttentionMechanism:
     @dataclass
     class ComputeBudget:
         """Computational resource budget for a task."""
+
         total_compute: float = 1.0  # Normalized total compute
         allocated: dict[str, float] = field(default_factory=dict)
         remaining: float = 1.0
@@ -240,6 +257,7 @@ class AttentionMechanism:
     @dataclass
     class ComputePriority:
         """Priority for compute allocation."""
+
         component: str = ""
         relevance: float = 0.5
         uncertainty: float = 0.5
@@ -250,10 +268,10 @@ class AttentionMechanism:
         def priority_score(self) -> float:
             """Priority = relevance × uncertainty × urgency - fatigue."""
             return (
-                self.relevance * 0.3 +
-                self.uncertainty * 0.3 +
-                self.urgency * 0.2 +
-                (1 - self.fatigue_cost) * 0.2
+                self.relevance * 0.3
+                + self.uncertainty * 0.3
+                + self.urgency * 0.2
+                + (1 - self.fatigue_cost) * 0.2
             )
 
     async def allocate_compute(
@@ -424,8 +442,10 @@ class AttentionMechanism:
             "exploitation_allocation": exploitation_allocation,
             "compute_allocation": allocation,
             "recommendation": (
-                "Focus and explore" if uncertainty > 0.6 and should_focus else
-                "Focus and exploit" if should_focus else
-                "Suppress and maintain current focus"
+                "Focus and explore"
+                if uncertainty > 0.6 and should_focus
+                else "Focus and exploit"
+                if should_focus
+                else "Suppress and maintain current focus"
             ),
         }

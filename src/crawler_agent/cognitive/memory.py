@@ -2,23 +2,23 @@
 
 import json
 import uuid
-from datetime import datetime
 from dataclasses import dataclass, field
-from enum import Enum
+from datetime import datetime
+from enum import Enum, StrEnum
 from typing import Any
 
 import structlog
-from sqlalchemy import Column, String, Text, DateTime, JSON, Integer, Float, Boolean
+from sqlalchemy import JSON, Boolean, Column, DateTime, Float, Integer, String, Text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 
 
-class MemoryType(str, Enum):
-    EPISODIC = "episodic"      # What happened (events, experiences)
-    SEMANTIC = "semantic"      # What is known (facts, knowledge)
+class MemoryType(StrEnum):
+    EPISODIC = "episodic"  # What happened (events, experiences)
+    SEMANTIC = "semantic"  # What is known (facts, knowledge)
     PROCEDURAL = "procedural"  # How to do things (skills, procedures)
-    WORKING = "working"        # Current context (temporary)
-    IDENTITY = "identity"      # Who I am (values, goals, personality)
+    WORKING = "working"  # Current context (temporary)
+    IDENTITY = "identity"  # Who I am (values, goals, personality)
 
 
 class Base(DeclarativeBase):
@@ -27,6 +27,7 @@ class Base(DeclarativeBase):
 
 class MemoryRecord(Base):
     """Database model for memories."""
+
     __tablename__ = "memories"
 
     id = Column(String, primary_key=True)
@@ -47,6 +48,7 @@ class MemoryRecord(Base):
 @dataclass
 class Memory:
     """Memory entry."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     memory_type: MemoryType = MemoryType.WORKING
     content: str = ""
@@ -135,7 +137,7 @@ class EpisodicMemory:
     ) -> list[Memory]:
         """Recall episodic memories."""
         async with self.session_factory() as session:
-            from sqlalchemy import select, and_
+            from sqlalchemy import and_, select
 
             stmt = select(MemoryRecord).where(
                 and_(
@@ -180,13 +182,13 @@ class EpisodicMemory:
     async def decay(self, decay_rate: float = 0.01) -> int:
         """Apply memory decay to all unconsolidated memories."""
         async with self.session_factory() as session:
-            from sqlalchemy import update, and_
+            from sqlalchemy import and_, update
 
             result = await session.execute(
                 update(MemoryRecord)
                 .where(
                     and_(
-                        MemoryRecord.consolidated == False,
+                        not MemoryRecord.consolidated,
                         MemoryRecord.memory_type == MemoryType.EPISODIC.value,
                     )
                 )
@@ -236,11 +238,9 @@ class SemanticMemory:
     ) -> list[Memory]:
         """Query semantic memories."""
         async with self.session_factory() as session:
-            from sqlalchemy import select, and_
+            from sqlalchemy import and_, select
 
-            stmt = select(MemoryRecord).where(
-                MemoryRecord.memory_type == MemoryType.SEMANTIC.value
-            )
+            stmt = select(MemoryRecord).where(MemoryRecord.memory_type == MemoryType.SEMANTIC.value)
 
             if source:
                 stmt = stmt.where(MemoryRecord.metadata_["source"].astext == source)
@@ -298,7 +298,7 @@ class ProceduralMemory:
     async def get_skill(self, name: str) -> Memory | None:
         """Get a skill by name."""
         async with self.session_factory() as session:
-            from sqlalchemy import select, and_
+            from sqlalchemy import and_, select
 
             stmt = select(MemoryRecord).where(
                 and_(
@@ -409,7 +409,7 @@ class IdentityMemory:
     async def get_value(self, key: str) -> Any | None:
         """Get an identity value."""
         async with self.session_factory() as session:
-            from sqlalchemy import select, and_
+            from sqlalchemy import and_, select
 
             stmt = select(MemoryRecord).where(
                 and_(
@@ -429,9 +429,7 @@ class IdentityMemory:
         async with self.session_factory() as session:
             from sqlalchemy import select
 
-            stmt = select(MemoryRecord).where(
-                MemoryRecord.memory_type == MemoryType.IDENTITY.value
-            )
+            stmt = select(MemoryRecord).where(MemoryRecord.memory_type == MemoryType.IDENTITY.value)
             result = await session.execute(stmt)
 
             values = {}
@@ -447,7 +445,7 @@ class MemorySystem:
     """Unified multi-layer memory system."""
 
     def __init__(self, database_url: str):
-        from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+        from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
         self.engine = create_async_engine(database_url)
         self.session_factory = async_sessionmaker(self.engine, class_=AsyncSession)
@@ -546,7 +544,7 @@ class MemorySystem:
 
         # Truncate if too long
         if len(context) > max_tokens * 4:
-            context = context[:max_tokens * 4]
+            context = context[: max_tokens * 4]
 
         return context
 

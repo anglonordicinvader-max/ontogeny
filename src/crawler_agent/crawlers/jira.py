@@ -1,12 +1,12 @@
 """Jira crawler using REST API v2/v3."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 from datetime import datetime
 
 import httpx
 import structlog
 
-from .base import BaseCrawler, CrawlerConfig, CrawlResult, ContentType
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class JiraCrawler(BaseCrawler):
@@ -74,11 +74,13 @@ class JiraCrawler(BaseCrawler):
             # Extract comments
             comments = []
             for comment in fields.get("comment", {}).get("comments", []):
-                comments.append({
-                    "author": comment.get("author", {}).get("displayName", ""),
-                    "body": self._extract_adf_text(comment.get("body", {})),
-                    "created": comment.get("created"),
-                })
+                comments.append(
+                    {
+                        "author": comment.get("author", {}).get("displayName", ""),
+                        "body": self._extract_adf_text(comment.get("body", {})),
+                        "created": comment.get("created"),
+                    }
+                )
 
             yield CrawlResult(
                 url=f"{self.base_url}/browse/{issue_key}",
@@ -90,8 +92,12 @@ class JiraCrawler(BaseCrawler):
                     "status": fields.get("status", {}).get("name"),
                     "priority": fields.get("priority", {}).get("name"),
                     "issue_type": fields.get("issuetype", {}).get("name"),
-                    "assignee": fields.get("assignee", {}).get("displayName") if fields.get("assignee") else None,
-                    "reporter": fields.get("reporter", {}).get("displayName") if fields.get("reporter") else None,
+                    "assignee": fields.get("assignee", {}).get("displayName")
+                    if fields.get("assignee")
+                    else None,
+                    "reporter": fields.get("reporter", {}).get("displayName")
+                    if fields.get("reporter")
+                    else None,
                     "created": fields.get("created"),
                     "updated": fields.get("updated"),
                     "labels": fields.get("labels", []),
@@ -198,9 +204,7 @@ class JiraCrawler(BaseCrawler):
                     "key": project_key,
                     "lead": project.get("lead", {}).get("displayName"),
                     "created": project.get("created"),
-                    "issue_types": [
-                        it["name"] for it in project.get("issueTypes", [])
-                    ],
+                    "issue_types": [it["name"] for it in project.get("issueTypes", [])],
                     "roles": list(project.get("roles", {}).keys()),
                 },
                 source="jira",

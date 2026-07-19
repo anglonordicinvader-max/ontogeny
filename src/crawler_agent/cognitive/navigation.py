@@ -26,7 +26,7 @@ class Waypoint:
 
 @dataclass
 class Path:
-    waypoints: List[List[float]]
+    waypoints: list[list[float]]
     cost: float = 0.0
     algorithm: str = ""
     valid: bool = True
@@ -35,15 +35,24 @@ class Path:
 class ObstacleAvoidance:
     """Obstacle avoidance using potential field method."""
 
-    def __init__(self, safety_distance: float = 1.0, repulsive_gain: float = 10.0,
-                 attractive_gain: float = 1.0):
+    def __init__(
+        self,
+        safety_distance: float = 1.0,
+        repulsive_gain: float = 10.0,
+        attractive_gain: float = 1.0,
+    ):
         self.safety_distance = safety_distance
         self.repulsive_gain = repulsive_gain
         self.attractive_gain = attractive_gain
         self.logger = structlog.get_logger(component="obstacle_avoidance")
 
-    def compute_force(self, robot_pos: List[float], goal_pos: List[float],
-                      obstacles: Dict[str, List[float]], obstacle_radii: Dict[str, float] = None) -> List[float]:
+    def compute_force(
+        self,
+        robot_pos: list[float],
+        goal_pos: list[float],
+        obstacles: dict[str, list[float]],
+        obstacle_radii: dict[str, float] = None,
+    ) -> list[float]:
         """Compute avoidance force vector."""
         if obstacle_radii is None:
             obstacle_radii = {}
@@ -58,7 +67,7 @@ class ObstacleAvoidance:
 
         return total
 
-    def _attractive_force(self, robot_pos: List[float], goal_pos: List[float]) -> List[float]:
+    def _attractive_force(self, robot_pos: list[float], goal_pos: list[float]) -> list[float]:
         """Compute attractive force toward goal."""
         diff = [goal_pos[i] - robot_pos[i] for i in range(3)]
         dist = math.sqrt(sum(d**2 for d in diff))
@@ -66,8 +75,12 @@ class ObstacleAvoidance:
             diff = [d / dist for d in diff]
         return [d * self.attractive_gain for d in diff]
 
-    def _repulsive_force(self, robot_pos: List[float], obstacles: Dict[str, List[float]],
-                         obstacle_radii: Dict[str, float]) -> List[float]:
+    def _repulsive_force(
+        self,
+        robot_pos: list[float],
+        obstacles: dict[str, list[float]],
+        obstacle_radii: dict[str, float],
+    ) -> list[float]:
         """Compute repulsive force from obstacles."""
         force = [0.0, 0.0, 0.0]
         for obj_id, obj_pos in obstacles.items():
@@ -87,8 +100,13 @@ class ObstacleAvoidance:
 
         return force
 
-    def avoid(self, robot_pos: List[float], goal_pos: List[float],
-              obstacles: Dict[str, List[float]], dt: float = 0.1) -> List[float]:
+    def avoid(
+        self,
+        robot_pos: list[float],
+        goal_pos: list[float],
+        obstacles: dict[str, list[float]],
+        dt: float = 0.1,
+    ) -> list[float]:
         """Compute new position with obstacle avoidance."""
         force = self.compute_force(robot_pos, goal_pos, obstacles)
         new_pos = [robot_pos[i] + force[i] * dt for i in range(3)]
@@ -98,13 +116,18 @@ class ObstacleAvoidance:
 class PathPlanner:
     """Path planning using A*, RRT, and Dijkstra."""
 
-    def __init__(self, grid_size: float = 0.5, world_bounds: Tuple[float, float] = (-50, 50)):
+    def __init__(self, grid_size: float = 0.5, world_bounds: tuple[float, float] = (-50, 50)):
         self.grid_size = grid_size
         self.world_bounds = world_bounds
         self.logger = structlog.get_logger(component="path_planner")
 
-    def a_star(self, start: List[float], goal: List[float],
-               obstacles: Dict[str, List[float]], obstacle_radii: Dict[str, float] = None) -> Path:
+    def a_star(
+        self,
+        start: list[float],
+        goal: list[float],
+        obstacles: dict[str, list[float]],
+        obstacle_radii: dict[str, float] = None,
+    ) -> Path:
         """A* path planning on grid."""
         if obstacle_radii is None:
             obstacle_radii = {}
@@ -122,7 +145,9 @@ class PathPlanner:
 
             if current == goal_grid:
                 path = self._reconstruct_path(came_from, current)
-                return Path(waypoints=[list(p) for p in path], cost=g_score[current], algorithm="A*")
+                return Path(
+                    waypoints=[list(p) for p in path], cost=g_score[current], algorithm="A*"
+                )
 
             for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)]:
                 neighbor = (current[0] + dx, current[1] + dy)
@@ -141,11 +166,17 @@ class PathPlanner:
                     f_score[neighbor] = tentative_g + self._heuristic(neighbor, goal_grid)
                     heapq.heappush(open_set, (f_score[neighbor], neighbor))
 
-        return Path(waypoints=[], cost=float('inf'), algorithm="A*", valid=False)
+        return Path(waypoints=[], cost=float("inf"), algorithm="A*", valid=False)
 
-    def rrt(self, start: List[float], goal: List[float],
-            obstacles: Dict[str, List[float]], obstacle_radii: Dict[str, float] = None,
-            max_iterations: int = 1000, step_size: float = 1.0) -> Path:
+    def rrt(
+        self,
+        start: list[float],
+        goal: list[float],
+        obstacles: dict[str, list[float]],
+        obstacle_radii: dict[str, float] = None,
+        max_iterations: int = 1000,
+        step_size: float = 1.0,
+    ) -> Path:
         """Rapidly-exploring Random Tree path planning."""
         if obstacle_radii is None:
             obstacle_radii = {}
@@ -162,7 +193,9 @@ class PathPlanner:
                     random.uniform(self.world_bounds[0], self.world_bounds[1]),
                 )
 
-            nearest = min(tree.keys(), key=lambda n: math.sqrt(sum((n[i] - sample[i])**2 for i in range(2))))
+            nearest = min(
+                tree.keys(), key=lambda n: math.sqrt(sum((n[i] - sample[i]) ** 2 for i in range(2)))
+            )
 
             direction = [sample[i] - nearest[i] for i in range(2)]
             dist = math.sqrt(sum(d**2 for d in direction))
@@ -175,7 +208,7 @@ class PathPlanner:
                 tree[new_node] = nearest
                 tree_costs[new_node] = tree_costs[nearest] + step_size
 
-                if math.sqrt(sum((new_node[i] - goal[i])**2 for i in range(2))) < step_size:
+                if math.sqrt(sum((new_node[i] - goal[i]) ** 2 for i in range(2))) < step_size:
                     path = []
                     node = new_node
                     while node is not None:
@@ -184,38 +217,47 @@ class PathPlanner:
                     path.reverse()
                     return Path(waypoints=path, cost=tree_costs[new_node], algorithm="RRT")
 
-        return Path(waypoints=[], cost=float('inf'), algorithm="RRT", valid=False)
+        return Path(waypoints=[], cost=float("inf"), algorithm="RRT", valid=False)
 
-    def dijkstra(self, start: List[float], goal: List[float],
-                 obstacles: Dict[str, List[float]], obstacle_radii: Dict[str, float] = None) -> Path:
+    def dijkstra(
+        self,
+        start: list[float],
+        goal: list[float],
+        obstacles: dict[str, list[float]],
+        obstacle_radii: dict[str, float] = None,
+    ) -> Path:
         """Dijkstra shortest path."""
         return self.a_star(start, goal, obstacles, obstacle_radii)
 
-    def _to_grid(self, pos: List[float]) -> Tuple[int, int]:
+    def _to_grid(self, pos: list[float]) -> tuple[int, int]:
         return (int(pos[0] / self.grid_size), int(pos[1] / self.grid_size))
 
-    def _from_grid(self, grid: Tuple[int, int]) -> List[float]:
+    def _from_grid(self, grid: tuple[int, int]) -> list[float]:
         return [grid[0] * self.grid_size, grid[1] * self.grid_size, 0]
 
-    def _heuristic(self, a: Tuple[int, int], b: Tuple[int, int]) -> float:
-        return math.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2) * self.grid_size
+    def _heuristic(self, a: tuple[int, int], b: tuple[int, int]) -> float:
+        return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) * self.grid_size
 
-    def _is_valid_node(self, node: Tuple[int, int]) -> bool:
+    def _is_valid_node(self, node: tuple[int, int]) -> bool:
         bounds_min = int(self.world_bounds[0] / self.grid_size)
         bounds_max = int(self.world_bounds[1] / self.grid_size)
         return bounds_min <= node[0] <= bounds_max and bounds_min <= node[1] <= bounds_max
 
-    def _is_collision(self, grid_node: Tuple[int, int], obstacles: Dict[str, List[float]],
-                      obstacle_radii: Dict[str, float]) -> bool:
+    def _is_collision(
+        self,
+        grid_node: tuple[int, int],
+        obstacles: dict[str, list[float]],
+        obstacle_radii: dict[str, float],
+    ) -> bool:
         pos = self._from_grid(grid_node)
         for obj_id, obj_pos in obstacles.items():
             radius = obstacle_radii.get(obj_id, 0.5)
-            dist = math.sqrt(sum((pos[i] - obj_pos[i])**2 for i in range(2)))
+            dist = math.sqrt(sum((pos[i] - obj_pos[i]) ** 2 for i in range(2)))
             if dist < radius + self.grid_size:
                 return True
         return False
 
-    def _reconstruct_path(self, came_from: Dict, current: Tuple) -> List[List[float]]:
+    def _reconstruct_path(self, came_from: dict, current: tuple) -> list[list[float]]:
         path = [self._from_grid(current)]
         while current in came_from:
             current = came_from[current]
@@ -227,15 +269,16 @@ class PathPlanner:
 class SLAMSimulation:
     """SLAM simulation with occupancy grid mapping."""
 
-    def __init__(self, grid_resolution: float = 0.5, map_size: Tuple[int, int] = (100, 100)):
+    def __init__(self, grid_resolution: float = 0.5, map_size: tuple[int, int] = (100, 100)):
         self.grid_resolution = grid_resolution
         self.map_size = map_size
         self.occupancy_grid = [[0.5 for _ in range(map_size[1])] for _ in range(map_size[0])]
-        self.robot_path: List[List[float]] = []
+        self.robot_path: list[list[float]] = []
         self.logger = structlog.get_logger(component="slam")
 
-    def update(self, robot_pos: List[float], sensor_readings: List[List[float]],
-               sensor_range: float = 10.0) -> Dict:
+    def update(
+        self, robot_pos: list[float], sensor_readings: list[list[float]], sensor_range: float = 10.0
+    ) -> dict:
         """Update occupancy grid with new sensor readings."""
         self.robot_path.append(list(robot_pos))
 
@@ -245,23 +288,27 @@ class SLAMSimulation:
         for reading in sensor_readings:
             hit_grid = self._to_grid(reading)
             if 0 <= hit_grid[0] < self.map_size[0] and 0 <= hit_grid[1] < self.map_size[1]:
-                self.occupancy_grid[hit_grid[0]][hit_grid[1]] = min(1.0,
-                    self.occupancy_grid[hit_grid[0]][hit_grid[1]] + 0.3)
+                self.occupancy_grid[hit_grid[0]][hit_grid[1]] = min(
+                    1.0, self.occupancy_grid[hit_grid[0]][hit_grid[1]] + 0.3
+                )
                 cells_updated += 1
 
             ray_cells = self._bresenham(robot_grid, hit_grid)
             for cell in ray_cells:
                 if 0 <= cell[0] < self.map_size[0] and 0 <= cell[1] < self.map_size[1]:
-                    self.occupancy_grid[cell[0]][cell[1]] = max(0.0,
-                        self.occupancy_grid[cell[0]][cell[1]] - 0.1)
+                    self.occupancy_grid[cell[0]][cell[1]] = max(
+                        0.0, self.occupancy_grid[cell[0]][cell[1]] - 0.1
+                    )
 
         return {"cells_updated": cells_updated, "robot_pos": robot_pos}
 
-    def _to_grid(self, pos: List[float]) -> Tuple[int, int]:
-        return (int(pos[0] / self.grid_resolution) + self.map_size[0] // 2,
-                int(pos[1] / self.grid_resolution) + self.map_size[1] // 2)
+    def _to_grid(self, pos: list[float]) -> tuple[int, int]:
+        return (
+            int(pos[0] / self.grid_resolution) + self.map_size[0] // 2,
+            int(pos[1] / self.grid_resolution) + self.map_size[1] // 2,
+        )
 
-    def _bresenham(self, start: Tuple[int, int], end: Tuple[int, int]) -> List[Tuple[int, int]]:
+    def _bresenham(self, start: tuple[int, int], end: tuple[int, int]) -> list[tuple[int, int]]:
         cells = []
         x0, y0 = start
         x1, y1 = end
@@ -284,10 +331,10 @@ class SLAMSimulation:
                 y0 += sy
         return cells
 
-    def get_map(self) -> List[List[float]]:
+    def get_map(self) -> list[list[float]]:
         return self.occupancy_grid
 
-    def get_path(self) -> List[List[float]]:
+    def get_path(self) -> list[list[float]]:
         return self.robot_path
 
     def to_context(self) -> str:
@@ -303,7 +350,7 @@ class WaypointFollower:
         self.current_index = 0
         self.logger = structlog.get_logger(component="waypoint_follower")
 
-    def update(self, robot_pos: List[float], waypoints: List[List[float]]) -> Dict:
+    def update(self, robot_pos: list[float], waypoints: list[list[float]]) -> dict:
         """Update waypoint following."""
         if not waypoints or self.current_index >= len(waypoints):
             return {"reached_goal": True, "command": [0, 0, 0]}
@@ -315,15 +362,22 @@ class WaypointFollower:
 
         if dist < self.position_tolerance:
             self.current_index += 1
-            return {"reached_waypoint": True, "waypoint_index": self.current_index - 1,
-                    "command": [0, 0, 0]}
+            return {
+                "reached_waypoint": True,
+                "waypoint_index": self.current_index - 1,
+                "command": [0, 0, 0],
+            }
 
         speed = min(1.0, dist / self.lookahead)
         cmd_x = (dx / dist) * speed if dist > 0 else 0
         cmd_y = (dy / dist) * speed if dist > 0 else 0
 
-        return {"reached_goal": False, "command": [cmd_x, cmd_y, 0],
-                "distance_to_waypoint": dist, "waypoint_index": self.current_index}
+        return {
+            "reached_goal": False,
+            "command": [cmd_x, cmd_y, 0],
+            "distance_to_waypoint": dist,
+            "waypoint_index": self.current_index,
+        }
 
     def reset(self):
         self.current_index = 0

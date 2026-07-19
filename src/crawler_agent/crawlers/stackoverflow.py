@@ -1,12 +1,12 @@
 """Stack Overflow crawler using SE API."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 from datetime import datetime
 
 import httpx
 import structlog
 
-from .base import BaseCrawler, CrawlerConfig, CrawlResult, ContentType
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class StackOverflowCrawler(BaseCrawler):
@@ -79,7 +79,9 @@ class StackOverflowCrawler(BaseCrawler):
                         "is_answered": q.get("is_answered", False),
                         "accepted_answer_id": q.get("accepted_answer_id"),
                         "created_at": datetime.fromtimestamp(q["creation_date"]).isoformat(),
-                        "last_activity": datetime.fromtimestamp(q["last_activity_date"]).isoformat(),
+                        "last_activity": datetime.fromtimestamp(
+                            q["last_activity_date"]
+                        ).isoformat(),
                     },
                     source="stackoverflow",
                 )

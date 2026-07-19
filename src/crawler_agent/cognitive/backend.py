@@ -20,14 +20,26 @@ def extract_json(text: str) -> dict:
     text = text.strip()
     try:
         result = json.loads(text)
-        return result if isinstance(result, dict) else {"items": result} if isinstance(result, list) else {}
+        return (
+            result
+            if isinstance(result, dict)
+            else {"items": result}
+            if isinstance(result, list)
+            else {}
+        )
     except (json.JSONDecodeError, ValueError):
         pass
     match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
     if match:
         try:
             result = json.loads(match.group(1).strip())
-            return result if isinstance(result, dict) else {"items": result} if isinstance(result, list) else {}
+            return (
+                result
+                if isinstance(result, dict)
+                else {"items": result}
+                if isinstance(result, list)
+                else {}
+            )
         except (json.JSONDecodeError, ValueError):
             pass
     start = text.find("{")
@@ -40,7 +52,7 @@ def extract_json(text: str) -> dict:
                 depth -= 1
                 if depth == 0:
                     try:
-                        return json.loads(text[start:i + 1])
+                        return json.loads(text[start : i + 1])
                     except (json.JSONDecodeError, ValueError):
                         break
     start_arr = text.find("[")
@@ -53,8 +65,14 @@ def extract_json(text: str) -> dict:
                 depth -= 1
                 if depth == 0:
                     try:
-                        result = json.loads(text[start_arr:i + 1])
-                        return result if isinstance(result, dict) else {"items": result} if isinstance(result, list) else {}
+                        result = json.loads(text[start_arr : i + 1])
+                        return (
+                            result
+                            if isinstance(result, dict)
+                            else {"items": result}
+                            if isinstance(result, list)
+                            else {}
+                        )
                     except (json.JSONDecodeError, ValueError):
                         break
     return {}
@@ -63,6 +81,7 @@ def extract_json(text: str) -> dict:
 @dataclass
 class CognitiveResponse:
     """Standard response from any cognitive backend."""
+
     content: str
     confidence: float = 0.5
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -134,6 +153,7 @@ class LLMBackend(CognitiveBackend):
         api_base: str = "http://localhost:11434/v1",
     ):
         from openai import AsyncOpenAI
+
         self.client = AsyncOpenAI(api_key=api_key, base_url=api_base)
         self.model = model
         self.logger = structlog.get_logger()
@@ -180,7 +200,7 @@ class LLMBackend(CognitiveBackend):
         text: str,
         categories: list[str],
     ) -> dict[str, float]:
-        prompt = f"""Classify the following text into exactly one of these categories: {', '.join(categories)}
+        prompt = f"""Classify the following text into exactly one of these categories: {", ".join(categories)}
 Text: {text[:2000]}
 Return ONLY a JSON object with category as key and confidence (0-1) as value."""
 
@@ -268,17 +288,20 @@ class PatternBackend(CognitiveBackend):
 
         # Frequency analysis
         from collections import Counter
+
         all_keys = Counter()
         for item in data:
             all_keys.update(item.keys())
 
         for key, count in all_keys.most_common(10):
             if count > len(data) * 0.3:
-                patterns.append({
-                    "type": "frequent_key",
-                    "description": f"Key '{key}' appears in {count}/{len(data)} items",
-                    "confidence": count / len(data),
-                })
+                patterns.append(
+                    {
+                        "type": "frequent_key",
+                        "description": f"Key '{key}' appears in {count}/{len(data)} items",
+                        "confidence": count / len(data),
+                    }
+                )
 
         return patterns
 
@@ -288,11 +311,13 @@ class PatternBackend(CognitiveBackend):
         response: str,
         confidence: float = 0.8,
     ):
-        self.rules.append({
-            "condition": condition,
-            "response": response,
-            "confidence": confidence,
-        })
+        self.rules.append(
+            {
+                "condition": condition,
+                "response": response,
+                "confidence": confidence,
+            }
+        )
 
     def get_name(self) -> str:
         return "pattern"
@@ -309,18 +334,33 @@ class HybridBackend(CognitiveBackend):
     """
 
     CODE_TASKS = {
-        "code_generation", "code_gen", "self_modify", "optimize",
-        "recursive", "analyze_source", "skill_composition",
+        "code_generation",
+        "code_gen",
+        "self_modify",
+        "optimize",
+        "recursive",
+        "analyze_source",
+        "skill_composition",
     }
 
     REASONING_TASKS = {
-        "planning", "plan", "causal_reasoning", "counterfactual",
-        "simulation", "architecture", "design", "strategy",
+        "planning",
+        "plan",
+        "causal_reasoning",
+        "counterfactual",
+        "simulation",
+        "architecture",
+        "design",
+        "strategy",
     }
 
     MODIFIER_TASKS = {
-        "recursive_modify", "self_rewrite", "evolution",
-        "architecture_modify", "bottleneck", "self_improve",
+        "recursive_modify",
+        "self_rewrite",
+        "evolution",
+        "architecture_modify",
+        "bottleneck",
+        "self_improve",
     }
 
     def __init__(
@@ -391,7 +431,7 @@ class HybridBackend(CognitiveBackend):
         return await self.routine.extract_patterns(data)
 
     def get_stats(self) -> dict[str, Any]:
-        total = self._routine_calls + self._code_calls + self._reasoning_calls + self._modifier_calls
+        self._routine_calls + self._code_calls + self._reasoning_calls + self._modifier_calls
         return {
             "routine_calls": self._routine_calls,
             "code_calls": self._code_calls,

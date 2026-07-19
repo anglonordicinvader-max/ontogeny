@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 import structlog
@@ -10,17 +10,18 @@ import structlog
 from .backend import CognitiveBackend, CognitiveResponse
 
 
-class ConfidenceLevel(str, Enum):
-    VERY_LOW = "very_low"      # 0-20%
-    LOW = "low"                # 20-40%
-    MEDIUM = "medium"          # 40-60%
-    HIGH = "high"              # 60-80%
-    VERY_HIGH = "very_high"    # 80-100%
+class ConfidenceLevel(StrEnum):
+    VERY_LOW = "very_low"  # 0-20%
+    LOW = "low"  # 20-40%
+    MEDIUM = "medium"  # 40-60%
+    HIGH = "high"  # 60-80%
+    VERY_HIGH = "very_high"  # 80-100%
 
 
 @dataclass
 class ReasoningTrace:
     """Trace of reasoning steps."""
+
     id: str
     steps: list[dict[str, Any]] = field(default_factory=list)
     conclusion: str = ""
@@ -32,16 +33,18 @@ class ReasoningTrace:
     timestamp: datetime = field(default_factory=datetime.utcnow)
 
     def add_step(self, thought: str, evidence: str = "", confidence: float = 0.5):
-        self.steps.append({
-            "thought": thought,
-            "evidence": evidence,
-            "confidence": confidence,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        self.steps.append(
+            {
+                "thought": thought,
+                "evidence": evidence,
+                "confidence": confidence,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
 
     def to_context(self) -> str:
         steps_str = "\n".join(
-            f"  {i+1}. {s['thought']} (confidence: {s['confidence']:.0%})"
+            f"  {i + 1}. {s['thought']} (confidence: {s['confidence']:.0%})"
             for i, s in enumerate(self.steps)
         )
         return f"""Reasoning Trace:
@@ -49,8 +52,8 @@ class ReasoningTrace:
 Conclusion: {self.conclusion}
 Overall Confidence: {self.confidence:.0%} ({self.confidence_level.value})
 Quality Score: {self.reasoning_quality:.2f}
-Biases Detected: {', '.join(self.potential_biases) if self.potential_biases else 'None'}
-Alternatives: {', '.join(self.alternatives_considered) if self.alternatives_considered else 'None'}"""
+Biases Detected: {", ".join(self.potential_biases) if self.potential_biases else "None"}
+Alternatives: {", ".join(self.alternatives_considered) if self.alternatives_considered else "None"}"""
 
 
 class MetaCognition:
@@ -131,7 +134,7 @@ Evaluate this reasoning:"""
         user_prompt = f"""Claim: {claim}
 
 Evidence:
-{chr(10).join(f'- {e}' for e in evidence)}
+{chr(10).join(f"- {e}" for e in evidence)}
 
 Assess confidence:"""
 
@@ -162,7 +165,7 @@ Return JSON with: supported_claims, unsupported_claims, hallucination_risk (0-1)
         user_prompt = f"""Text: {text}
 
 Known facts:
-{chr(10).join(f'- {f}' for f in known_facts)}
+{chr(10).join(f"- {f}" for f in known_facts)}
 
 Check for hallucinations:"""
 
@@ -210,7 +213,7 @@ Suggest improvements:"""
         expected: str,
     ) -> dict[str, Any]:
         """Reflect on an action's outcome."""
-        system_prompt = """Reflect on an action and its outcome. 
+        system_prompt = """Reflect on an action and its outcome.
 Return JSON with: analysis, what_worked, what_failed, lessons_learned, confidence_in_future"""
 
         user_prompt = f"""Action: {action}

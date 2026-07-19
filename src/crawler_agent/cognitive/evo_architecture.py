@@ -12,7 +12,7 @@ import random
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 import structlog
@@ -20,7 +20,7 @@ import structlog
 from .backend import CognitiveBackend
 
 
-class ArchitectureComponent(str, Enum):
+class ArchitectureComponent(StrEnum):
     ATTENTION = "attention"
     WORKING_MEMORY = "working_memory"
     LONG_TERM_MEMORY = "long_term_memory"
@@ -33,8 +33,8 @@ class ArchitectureComponent(str, Enum):
     CAUSAL_REASONING = "causal_reasoning"
 
 
-class MutationType(str, Enum):
-    PARAMETER = "parameter"     # Tweak a parameter
+class MutationType(StrEnum):
+    PARAMETER = "parameter"  # Tweak a parameter
     ADD_COMPONENT = "add_component"
     REMOVE_COMPONENT = "remove_component"
     MODIFY_CONNECTION = "modify_connection"
@@ -44,6 +44,7 @@ class MutationType(str, Enum):
 @dataclass
 class ArchitectureVariant:
     """A variant of the agent architecture."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     name: str = ""
     components: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -68,12 +69,13 @@ class ArchitectureVariant:
 @dataclass
 class EvaluationResult:
     """Result of evaluating an architecture variant."""
+
     variant_id: str = ""
     task_accuracy: float = 0.0
     task_efficiency: float = 0.0  # Time/resources per task
-    generalization: float = 0.0   # Performance on unseen tasks
-    robustness: float = 0.0       # Performance under noise
-    resource_usage: float = 0.0   # Memory/compute efficiency
+    generalization: float = 0.0  # Performance on unseen tasks
+    robustness: float = 0.0  # Performance under noise
+    resource_usage: float = 0.0  # Memory/compute efficiency
     overall_fitness: float = 0.0
     timestamp: datetime = field(default_factory=datetime.utcnow)
 
@@ -104,6 +106,7 @@ class EvoArchitecture:
         """Lazy-load benchmark runner to avoid circular imports."""
         if self.benchmark_runner is None:
             from .benchmark_runner import BenchmarkRunner
+
             self.benchmark_runner = BenchmarkRunner(backend=self.backend)
         return self.benchmark_runner
 
@@ -216,11 +219,11 @@ Evaluate:"""
             resource_usage = data.get("resource_usage", 0.5)
 
             fitness = (
-                accuracy * 0.35 +
-                generalization * 0.25 +
-                robustness * 0.2 +
-                efficiency * 0.1 +
-                (1 - resource_usage) * 0.1
+                accuracy * 0.35
+                + generalization * 0.25
+                + robustness * 0.2
+                + efficiency * 0.1
+                + (1 - resource_usage) * 0.1
             )
 
             result = EvaluationResult(
@@ -255,7 +258,7 @@ Evaluate:"""
             evaluated = list(self.variants.values())
 
         evaluated.sort(key=lambda v: v.fitness, reverse=True)
-        parents = evaluated[:max(2, len(evaluated) // 2)]
+        parents = evaluated[: max(2, len(evaluated) // 2)]
 
         # Create next generation
         next_gen = []
@@ -357,8 +360,8 @@ Evaluate:"""
                     child.components[comp] = copy.deepcopy(parent1.components[comp])
 
         # Mix connections
-        p1_conns = parent1.connections[:len(parent1.connections) // 2]
-        p2_conns = parent2.connections[len(parent2.connections) // 2:]
+        p1_conns = parent1.connections[: len(parent1.connections) // 2]
+        p2_conns = parent2.connections[len(parent2.connections) // 2 :]
         child.connections = p1_conns + p2_conns
 
         child.mutations = ["crossover"]
@@ -458,9 +461,7 @@ Evaluate:"""
             "population": len(self.variants),
             "evaluated": len(evaluated),
             "best_fitness": self.best_variant.fitness if self.best_variant else 0,
-            "avg_fitness": (
-                sum(v.fitness for v in evaluated) / max(1, len(evaluated))
-            ),
+            "avg_fitness": (sum(v.fitness for v in evaluated) / max(1, len(evaluated))),
             "total_evaluations": len(self.evaluation_history),
             "use_real_benchmarks": self.use_real_benchmarks,
             "benchmark_history": self.get_benchmark_history()[-5:],

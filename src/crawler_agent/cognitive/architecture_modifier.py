@@ -22,15 +22,16 @@ import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Any
 
 import structlog
 
 
-class ModificationType(str, Enum):
+class ModificationType(StrEnum):
     """Types of structural modifications."""
+
     ADD_LAYER = "add_layer"
     REMOVE_LAYER = "remove_layer"
     MODIFY_ATTENTION_HEADS = "modify_attention_heads"
@@ -43,6 +44,7 @@ class ModificationType(str, Enum):
 @dataclass
 class ArchitectureModification:
     """A single structural modification to the model."""
+
     id: str = ""
     mod_type: ModificationType = ModificationType.ADD_LAYER
     description: str = ""
@@ -54,6 +56,7 @@ class ArchitectureModification:
 @dataclass
 class ArchitectureState:
     """Current state of the model architecture."""
+
     base_model: str = "Qwen/Qwen2.5-7B-Instruct"
     version: str = "v0"
     num_layers: int = 0
@@ -69,6 +72,7 @@ class ArchitectureState:
 @dataclass
 class ModificationResult:
     """Result of attempting an architecture modification."""
+
     success: bool = False
     modification: ArchitectureModification | None = None
     before_state: ArchitectureState | None = None
@@ -226,9 +230,7 @@ class ArchitectureModifier:
 
         # If no history of success, try safest option not yet attempted
         attempted_types = {
-            r.modification.mod_type
-            for r in self.modification_history
-            if r.modification
+            r.modification.mod_type for r in self.modification_history if r.modification
         }
         for mod in mods:
             if mod.mod_type not in attempted_types:
@@ -280,12 +282,14 @@ class ArchitectureModifier:
                 await self._deploy_modified(new_state)
                 result.success = True
                 self.current_state = new_state
-                self.current_state.modification_history.append({
-                    "mod_type": modification.mod_type.value,
-                    "description": modification.description,
-                    "eval_score": eval_score,
-                    "timestamp": datetime.utcnow().isoformat(),
-                })
+                self.current_state.modification_history.append(
+                    {
+                        "mod_type": modification.mod_type.value,
+                        "description": modification.description,
+                        "eval_score": eval_score,
+                        "timestamp": datetime.utcnow().isoformat(),
+                    }
+                )
             else:
                 await self._rollback_model(backup_path)
                 result.error = f"Eval score {eval_score:.3f} below threshold 0.4"
@@ -441,9 +445,7 @@ class ArchitectureModifier:
             "current_version": self.current_state.version if self.current_state else "v0",
             "current_params": self.current_state.total_params if self.current_state else 0,
             "modification_types": {
-                r.modification.mod_type.value: 1
-                for r in successful
-                if r.modification
+                r.modification.mod_type.value: 1 for r in successful if r.modification
             },
         }
 

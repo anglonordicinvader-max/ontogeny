@@ -3,10 +3,10 @@
 import asyncio
 import random
 import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, StrEnum
 from pathlib import Path
-from typing import AsyncIterator
 from urllib.parse import urlparse, urlunparse
 
 import httpx
@@ -14,13 +14,13 @@ import structlog
 from fake_useragent import UserAgent
 
 
-class ProxyProtocol(str, Enum):
+class ProxyProtocol(StrEnum):
     HTTP = "http"
     HTTPS = "https"
     SOCKS5 = "socks5"
 
 
-class ProxyStatus(str, Enum):
+class ProxyStatus(StrEnum):
     HEALTHY = "healthy"
     DEGRADED = "degraded"
     DEAD = "dead"
@@ -30,11 +30,12 @@ class ProxyStatus(str, Enum):
 @dataclass
 class Proxy:
     """Proxy configuration with health tracking."""
+
     url: str
     protocol: ProxyProtocol = ProxyProtocol.HTTP
     username: str | None = None
     password: str | None = None
-    
+
     # Health tracking
     status: ProxyStatus = ProxyStatus.UNKNOWN
     success_count: int = 0
@@ -44,7 +45,7 @@ class Proxy:
     last_success: float = 0.0
     last_failure: float = 0.0
     avg_response_time: float = 0.0
-    
+
     # Configuration
     max_failures: int = 3
     timeout: float = 10.0
@@ -77,8 +78,9 @@ class Proxy:
         if self.username and self.password:
             # URL encode special characters
             from urllib.parse import quote
-            user = quote(self.username, safe='')
-            pwd = quote(self.password, safe='')
+
+            user = quote(self.username, safe="")
+            pwd = quote(self.password, safe="")
             return f"{self.protocol.value}://{user}:{pwd}@{self._host_port}"
         return f"{self.protocol.value}://{self._host_port}"
 
@@ -110,7 +112,7 @@ class Proxy:
         self.total_requests += 1
         self.last_failure = time.monotonic()
         self.last_used = time.monotonic()
-        
+
         if self.failure_count >= self.max_failures:
             self.status = ProxyStatus.DEAD
         elif self.failure_count >= self.max_failures // 2:
@@ -120,15 +122,15 @@ class Proxy:
     def from_string(cls, proxy_str: str, **kwargs) -> "Proxy":
         """Parse proxy string like protocol://user:pass@host:port."""
         parsed = urlparse(proxy_str)
-        
+
         protocol_map = {
             "http": ProxyProtocol.HTTP,
             "https": ProxyProtocol.HTTPS,
             "socks5": ProxyProtocol.SOCKS5,
         }
-        
+
         protocol = protocol_map.get(parsed.scheme, ProxyProtocol.HTTP)
-        
+
         return cls(
             url=proxy_str,
             protocol=protocol,
@@ -221,14 +223,17 @@ class ProxyPool:
     async def _health_check(self) -> None:
         """Check health of all proxies."""
         self.logger.debug("running_proxy_health_check")
-        
+
         for proxy in self._proxies:
             if proxy.total_requests > 0 and not proxy.is_healthy:
                 # Reset old failures
                 age = time.monotonic() - proxy.last_failure
                 if age > 3600:  # 1 hour
                     proxy.failure_count = max(0, proxy.failure_count - 1)
-                    if proxy.status == ProxyStatus.DEAD and proxy.failure_count < proxy.max_failures:
+                    if (
+                        proxy.status == ProxyStatus.DEAD
+                        and proxy.failure_count < proxy.max_failures
+                    ):
                         proxy.status = ProxyStatus.DEGRADED
 
     def report_success(self, proxy: Proxy, response_time: float = 0.0) -> None:
@@ -265,7 +270,7 @@ class ProxyAwareClient:
         self.retries = retries
         self._client_kwargs = client_kwargs
         self.logger = structlog.get_logger()
-        
+
         # User agent rotation
         try:
             self._ua = UserAgent()
@@ -320,9 +325,7 @@ class ProxyAwareClient:
 
             try:
                 start_time = time.monotonic()
-                response = await self._make_request(
-                    method, url, proxy, headers, **kwargs
-                )
+                response = await self._make_request(method, url, proxy, headers, **kwargs)
                 elapsed = time.monotonic() - start_time
                 self.pool.report_success(proxy, elapsed)
                 return response
@@ -358,9 +361,7 @@ class ProxyAwareClient:
             follow_redirects=True,
             **self._client_kwargs,
         ) as client:
-            response = await client.request(
-                method, url, headers=request_headers, **kwargs
-            )
+            response = await client.request(method, url, headers=request_headers, **kwargs)
             response.raise_for_status()
             return response
 
@@ -385,19 +386,19 @@ class AnonymityLayer:
         """Create proxy chain for request."""
         primary = await self.primary.get_proxy()
         exit_proxy = await self.exit.get_proxy()
-        
+
         chain = []
         if primary:
             chain.append(primary)
         if exit_proxy and exit_proxy != primary:
             chain.append(exit_proxy)
-        
+
         return chain
 
     async def get_anonymous_client(self) -> ProxyAwareClient:
         """Get client configured for anonymity."""
         # Use exit proxy as the main proxy
-        exit_proxy = await self.exit.get_proxy()
-        
+        await self.exit.get_proxy()
+
         client = ProxyAwareClient(pool=self.exit)
         return client

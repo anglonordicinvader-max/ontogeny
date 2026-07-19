@@ -1,12 +1,12 @@
 """SourceForge crawler."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import httpx
 import structlog
 from bs4 import BeautifulSoup
 
-from .base import BaseCrawler, CrawlerConfig, CrawlResult, ContentType
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class SourceForgeCrawler(BaseCrawler):
@@ -81,7 +81,9 @@ class SourceForgeCrawler(BaseCrawler):
                         url=f"https://sourceforge.net{href}" if href.startswith("/") else href,
                         content_type=ContentType.REPOSITORY,
                         title=name,
-                        content=proj.select_one(".project-desc").text.strip() if proj.select_one(".project-desc") else "",
+                        content=proj.select_one(".project-desc").text.strip()
+                        if proj.select_one(".project-desc")
+                        else "",
                         metadata={"platform": "sourceforge"},
                         source="sourceforge",
                     )

@@ -16,7 +16,7 @@ export function CognitiveState({ status }: CognitiveStateProps) {
 
   return (
     <div className="h-full overflow-y-auto p-4 space-y-4">
-      <Panel title="Intrinsic Drives">
+      <Panel title="Intrinsic Drives" accentGlow>
         <div className="space-y-3">
           {Object.entries(drives).map(([name, value]) => (
             <div key={name} className="space-y-1">
@@ -30,7 +30,7 @@ export function CognitiveState({ status }: CognitiveStateProps) {
         </div>
       </Panel>
 
-      <Panel title="Emotional State">
+      <Panel title="Emotional State" accentGlow>
         <div className="glass-subtle rounded-md p-4">
           <div className="grid grid-cols-2 gap-3">
             <MetricCard label="Mood" value={status?.mood || '—'} />

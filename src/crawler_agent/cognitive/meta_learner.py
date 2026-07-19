@@ -18,6 +18,7 @@ import structlog
 @dataclass
 class LearningStrategy:
     """A strategy for learning."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     name: str = ""
     description: str = ""
@@ -37,13 +38,16 @@ class LearningStrategy:
         if success:
             self.successes += 1
         self.success_rate = self.successes / self.total_attempts
-        self.avg_quality = (self.avg_quality * (self.total_attempts - 1) + quality) / self.total_attempts
+        self.avg_quality = (
+            self.avg_quality * (self.total_attempts - 1) + quality
+        ) / self.total_attempts
         self.avg_speed = (self.avg_speed * (self.total_attempts - 1) + speed) / self.total_attempts
 
 
 @dataclass
 class LearningSession:
     """A record of a learning session."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     topic: str = ""
     strategy_id: str = ""
@@ -122,6 +126,7 @@ class MetaLearner:
 
         # Epsilon-greedy: sometimes try suboptimal strategies
         import random
+
         if random.random() < 0.2 and len(scored) > 1:
             return scored[1][0]
 
@@ -182,7 +187,9 @@ class MetaLearner:
                 analysis.items(),
                 key=lambda x: x[1]["avg_quality"],
                 default=(None, None),
-            )[0] if analysis else None,
+            )[0]
+            if analysis
+            else None,
         }
 
     async def suggest_improvements(self) -> list[str]:
@@ -192,11 +199,17 @@ class MetaLearner:
 
         for name, stats in analysis.get("strategies", {}).items():
             if stats["success_rate"] < 0.5:
-                suggestions.append(f"Strategy '{name}' has low success rate ({stats['success_rate']:.0%}), consider alternatives")
+                suggestions.append(
+                    f"Strategy '{name}' has low success rate ({stats['success_rate']:.0%}), consider alternatives"
+                )
             if stats["avg_quality"] < 0.4:
-                suggestions.append(f"Strategy '{name}' produces low quality results ({stats['avg_quality']:.2f})")
+                suggestions.append(
+                    f"Strategy '{name}' produces low quality results ({stats['avg_quality']:.2f})"
+                )
             if stats["avg_speed"] < 0.1:
-                suggestions.append(f"Strategy '{name}' is slow ({stats['avg_speed']:.2f} items/min)")
+                suggestions.append(
+                    f"Strategy '{name}' is slow ({stats['avg_speed']:.2f} items/min)"
+                )
 
         if not suggestions:
             suggestions.append("All strategies performing adequately")
@@ -270,7 +283,9 @@ class MetaLearner:
                 analysis.items(),
                 key=lambda x: x[1]["avg_quality"],
                 default=(None, None),
-            )[0] if analysis else None,
+            )[0]
+            if analysis
+            else None,
         }
 
     def save(self) -> None:
@@ -297,17 +312,19 @@ class MetaLearner:
             }
 
         for session in self.sessions:
-            state["sessions"].append({
-                "id": session.id,
-                "topic": session.topic,
-                "strategy_id": session.strategy_id,
-                "start_time": session.start_time.isoformat(),
-                "end_time": session.end_time.isoformat() if session.end_time else None,
-                "items_learned": session.items_learned,
-                "quality_score": session.quality_score,
-                "duration_seconds": session.duration_seconds,
-                "insights": session.insights,
-            })
+            state["sessions"].append(
+                {
+                    "id": session.id,
+                    "topic": session.topic,
+                    "strategy_id": session.strategy_id,
+                    "start_time": session.start_time.isoformat(),
+                    "end_time": session.end_time.isoformat() if session.end_time else None,
+                    "items_learned": session.items_learned,
+                    "quality_score": session.quality_score,
+                    "duration_seconds": session.duration_seconds,
+                    "insights": session.insights,
+                }
+            )
 
         path = self.persistence_dir / "meta_learner.json"
         path.write_text(json.dumps(state, indent=2), encoding="utf-8")

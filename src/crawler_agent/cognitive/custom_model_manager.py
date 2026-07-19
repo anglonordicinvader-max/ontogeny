@@ -1,4 +1,5 @@
 """Maldoror custom model lifecycle management."""
+
 import asyncio
 import json
 import time
@@ -63,9 +64,9 @@ TEMPLATE {template}
                 self.logger.warning("state_load_failed", error=str(e))
 
     def _save_state(self) -> None:
-        self._state_path().write_text(json.dumps(
-            {"models": [m.__dict__ for m in self.models]}, indent=2, default=str
-        ))
+        self._state_path().write_text(
+            json.dumps({"models": [m.__dict__ for m in self.models]}, indent=2, default=str)
+        )
 
     async def deploy(self, run: TrainingRun, model_name: str | None = None) -> ModelState | None:
         """Deploy a trained adapter as an Ollama model."""
@@ -91,8 +92,13 @@ TEMPLATE {template}
 
         try:
             proc = await asyncio.create_subprocess_exec(
-                "ollama", "create", name, "-f", str(modelfile_path),
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                "ollama",
+                "create",
+                name,
+                "-f",
+                str(modelfile_path),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
 
@@ -101,15 +107,17 @@ TEMPLATE {template}
                 return None
 
             state = ModelState(
-                name=name, version=version,
-                adapter_path=run.adapter_path, timestamp=time.time(),
+                name=name,
+                version=version,
+                adapter_path=run.adapter_path,
+                timestamp=time.time(),
             )
             self.models.append(state)
             self._save_state()
             self.logger.info("model_deployed", name=name)
             return state
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self.logger.error("ollama_create_timeout")
             return None
         except FileNotFoundError:
@@ -162,8 +170,12 @@ TEMPLATE {template}
     async def _query_model(self, model: str, prompt: str) -> str:
         try:
             proc = await asyncio.create_subprocess_exec(
-                "ollama", "run", model, prompt,
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                "ollama",
+                "run",
+                model,
+                prompt,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
             if proc.returncode == 0:
@@ -176,8 +188,10 @@ TEMPLATE {template}
         """List available Ollama models matching maldoror."""
         try:
             proc = await asyncio.create_subprocess_exec(
-                "ollama", "list",
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                "ollama",
+                "list",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
             lines = stdout.decode().strip().split("\n")[1:]
@@ -186,7 +200,7 @@ TEMPLATE {template}
                 for parts in (l.split() for l in lines)
                 if parts and "maldoror" in parts[0]
             ]
-        except (FileNotFoundError, asyncio.TimeoutError):
+        except (TimeoutError, FileNotFoundError):
             return []
 
     def get_stats(self) -> dict[str, Any]:

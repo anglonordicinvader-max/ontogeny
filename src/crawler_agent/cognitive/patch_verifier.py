@@ -10,12 +10,13 @@ from pathlib import Path
 from typing import Any
 
 from .backend import CognitiveBackend
-from .recursive_modify import RecursiveModification, ModificationTarget
+from .recursive_modify import ModificationTarget, RecursiveModification
 
 
 @dataclass
 class TestCase:
     """A generated test case."""
+
     name: str
     code: str
     description: str
@@ -24,6 +25,7 @@ class TestCase:
 @dataclass
 class VerificationResult:
     """Result of patch verification."""
+
     patch_id: str
     passed: bool
     tests_passed: int
@@ -80,11 +82,13 @@ Requirements:
 
         tests = []
         for i, t in enumerate(tests_data[:num_tests]):
-            tests.append(TestCase(
-                name=t.get("name", f"test_generated_{i}"),
-                code=t.get("code", ""),
-                description=t.get("description", ""),
-            ))
+            tests.append(
+                TestCase(
+                    name=t.get("name", f"test_generated_{i}"),
+                    code=t.get("code", ""),
+                    description=t.get("description", ""),
+                )
+            )
 
         # Add fallback tests if LLM failed
         if not tests:
@@ -104,25 +108,29 @@ Requirements:
 
         for func in functions[:3]:
             if not func.name.startswith("_"):
-                tests.append(TestCase(
-                    name=f"test_{func.name}_basic",
-                    code=f"""def test_{func.name}_basic():
+                tests.append(
+                    TestCase(
+                        name=f"test_{func.name}_basic",
+                        code=f"""def test_{func.name}_basic():
     from {module_name} import {func.name}
     # Basic smoke test
     result = {func.name}()
     assert result is not None""",
-                    description=f"Basic test for {func.name}",
-                ))
+                        description=f"Basic test for {func.name}",
+                    )
+                )
 
         for cls in classes[:2]:
-            tests.append(TestCase(
-                name=f"test_{cls.name}_instantiation",
-                code=f"""def test_{cls.name}_instantiation():
+            tests.append(
+                TestCase(
+                    name=f"test_{cls.name}_instantiation",
+                    code=f"""def test_{cls.name}_instantiation():
     from {module_name} import {cls.name}
     obj = {cls.name}()
     assert obj is not None""",
-                description=f"Test {cls.name} can be instantiated",
-            ))
+                    description=f"Test {cls.name} can be instantiated",
+                )
+            )
 
         return tests[:5]
 
@@ -231,11 +239,13 @@ from {module_name} import *
             return await self._run_pytest_local(target_file, test_code)
 
         # Check if sandbox has execute_code method (CodeSandbox)
-        if not hasattr(self.sandbox, 'execute_code'):
+        if not hasattr(self.sandbox, "execute_code"):
             return await self._run_pytest_local(target_file, test_code)
 
         # Build a combined script: install deps, write files, run pytest
         target_content = target_file.read_text(encoding="utf-8")
+        escaped_target = target_content.replace("'", "\\'").replace("\\n", "\\\\n")
+        escaped_test = test_code.replace("'", "\\'").replace("\\n", "\\\\n")
 
         combined_script = f"""
 import subprocess, sys, os, tempfile, json
@@ -249,11 +259,11 @@ sys.path.insert(0, workspace)
 
 # Write target module
 with open(os.path.join(workspace, "{module_name}.py"), "w") as f:
-    f.write('''{target_content.replace("'", "\\'").replace("\\n", "\\\\n")}''')
+    f.write('''{escaped_target}''')
 
 # Write test file
 with open(os.path.join(workspace, "test_{module_name}.py"), "w") as f:
-    f.write('''{test_code.replace("'", "\\'").replace("\\n", "\\\\n")}''')
+    f.write('''{escaped_test}''')
 
 # Run pytest
 result = subprocess.run(
@@ -329,9 +339,18 @@ print(json.dumps({{
 
             try:
                 result = subprocess.run(
-                    [_sys.executable, "-m", "pytest", str(test_file),
-                     "-v", "--tb=short", "--no-header"],
-                    capture_output=True, text=True, timeout=30,
+                    [
+                        _sys.executable,
+                        "-m",
+                        "pytest",
+                        str(test_file),
+                        "-v",
+                        "--tb=short",
+                        "--no-header",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
                     cwd=str(tmp_path),
                 )
                 output = result.stdout + result.stderr
@@ -480,10 +499,13 @@ class MultiRolloutPatchGenerator:
             return None
 
         # Select best (most tests passed, then highest critique confidence)
-        best = max(verified, key=lambda p: (
-            p.metadata["verification"]["tests_passed"],
-            p.metadata.get("confidence", 0),
-        ))
+        best = max(
+            verified,
+            key=lambda p: (
+                p.metadata["verification"]["tests_passed"],
+                p.metadata.get("confidence", 0),
+            ),
+        )
         return best
 
     async def _generate_single_patch(
@@ -499,6 +521,7 @@ class MultiRolloutPatchGenerator:
         return None
 
 
-async def create_test_generator(backend: CognitiveBackend, sandbox: Any) -> 'UnitTestGenerator':
+async def create_test_generator(backend: CognitiveBackend, sandbox: Any) -> "UnitTestGenerator":
     from .test_generator import UnitTestGenerator
+
     return UnitTestGenerator(backend, sandbox)

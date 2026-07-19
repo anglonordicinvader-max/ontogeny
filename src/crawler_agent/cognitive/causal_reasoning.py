@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 import networkx as nx
@@ -11,7 +11,7 @@ import structlog
 from .backend import CognitiveBackend
 
 
-class CausalRelation(str, Enum):
+class CausalRelation(StrEnum):
     DIRECT_CAUSE = "direct_cause"
     INDIRECT_CAUSE = "indirect_cause"
     CONTRIBUTING_FACTOR = "contributing_factor"
@@ -26,6 +26,7 @@ class CausalRelation(str, Enum):
 @dataclass
 class CausalVariable:
     """A variable in the causal model."""
+
     id: str
     name: str
     description: str = ""
@@ -38,6 +39,7 @@ class CausalVariable:
 @dataclass
 class CausalEdge:
     """A causal relationship."""
+
     source: str
     target: str
     relation: CausalRelation
@@ -50,6 +52,7 @@ class CausalEdge:
 @dataclass
 class Intervention:
     """A causal intervention."""
+
     variable: str
     value: Any
     do_operator: bool = True  # do(x=v) vs observe(x=v)
@@ -59,6 +62,7 @@ class Intervention:
 @dataclass
 class Counterfactual:
     """A counterfactual scenario."""
+
     description: str
     interventions: list[Intervention]
     predicted_outcome: str = ""
@@ -88,7 +92,7 @@ class CausalReasoner:
 - variables: list of {name, type, description}
 - edges: list of {cause, effect, relation_type, strength, mechanisms}
 
-Relation types: direct_cause, indirect_cause, contributing_factor, 
+Relation types: direct_cause, indirect_cause, contributing_factor,
 necessary_condition, sufficient_condition, correlation, confounding
 
 Be precise about causal vs correlational claims."""
@@ -154,7 +158,8 @@ Be precise about causal vs correlational claims."""
         """Add causal edge."""
         self.edges.append(edge)
         self.dag.add_edge(
-            edge.source, edge.target,
+            edge.source,
+            edge.target,
             relation=edge.relation.value,
             strength=edge.strength,
             confidence=edge.confidence,
@@ -165,11 +170,13 @@ Be precise about causal vs correlational claims."""
         causes = []
         for predecessor in self.dag.predecessors(effect):
             edge_data = self.dag[predecessor][effect]
-            causes.append({
-                "variable": predecessor,
-                "relation": edge_data.get("relation"),
-                "strength": edge_data.get("strength", 1.0),
-            })
+            causes.append(
+                {
+                    "variable": predecessor,
+                    "relation": edge_data.get("relation"),
+                    "strength": edge_data.get("strength", 1.0),
+                }
+            )
         return causes
 
     def get_effects(self, cause: str) -> list[dict[str, Any]]:
@@ -177,11 +184,13 @@ Be precise about causal vs correlational claims."""
         effects = []
         for successor in self.dag.successors(cause):
             edge_data = self.dag[cause][successor]
-            effects.append({
-                "variable": successor,
-                "relation": edge_data.get("relation"),
-                "strength": edge_data.get("strength", 1.0),
-            })
+            effects.append(
+                {
+                    "variable": successor,
+                    "relation": edge_data.get("relation"),
+                    "strength": edge_data.get("strength", 1.0),
+                }
+            )
         return effects
 
     def find_confounders(self, x: str, y: str) -> list[str]:
@@ -201,9 +210,7 @@ Be precise about causal vs correlational claims."""
         """Find mediating paths from X to Y."""
         try:
             all_paths = list(nx.all_simple_paths(self.dag, x, y, cutoff=5))
-            mediators = [
-                path[1:-1] for path in all_paths if len(path) > 2
-            ]
+            mediators = [path[1:-1] for path in all_paths if len(path) > 2]
             return mediators
         except (nx.NetworkXError, nx.NodeNotFound):
             return []
@@ -341,7 +348,9 @@ Estimate causal effect:"""
             "edges": len(self.edges),
             "interventions": len(self.interventions),
             "counterfactuals": len(self.counterfactuals),
-            "is_dag": nx.is_directed_acyclic_graph(self.dag) if self.dag.number_of_nodes() > 0 else True,
+            "is_dag": nx.is_directed_acyclic_graph(self.dag)
+            if self.dag.number_of_nodes() > 0
+            else True,
         }
 
     # === Temporal Causal Discovery ===
@@ -430,7 +439,11 @@ Discover causal relationships:"""
         for i, e in enumerate(events[:20]):
             ts = e.get("timestamp", "N/A")
             etype = e.get("event_type", "unknown")
-            vars_str = ", ".join(str(k) for k in e.get("variables", {}).keys()) if isinstance(e.get("variables"), dict) else ""
+            vars_str = (
+                ", ".join(str(k) for k in e.get("variables", {}).keys())
+                if isinstance(e.get("variables"), dict)
+                else ""
+            )
             lines.append(f"  {i}: [{ts}] {etype} ({vars_str})")
         return "\n".join(lines)
 
@@ -487,10 +500,12 @@ Plan interventions:"""
 
             # Record interventions
             for interv in data.get("intervention_plan", []):
-                self.interventions.append(Intervention(
-                    variable=interv.get("variable", "unknown"),
-                    value=interv.get("value"),
-                ))
+                self.interventions.append(
+                    Intervention(
+                        variable=interv.get("variable", "unknown"),
+                        value=interv.get("value"),
+                    )
+                )
 
             return data
         except Exception as e:
@@ -523,7 +538,7 @@ Plan interventions:"""
 
         for d in range(depth):
             next_level = []
-            for var, val, strength in current_level:
+            for var, _val, strength in current_level:
                 if var in visited:
                     continue
                 visited.add(var)
@@ -532,14 +547,16 @@ Plan interventions:"""
                 for edge in self.edges:
                     if edge.source == var and edge.target not in visited:
                         effect_strength = strength * edge.strength
-                        effects.append({
-                            "variable": edge.target,
-                            "via_path": f"{var} -> {edge.target}",
-                            "relation": edge.relation.value,
-                            "strength": effect_strength,
-                            "depth": d + 1,
-                            "confidence": edge.confidence * strength,
-                        })
+                        effects.append(
+                            {
+                                "variable": edge.target,
+                                "via_path": f"{var} -> {edge.target}",
+                                "relation": edge.relation.value,
+                                "strength": effect_strength,
+                                "depth": d + 1,
+                                "confidence": edge.confidence * strength,
+                            }
+                        )
                         next_level.append((edge.target, "affected", effect_strength))
 
             current_level = next_level

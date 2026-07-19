@@ -1,13 +1,13 @@
 """Academic source crawlers (arXiv, Semantic Scholar, PubMed)."""
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 from datetime import datetime
+from xml.etree import ElementTree
 
 import httpx
 import structlog
-from xml.etree import ElementTree
 
-from .base import BaseCrawler, CrawlerConfig, CrawlResult, ContentType
+from .base import BaseCrawler, ContentType, CrawlerConfig, CrawlResult
 
 
 class ArxivCrawler(BaseCrawler):

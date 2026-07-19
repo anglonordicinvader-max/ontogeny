@@ -67,6 +67,41 @@ build-backend = "hatchling.build"
 target-version = "py311"
 line-length = 100
 
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "F401",   # unused imports (common in __init__.py re-exports)
+    "F811",   # redefinition of unused name
+    "F821",   # undefined name (false positives in template strings)
+    "E402",   # module-level import not at top
+    "B008",   # function call in default argument
+    "UP035",  # deprecated typing imports (intentional for Python 3.11 compat)
+    "E741",   # ambiguous variable name
+    "B007",   # unused loop control variable
+    "B904",   # raise without from inside except
+    "F524",   # string format missing arguments (template strings)
+    "F601",   # multi-value repeated key literal
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "F811"]
+"tests/*" = ["E402"]
+"backend/*" = ["E402"]
+"src/crawler_agent/cognitive/patch_verifier.py" = ["E999"]
+"src/crawler_agent/cognitive/blender_sandbox.py" = ["E999", "F821"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
 [tool.mypy]
 python_version = "3.11"
 strict = true

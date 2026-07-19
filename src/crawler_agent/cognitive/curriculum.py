@@ -25,14 +25,14 @@ class LearningTask:
     name: str
     category: str
     difficulty: float  # 0.0 to 1.0
-    prerequisites: List[str] = field(default_factory=list)
-    knowledge_required: List[str] = field(default_factory=list)
-    skills_to_practice: List[str] = field(default_factory=list)
+    prerequisites: list[str] = field(default_factory=list)
+    knowledge_required: list[str] = field(default_factory=list)
+    skills_to_practice: list[str] = field(default_factory=list)
     description: str = ""
     estimated_time: float = 30.0
     created_at: datetime = field(default_factory=datetime.utcnow)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "name": self.name,
@@ -50,13 +50,13 @@ class LearningTask:
 class ExperimentDesign:
     id: str
     hypothesis: str
-    variables: List[Dict] = field(default_factory=list)
-    procedure: List[str] = field(default_factory=list)
+    variables: list[dict] = field(default_factory=list)
+    procedure: list[str] = field(default_factory=list)
     expected_outcome: str = ""
     difficulty: float = 0.5
     created_at: datetime = field(default_factory=datetime.utcnow)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "hypothesis": self.hypothesis,
@@ -73,7 +73,7 @@ class SkillProgress:
     skill: str
     mastery: float = 0.0  # 0.0 to 1.0
     times_practiced: int = 0
-    last_practiced: Optional[datetime] = None
+    last_practiced: datetime | None = None
     successes: int = 0
     failures: int = 0
 
@@ -91,11 +91,11 @@ class SelfGeneratedCurriculum:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.logger = structlog.get_logger(component="curriculum")
 
-        self.tasks: Dict[str, LearningTask] = {}
-        self.experiments: List[ExperimentDesign] = []
-        self.skill_progress: Dict[str, SkillProgress] = {}
-        self.completed_tasks: List[str] = []
-        self.current_task: Optional[str] = None
+        self.tasks: dict[str, LearningTask] = {}
+        self.experiments: list[ExperimentDesign] = []
+        self.skill_progress: dict[str, SkillProgress] = {}
+        self.completed_tasks: list[str] = []
+        self.current_task: str | None = None
 
         self._setup_task_templates()
         self._load()
@@ -175,32 +175,42 @@ class SelfGeneratedCurriculum:
 
     def _save(self):
         tasks_file = self.data_dir / "tasks.json"
-        tasks_file.write_text(json.dumps({
-            "tasks": [t.to_dict() for t in self.tasks.values()],
-            "completed_tasks": self.completed_tasks[-200:],
-            "saved_at": datetime.utcnow().isoformat(),
-        }, indent=2))
+        tasks_file.write_text(
+            json.dumps(
+                {
+                    "tasks": [t.to_dict() for t in self.tasks.values()],
+                    "completed_tasks": self.completed_tasks[-200:],
+                    "saved_at": datetime.utcnow().isoformat(),
+                },
+                indent=2,
+            )
+        )
 
         progress_file = self.data_dir / "progress.json"
-        progress_file.write_text(json.dumps({
-            "skills": {
-                skill: {
-                    "mastery": sp.mastery,
-                    "times_practiced": sp.times_practiced,
-                    "successes": sp.successes,
-                    "failures": sp.failures,
-                }
-                for skill, sp in self.skill_progress.items()
-            },
-            "saved_at": datetime.utcnow().isoformat(),
-        }, indent=2))
+        progress_file.write_text(
+            json.dumps(
+                {
+                    "skills": {
+                        skill: {
+                            "mastery": sp.mastery,
+                            "times_practiced": sp.times_practiced,
+                            "successes": sp.successes,
+                            "failures": sp.failures,
+                        }
+                        for skill, sp in self.skill_progress.items()
+                    },
+                    "saved_at": datetime.utcnow().isoformat(),
+                },
+                indent=2,
+            )
+        )
 
     def generate_tasks(
         self,
-        knowledge_gaps: List[str],
-        weak_skills: List[str],
+        knowledge_gaps: list[str],
+        weak_skills: list[str],
         count: int = 5,
-    ) -> List[LearningTask]:
+    ) -> list[LearningTask]:
         """Generate learning tasks based on gaps and weaknesses."""
         generated = []
         for _ in range(count):
@@ -240,7 +250,7 @@ class SelfGeneratedCurriculum:
         self._save()
         return generated
 
-    def design_experiment(self, hypothesis: str, context: Dict = None) -> ExperimentDesign:
+    def design_experiment(self, hypothesis: str, context: dict = None) -> ExperimentDesign:
         """Design an experiment to test a hypothesis."""
         experiment_id = str(uuid.uuid4())[:8]
 
@@ -298,16 +308,13 @@ class SelfGeneratedCurriculum:
 
             self._save()
 
-    def get_next_task(self) -> Optional[LearningTask]:
+    def get_next_task(self) -> LearningTask | None:
         """Get the next learning task based on progress."""
         incomplete = [t for t in self.tasks.values() if t.id not in self.completed_tasks]
         if not incomplete:
             return None
 
-        weak_skills = [
-            skill for skill, sp in self.skill_progress.items()
-            if sp.mastery < 0.5
-        ]
+        weak_skills = [skill for skill, sp in self.skill_progress.items() if sp.mastery < 0.5]
 
         def task_priority(task):
             skill_match = sum(1 for s in task.skills_to_practice if s in weak_skills)
@@ -316,7 +323,7 @@ class SelfGeneratedCurriculum:
         incomplete.sort(key=task_priority)
         return incomplete[0] if incomplete else None
 
-    def get_learning_path(self, goal: str) -> List[LearningTask]:
+    def get_learning_path(self, goal: str) -> list[LearningTask]:
         """Generate a learning path toward a goal."""
         tasks = sorted(self.tasks.values(), key=lambda t: t.difficulty)
         return [t for t in tasks if t.id not in self.completed_tasks][:10]
@@ -324,5 +331,7 @@ class SelfGeneratedCurriculum:
     def to_context(self) -> str:
         incomplete = [t for t in self.tasks.values() if t.id not in self.completed_tasks]
         weak_skills = [s for s, p in self.skill_progress.items() if p.mastery < 0.5]
-        return (f"Curriculum: {len(self.tasks)} tasks ({len(self.completed_tasks)} completed), "
-                f"{len(incomplete)} remaining, {len(weak_skills)} weak skills")
+        return (
+            f"Curriculum: {len(self.tasks)} tasks ({len(self.completed_tasks)} completed), "
+            f"{len(incomplete)} remaining, {len(weak_skills)} weak skills"
+        )
