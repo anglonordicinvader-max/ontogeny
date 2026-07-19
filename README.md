@@ -14,7 +14,7 @@ It trains in a Blender physics sandbox with **9 sensor types** (depth, LiDAR, IM
 
 It also has a **MuJoCo robotics sandbox** with two robot models — **TOCABI** (33-DOF humanoid) and **Unitree G1** (29-DOF humanoid) — with real-time joint-state telemetry, standing/walking controllers, and sensor integration.
 
-An **Electron desktop UI** provides a real-time glassmorphic interface with 11 panels: Activity, Cognitive State, Memory, Goals, Knowledge Graph, Knowledge Acquisition, Maldoror, Production, Blender, MuJoCo, and Settings.
+An **Electron desktop UI** provides a real-time native-AI interface with 11 panels: Activity, Cognitive State, Memory, Goals, Knowledge Graph, Knowledge Acquisition, Maldoror, Production, Blender, MuJoCo, and Settings.
 
 ## Architecture
 
@@ -69,7 +69,7 @@ An **Electron desktop UI** provides a real-time glassmorphic interface with 11 p
 │                                                                   │
 │  ┌───────────────────────────────────────────────────────────┐   │
 │  │        Desktop UI (Electron + React)                        │   │
-│  │  Glassmorphic design · WebSocket real-time updates          │   │
+│  │  Native-AI design · WebSocket real-time updates          │   │
 │  │  11 panels · Command palette · Dual themes                  │   │
 │  └───────────────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────────┘
@@ -205,7 +205,7 @@ Real-time physics simulation with two robot models:
 
 ### Electron Desktop UI
 
-A glassmorphic real-time interface built with Electron + React + TypeScript:
+A native-AI real-time interface built with Electron + React + TypeScript:
 
 - **11 panels** — Activity Timeline, Cognitive State, Memory Explorer, Goal Tree, Knowledge Graph, Knowledge Acquisition, Maldoror Pipeline, Production Metrics, Blender Sandbox, MuJoCo Robotics, Settings
 - **WebSocket real-time updates** — live data streaming from Python backend
