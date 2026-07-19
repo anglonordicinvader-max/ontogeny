@@ -15,6 +15,7 @@ import {
   PanelLeftOpen,
   Search,
   Box,
+  Play,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -25,6 +26,7 @@ interface SidebarProps {
 }
 
 const tabs = [
+  { id: 'demo', label: 'Demo', icon: Play },
   { id: 'activity', label: 'Activity', icon: Activity },
   { id: 'cognitive', label: 'Cognitive', icon: Brain },
   { id: 'memory', label: 'Memory', icon: Database },
