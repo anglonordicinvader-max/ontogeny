@@ -12,6 +12,7 @@ import { MaldororPanel } from './components/MaldororPanel';
 import { ProductionPanel } from './components/ProductionPanel';
 import { BlenderPanel } from './components/BlenderPanel';
 import { MuJoCoPanel } from './components/MuJoCoPanel';
+import { DemoPanel } from './components/DemoPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { CommandPalette } from './components/CommandPalette';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -72,6 +73,8 @@ function App() {
 
   const renderWorkspace = () => {
     switch (activeTab) {
+      case 'demo':
+        return <DemoPanel status={status} send={send} />;
       case 'activity':
         return <ActivityTimeline events={events} />;
       case 'cognitive':
