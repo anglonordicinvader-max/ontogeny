@@ -69,7 +69,7 @@ An **Electron desktop UI** provides a real-time native-AI interface with 11 pane
 │                                                                   │
 │  ┌───────────────────────────────────────────────────────────┐   │
 │  │        Desktop UI (Electron + React)                        │   │
-│  │  Glassmorphic design · WebSocket real-time updates          │   │
+│  │  Native-AI design · WebSocket real-time updates          │   │
 │  │  11 panels · Command palette · Dual themes                  │   │
 │  └───────────────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────────┘
