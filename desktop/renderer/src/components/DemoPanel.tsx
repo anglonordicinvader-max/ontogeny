@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Panel, MetricCard } from './Panel';
 import { cn } from '@/lib/utils';
-import type { AgentStatus, DemoStats } from '@/types';
+import type { AgentStatus, DemoReflection, DemoMaldororProposal } from '@/types';
 import {
   Play,
   Pause,
@@ -14,7 +14,6 @@ import {
   Database,
   Brain,
   Zap,
-  GitBranch,
   FileText,
   ArrowRight,
 } from 'lucide-react';
@@ -38,10 +37,10 @@ const STEP_ICONS = [
 export function DemoPanel({ status, send }: DemoPanelProps) {
   const demo = status?.demo;
   const [autoPlay, setAutoPlay] = useState(false);
-  const [evidence, setEvidence] = useState<unknown[]>([]);
-  const [reflection, setReflection] = useState<unknown>(null);
-  const [maldoror, setMaldoror] = useState<unknown>(null);
-  const [knowledgeGraph, setKnowledgeGraph] = useState<{ nodes: unknown[]; edges: unknown[] }>({ nodes: [], edges: [] });
+  const [evidence, setEvidence] = useState<Record<string, unknown>[]>([]);
+  const [reflection, setReflection] = useState<DemoReflection | null>(null);
+  const [maldoror, setMaldoror] = useState<DemoMaldororProposal | null>(null);
+  const [knowledgeGraph, setKnowledgeGraph] = useState<{ nodes: Record<string, unknown>[]; edges: Record<string, unknown>[] }>({ nodes: [], edges: [] });
 
   const advance = useCallback(() => {
     send('command', { command: 'demo_advance' });
@@ -74,10 +73,10 @@ export function DemoPanel({ status, send }: DemoPanelProps) {
     const port = window.location.port || '8765';
     const base = `http://127.0.0.1:${port}`;
 
-    fetch(`${base}/api/demo/evidence`).then(r => r.json()).then(setEvidence).catch(() => {});
-    fetch(`${base}/api/demo/reflection`).then(r => r.json()).then(setReflection).catch(() => {});
-    fetch(`${base}/api/demo/maldoror`).then(r => r.json()).then(setMaldoror).catch(() => {});
-    fetch(`${base}/api/demo/knowledge-graph`).then(r => r.json()).then(setKnowledgeGraph).catch(() => {});
+    fetch(`${base}/api/demo/evidence`).then(r => r.json()).then((d: Record<string, unknown>[]) => setEvidence(d)).catch(() => {});
+    fetch(`${base}/api/demo/reflection`).then(r => r.json()).then((d: DemoReflection | null) => setReflection(d)).catch(() => {});
+    fetch(`${base}/api/demo/maldoror`).then(r => r.json()).then((d: DemoMaldororProposal | null) => setMaldoror(d)).catch(() => {});
+    fetch(`${base}/api/demo/knowledge-graph`).then(r => r.json()).then((d: { nodes: Record<string, unknown>[]; edges: Record<string, unknown>[] }) => setKnowledgeGraph(d)).catch(() => {});
   }, [demo?.active, demo?.step]);
 
   if (!demo?.active) {
@@ -179,14 +178,14 @@ export function DemoPanel({ status, send }: DemoPanelProps) {
       {currentStep >= 3 && evidence.length > 0 && (
         <Panel title="Evidence Acquired">
           <div className="space-y-2">
-            {evidence.map((doc: any, i: number) => (
+            {evidence.map((doc, i) => (
               <div key={i} className="p-2 rounded bg-surface-2 text-xs space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-text-secondary font-medium truncate">{doc.title}</span>
-                  <span className="text-2xs text-accent shrink-0 ml-2">{(doc.confidence * 100).toFixed(0)}%</span>
+                  <span className="text-text-secondary font-medium truncate">{String(doc.title)}</span>
+                  <span className="text-2xs text-accent shrink-0 ml-2">{((doc.confidence as number) * 100).toFixed(0)}%</span>
                 </div>
-                <div className="text-text-tertiary text-[11px]">{doc.source} — {doc.author}</div>
-                <div className="text-text-secondary text-[11px] leading-relaxed">{doc.summary}</div>
+                <div className="text-text-tertiary text-[11px]">{String(doc.source)} — {String(doc.author)}</div>
+                <div className="text-text-secondary text-[11px] leading-relaxed">{String(doc.summary)}</div>
               </div>
             ))}
           </div>
@@ -196,13 +195,13 @@ export function DemoPanel({ status, send }: DemoPanelProps) {
       {currentStep >= 5 && knowledgeGraph.nodes.length > 0 && (
         <Panel title="Knowledge Graph">
           <div className="flex flex-wrap gap-1.5">
-            {knowledgeGraph.nodes.map((node: any) => (
+            {knowledgeGraph.nodes.map((node) => (
               <span
-                key={node.id}
+                key={String(node.id)}
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-surface-2 text-text-secondary border border-border-subtle"
               >
-                {node.name}
-                <span className="text-text-tertiary">({node.connections})</span>
+                {String(node.name)}
+                <span className="text-text-tertiary">({String(node.connections)})</span>
               </span>
             ))}
           </div>
@@ -217,15 +216,15 @@ export function DemoPanel({ status, send }: DemoPanelProps) {
           <div className="space-y-2 text-xs">
             <div>
               <span className="text-text-tertiary">What worked: </span>
-              <span className="text-text-secondary">{(reflection as any).what_worked}</span>
+              <span className="text-text-secondary">{reflection.what_worked}</span>
             </div>
             <div>
               <span className="text-text-tertiary">Gap: </span>
-              <span className="text-text-secondary">{(reflection as any).what_failed}</span>
+              <span className="text-text-secondary">{reflection.what_failed}</span>
             </div>
             <div>
               <span className="text-text-tertiary">Lesson: </span>
-              <span className="text-text-secondary">{(reflection as any).lesson}</span>
+              <span className="text-text-secondary">{reflection.lesson}</span>
             </div>
           </div>
         </Panel>
@@ -236,9 +235,9 @@ export function DemoPanel({ status, send }: DemoPanelProps) {
           <div className="space-y-2 text-xs">
             <div className="flex items-center gap-2">
               <FileText className="w-3.5 h-3.5 text-accent" />
-              <span className="text-text-secondary font-medium">{(maldoror as any).description}</span>
+              <span className="text-text-secondary font-medium">{maldoror.description}</span>
             </div>
-            <div className="text-text-tertiary">{(maldoror as any).reasoning}</div>
+            <div className="text-text-tertiary">{maldoror.reasoning}</div>
             <div className="flex gap-2 mt-1">
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-status-success/10 text-status-success">
                 <CheckCircle2 className="w-3 h-3" /> Syntax valid
@@ -253,9 +252,9 @@ export function DemoPanel({ status, send }: DemoPanelProps) {
                 Not applied
               </span>
             </div>
-            {(maldoror as any).dry_run_diff && (
+            {maldoror.dry_run_diff && (
               <pre className="mt-2 p-2 rounded bg-surface-2 text-[10px] text-text-secondary overflow-x-auto font-mono leading-relaxed">
-                {(maldoror as any).dry_run_diff}
+                {maldoror.dry_run_diff}
               </pre>
             )}
           </div>
@@ -271,7 +270,7 @@ export function DemoPanel({ status, send }: DemoPanelProps) {
             </div>
             <div className="grid grid-cols-2 gap-2 mt-2">
               <MetricCard label="Evidence" value={`${evidence.length} sources`} />
-              <MetricCard label="Memory" value={`${(status?.demo as any)?.memoryWrites || 0} writes`} />
+              <MetricCard label="Memory" value={`${demo?.memoryWrites || 0} writes`} />
               <MetricCard label="KG Nodes" value={`${knowledgeGraph.nodes.length}`} />
               <MetricCard label="KG Edges" value={`${knowledgeGraph.edges.length}`} />
             </div>

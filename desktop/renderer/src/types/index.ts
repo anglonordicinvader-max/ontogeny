@@ -123,3 +123,22 @@ export interface DemoStats {
   maldororProposal: string | null;
   startedAt: number | null;
 }
+
+export interface DemoReflection {
+  what_worked: string;
+  what_failed: string;
+  lesson: string;
+  root_cause: string;
+}
+
+export interface DemoMaldororProposal {
+  description: string;
+  reasoning: string;
+  dry_run_diff: string;
+  validation: {
+    syntax_valid: boolean;
+    import_safe: boolean;
+    sandbox_passed: boolean;
+    applied: boolean;
+  };
+}
