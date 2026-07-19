@@ -30,7 +30,7 @@ const tabs = [
   { id: 'memory', label: 'Memory', icon: Database },
   { id: 'goals', label: 'Goals', icon: Target },
   { id: 'knowledge', label: 'Knowledge', icon: GitBranch },
-  { id: 'crawlers', label: 'Knowledge', icon: Workflow },
+  { id: 'crawlers', label: 'Acquisition', icon: Workflow },
   { id: 'maldoror', label: 'Maldoror', icon: Cpu },
   { id: 'production', label: 'Production', icon: Monitor },
   { id: 'blender', label: 'Blender', icon: Eye },

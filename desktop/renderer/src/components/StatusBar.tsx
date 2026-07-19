@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { AgentStatus } from '@/types';
+import { APP_VERSION } from '@/types';
 import { formatDuration } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { ChevronUp, X } from 'lucide-react';
@@ -105,11 +106,11 @@ export function StatusBar({ status, connected }: StatusBarProps) {
               <DetailRow label="Backend API" value={connected ? 'Online' : 'Offline'} status={connected ? 'green' : 'red'} />
               <DetailRow label="WebSocket" value={connected ? 'Open' : 'Closed'} status={connected ? 'green' : 'red'} />
               <DetailRow label="Active Model" value={modelVersion} status="gray" />
-              <DetailRow label="Sandbox" value="Ready" status="gray" />
+              <DetailRow label="Sandbox" value={status?.state === 'demo' ? 'Demo Mode' : 'Standby'} status="gray" />
               <DetailRow label="Current Cycle" value={`#${status?.iteration || 0}`} status="gray" />
               <DetailRow label="Runtime" value={status ? formatDuration(Date.now() - status.uptime * 1000) : '—'} status="gray" />
               <DetailRow label="State" value={stateLabel} status={status?.state === 'error' ? 'red' : 'green'} />
-              <DetailRow label="Version" value="v1.0.0" status="gray" />
+              <DetailRow label="Version" value={`v${APP_VERSION}`} status="gray" />
             </div>
           </div>
         </div>
