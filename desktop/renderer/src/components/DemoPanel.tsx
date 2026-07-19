@@ -21,6 +21,7 @@ import {
 interface DemoPanelProps {
   status: AgentStatus | null;
   send: (type: string, payload?: unknown) => void;
+  backendPort: number;
 }
 
 const STEP_ICONS = [
@@ -34,7 +35,7 @@ const STEP_ICONS = [
   CheckCircle2,
 ];
 
-export function DemoPanel({ status, send }: DemoPanelProps) {
+export function DemoPanel({ status, send, backendPort }: DemoPanelProps) {
   const demo = status?.demo;
   const [autoPlay, setAutoPlay] = useState(false);
   const [evidence, setEvidence] = useState<Record<string, unknown>[]>([]);
@@ -70,14 +71,13 @@ export function DemoPanel({ status, send }: DemoPanelProps) {
 
   useEffect(() => {
     if (!demo?.active) return;
-    const port = window.location.port || '8765';
-    const base = `http://127.0.0.1:${port}`;
+    const base = `http://127.0.0.1:${backendPort}`;
 
     fetch(`${base}/api/demo/evidence`).then(r => r.json()).then((d: Record<string, unknown>[]) => setEvidence(d)).catch(() => {});
     fetch(`${base}/api/demo/reflection`).then(r => r.json()).then((d: DemoReflection | null) => setReflection(d)).catch(() => {});
     fetch(`${base}/api/demo/maldoror`).then(r => r.json()).then((d: DemoMaldororProposal | null) => setMaldoror(d)).catch(() => {});
     fetch(`${base}/api/demo/knowledge-graph`).then(r => r.json()).then((d: { nodes: Record<string, unknown>[]; edges: Record<string, unknown>[] }) => setKnowledgeGraph(d)).catch(() => {});
-  }, [demo?.active, demo?.step]);
+  }, [demo?.active, demo?.step, backendPort]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

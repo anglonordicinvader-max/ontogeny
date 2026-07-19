@@ -74,7 +74,7 @@ function App() {
   const renderWorkspace = () => {
     switch (activeTab) {
       case 'demo':
-        return <DemoPanel status={status} send={send} />;
+        return <DemoPanel status={status} send={send} backendPort={backendPort} />;
       case 'activity':
         return <ActivityTimeline events={events} />;
       case 'cognitive':

@@ -114,12 +114,18 @@ async def handle_message(message: dict, websocket: WebSocket):
         elif cmd == "demo_start":
             result = demo_session.start()
             await websocket.send_json({"type": "command_result", "payload": result})
+            await broadcast({"type": "status", "payload": _demo_full_status()})
+            await broadcast({"type": "event", "payload": {"id": str(int(time.time() * 1000)), "timestamp": int(time.time() * 1000), "type": "demo", "message": "Demo Mode started"}})
         elif cmd == "demo_advance":
             result = demo_session.advance()
             await websocket.send_json({"type": "command_result", "payload": result})
+            await broadcast({"type": "status", "payload": _demo_full_status()})
+            step_name = result.get("stepName", "Unknown")
+            await broadcast({"type": "event", "payload": {"id": str(int(time.time() * 1000)), "timestamp": int(time.time() * 1000), "type": "demo", "message": f"Demo step: {step_name}"}})
         elif cmd == "demo_reset":
             result = demo_session.reset()
             await websocket.send_json({"type": "command_result", "payload": result})
+            await broadcast({"type": "status", "payload": _demo_full_status()})
 
     elif msg_type == "action":
         action = payload.get("action")
