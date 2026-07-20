@@ -13,6 +13,7 @@
     "typecheck": "cd renderer && npx tsc --noEmit",
     "verify": "cd renderer && npx tsc --noEmit && npm run build && npx eslint src/ --max-warnings 50",
     "package": "npm run build && electron-builder --win",
+    "package:demo": "python ../backend/build_demo.py && npm run build && electron-builder --win portable",
     "package:portable": "npm run build && electron-builder --win portable",
     "package:installer": "npm run build && electron-builder --win nsis",
     "postinstall": "electron-builder install-app-deps"
@@ -57,8 +58,18 @@
         "to": "backend/blender_worlds.py"
       },
       {
-        "from": "../data",
-        "to": "data"
+        "from": "../backend/package_resources/blender_vendor",
+        "to": "backend/blender_vendor"
+      },
+      {
+        "from": "../data/blender/models/tocabi/combined",
+        "to": "data/blender/models/tocabi/combined",
+        "filter": ["**/*", "!**/.git/**"]
+      },
+      {
+        "from": "../data/mujoco/models/unitree_g1",
+        "to": "data/mujoco/models/unitree_g1",
+        "filter": ["**/*", "!**/.git/**", "!test_render.png", "!g1_patched.xml"]
       }
     ],
     "win": {
@@ -76,7 +87,7 @@
           ]
         }
       ],
-      "icon": "renderer/public/icon.ico"
+      "icon": "renderer/public/branding/ontogeny.png"
     },
     "nsis": {
       "oneClick": false,

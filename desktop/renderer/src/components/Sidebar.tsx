@@ -9,7 +9,6 @@ import {
   Settings,
   Target,
   Workflow,
-  Cpu,
   Eye,
   PanelLeftClose,
   PanelLeftOpen,
@@ -33,7 +32,7 @@ const tabs = [
   { id: 'goals', label: 'Goals', icon: Target },
   { id: 'knowledge', label: 'Knowledge', icon: GitBranch },
   { id: 'crawlers', label: 'Acquisition', icon: Workflow },
-  { id: 'maldoror', label: 'Maldoror', icon: Cpu },
+  { id: 'maldoror', label: 'Maldoror', icon: null, branded: true },
   { id: 'production', label: 'Production', icon: Monitor },
   { id: 'blender', label: 'Blender', icon: Eye },
   { id: 'mujoco', label: 'MuJoCo', icon: Box },
@@ -94,7 +93,14 @@ export function Sidebar({ activeTab, onTabChange, onSearchOpen, connected }: Sid
               aria-label={tab.label}
               data-tooltip={collapsed ? tab.label : undefined}
             >
-              <Icon className="w-4 h-4 shrink-0" />
+              {tab.branded ? (
+                <span className="w-4 h-4 shrink-0 relative" aria-hidden="true">
+                  <img src="/branding/maldoror-black.png" alt="" className="w-4 h-4 object-contain dark:hidden" />
+                  <img src="/branding/maldoror-white.png" alt="" className="w-4 h-4 object-contain hidden dark:block" />
+                </span>
+              ) : Icon ? (
+                <Icon className="w-4 h-4 shrink-0" />
+              ) : null}
               {!collapsed && <span>{tab.label}</span>}
             </button>
           );

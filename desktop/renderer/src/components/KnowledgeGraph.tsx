@@ -1,4 +1,5 @@
 // @ts-nocheck
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-this-alias, no-console */
 import { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 import { Panel } from './Panel';
@@ -13,8 +14,8 @@ const GL = ['Core Architecture','Reasoning & Logic','Memory & Learning','Percept
 function getCSSVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888';
 }
-const GC = Array.from({ length: 6 }, (_, i) => getCSSVar(`--kg-group-${i}`));
-const GH = Array.from({ length: 6 }, (_, i) => getCSSVar(`--kg-halo-${i}`));
+const GC = Array.from({ length: 6 }, () => getCSSVar('--text-secondary'));
+const GH = Array.from({ length: 6 }, () => getCSSVar('--surface-2'));
 const GROUPS = [
   ['transformer','attention','embedding','recurrence','architecture','encoder','decoder','feedforward','normalization','residual'],
   ['reasoning','logic','causal','inference','deduction','induction','abstraction','generalization','composition','analogy'],
@@ -24,6 +25,7 @@ const GROUPS = [
   ['metacognition','curiosity','exploration','uncertainty','confidence','surprise','novelty','self-reflection','planning','monitoring'],
 ];
 const N = 6;
+const EMPTY_GRAPH = { nodes: [] as KnowledgeNode[], edges: [] as KnowledgeEdge[] };
 
 class GraphEngine {
   private svg: d3.Selection<SVGSVGElement, unknown, null, undefined>;
@@ -138,6 +140,18 @@ class GraphEngine {
     this.render();
   }
 
+  replace(nodes: KnowledgeNode[], edges: KnowledgeEdge[]) {
+    if (this.destroyed) return;
+    this.nodes = [];
+    this.links = [];
+    this.linkSet.clear();
+    this.linkG.selectAll('*').remove();
+    this.nodeG.selectAll('*').remove();
+    this.labelG.selectAll('*').remove();
+    nodes.slice(0, 80).forEach((node) => this.addNode(node));
+    edges.slice(0, 120).forEach((edge) => this.addEdge(edge));
+  }
+
   render() {
     if (this.destroyed) return;
 
@@ -217,7 +231,7 @@ export function KnowledgeGraph({ status }: KnowledgeGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<GraphEngine | null>(null);
   const knowledge = status?.knowledge || { nodes: 0, edges: 0 };
-  const graph = status?.knowledgeGraph || { nodes: [], edges: [] };
+  const graph = status?.knowledgeGraph || EMPTY_GRAPH;
 
   useEffect(() => {
     if (!svgRef.current || !containerRef.current) return;
@@ -239,8 +253,7 @@ export function KnowledgeGraph({ status }: KnowledgeGraphProps) {
     const engine = engineRef.current;
     if (!engine) return;
 
-    graph.nodes.slice(0, 80).forEach((node) => engine.addNode(node));
-    graph.edges.slice(0, 100).forEach((edge) => engine.addEdge(edge));
+    engine.replace(graph.nodes, graph.edges);
   }, [graph]);
 
   return (
@@ -271,13 +284,12 @@ export function KnowledgeGraph({ status }: KnowledgeGraphProps) {
 
       <Panel title="Recent Concepts">
         <div className="flex flex-wrap gap-2">
-          {(engineRef.current?.['nodes'] || []).slice(-18).map((n: any) => (
+          {graph.nodes.slice(-18).map((node) => (
             <span
-              key={n.id}
+              key={node.id}
               className="px-2 py-1 text-2xs rounded-md border border-border bg-surface-2 text-text-secondary"
-              style={{ borderColor: GC[n.g % N].replace('0.95', '0.25') }}
             >
-              {n.label}
+              {node.name}
             </span>
           ))}
         </div>

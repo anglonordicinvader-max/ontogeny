@@ -171,6 +171,7 @@ async function startMuJoCo() {
 }
 
 function createWindow() {
+  const windowIcon = path.join(__dirname, '..', 'renderer', 'dist', 'branding', 'ontogeny.png');
   mainWindow = new BrowserWindow({
     width: 1920,
     height: 1080,
@@ -179,6 +180,7 @@ function createWindow() {
     frame: false,
     titleBarStyle: 'hidden',
     backgroundColor: '#0a0a0a',
+    icon: windowIcon,
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'preload.js'),
       contextIsolation: true,

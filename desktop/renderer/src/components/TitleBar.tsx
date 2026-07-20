@@ -15,17 +15,12 @@ export function TitleBar({ title = 'Ontogeny' }: TitleBarProps) {
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
       <div className="flex items-center gap-2.5 px-4">
-        {/* Subtle monogram logo */}
-        <div
-          className="flex items-center justify-center w-5 h-5 rounded-[4px] text-[10px] font-bold tracking-tight"
-          style={{
-            background: 'rgba(255, 255, 255, 0.06)',
-            color: 'var(--text-tertiary)',
-            fontFamily: "'Geist Mono', monospace",
-          }}
-        >
-          O
-        </div>
+        <img
+          src="/branding/ontogeny.png"
+          alt=""
+          className="w-5 h-5 object-contain"
+          draggable={false}
+        />
         <span
           className="text-[13px] font-semibold tracking-[0.18em] text-text-secondary"
           style={{ fontFamily: "'Geist', 'Geist Sans', sans-serif" }}
