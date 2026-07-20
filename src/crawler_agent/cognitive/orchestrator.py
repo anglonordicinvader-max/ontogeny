@@ -2782,6 +2782,7 @@ class CognitiveOrchestrator:
             "state": self.state.value,
             "iteration": self.iteration,
             "uptime_seconds": uptime,
+            "backend": self.backend.get_stats() if self.backend else {},
             # Memory
             "memory": memory_stats,
             # Goals & Tasks
@@ -2797,6 +2798,7 @@ class CognitiveOrchestrator:
             "recursive_modification": self.recursive_modifier.get_stats()
             if self.recursive_modifier
             else {},
+            "maldoror": self.model_trainer.get_stats() if self.model_trainer else {},
             # Crawlers & Infrastructure
             "crawlers": list(self.crawlers.keys()),
             "proxy_pool": self.proxy_pool.get_stats(),

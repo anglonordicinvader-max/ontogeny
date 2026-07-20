@@ -48,6 +48,7 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
     print(f"  {yellow('goal')} <description>         - Create a goal")
     print(f"  {yellow('goals')}                      - List active goals")
     print(f"  {yellow('status')}                     - Agent status")
+    print(f"  {yellow('embodiment')}                 - NeoCorpus backend status")
     print(f"  {yellow('memory')}                     - View memory stats")
     print(f"  {yellow('drives')}                     - View intrinsic drives")
     print(f"  {yellow('skills')}                     - View learned skills")
@@ -163,9 +164,31 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
                 print(f"  Iteration:   {yellow(str(status['iteration']))}")
                 uptime = f"{status['uptime_seconds']:.0f}s"
                 print(f"  Uptime:      {yellow(uptime)}")
-                print(f"  Goals:       {status['goals']}")
-                print(f"  Drives:      {status['drives']}")
-                print(f"  Crawlers:    {status['crawlers']}")
+                goals = status.get("goals", {})
+                memory = status.get("memory", {})
+                print(
+                    f"  Goals:       {goals.get('active', 0)} active / "
+                    f"{goals.get('total', 0)} total"
+                )
+                print(f"  Planning:    {status.get('plans', {})}")
+                print(
+                    "  Memory:      "
+                    f"{memory.get('working_memory_size', 0)} working / "
+                    f"{memory.get('episodic_count', 0)} episodic / "
+                    f"{memory.get('semantic_count', 0)} semantic / "
+                    f"{memory.get('procedural_count', 0)} procedural"
+                )
+                print(f"  Knowledge:   {status.get('knowledge_graph', {})}")
+                print(f"  Reflection:  {status.get('self_reflection', {})}")
+                print(f"  Maldoror:    {status.get('maldoror', {})}")
+                backend = status.get("backend", {})
+                routes = ", ".join(
+                    f"{tier}={backend.get(tier + '_backend', 'unavailable')}"
+                    for tier in ("routine", "code", "reasoning", "modifier")
+                )
+                print(f"  Routing:     {routes}")
+                print(f"  NeoCorpus:   {status.get('embodiment', {})}")
+                print(f"  Crawlers:    {status.get('crawlers', [])}")
                 proxy_stats = agent.proxy_pool.get_stats()
                 healthy_color = green if proxy_stats["healthy"] > 0 else red
                 healthy_count = proxy_stats["healthy"]
@@ -173,6 +196,15 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
                 print(f"  Proxies:     {healthy_color(f'{healthy_count}/{total_count} healthy')}")
                 if status.get("current_plan"):
                     print(f"\n{bold('Current Plan:')}\n{status['current_plan']}")
+
+            elif command == "embodiment":
+                status = await agent.get_status()
+                embodiments = status.get("embodiment", {})
+                print(f"\n{bold(cyan('NeoCorpus Embodiment'))}")
+                for name in ("blender", "mujoco"):
+                    available = embodiments.get(name, False)
+                    marker = green("available") if available else red("unavailable")
+                    print(f"  {name.capitalize():8} {marker}")
 
             elif command == "memory":
                 context = await agent.memory.get_context_window()
