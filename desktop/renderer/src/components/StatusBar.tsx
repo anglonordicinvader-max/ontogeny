@@ -106,8 +106,8 @@ export function StatusBar({ status, connected }: StatusBarProps) {
               <DetailRow label="Backend API" value={connected ? 'Online' : 'Offline'} status={connected ? 'green' : 'red'} />
               <DetailRow label="WebSocket" value={connected ? 'Open' : 'Closed'} status={connected ? 'green' : 'red'} />
               <DetailRow label="Active Model" value={modelVersion} status="gray" />
-              <DetailRow label="Blender" value={status?.embodiment?.blender ? 'Available' : 'Unavailable'} status={status?.embodiment?.blender ? 'green' : 'gray'} />
-              <DetailRow label="MuJoCo" value={status?.embodiment?.mujoco ? 'Available' : 'Unavailable'} status={status?.embodiment?.mujoco ? 'green' : 'gray'} />
+              <DetailRow label="Blender" value={status?.embodimentDetails?.blender?.lifecycle || (status?.embodiment?.blender ? 'ready' : 'unavailable')} status={status?.embodiment?.blender ? 'green' : 'gray'} />
+              <DetailRow label="MuJoCo" value={status?.embodimentDetails?.mujoco?.lifecycle || (status?.embodiment?.mujoco ? 'ready' : 'unavailable')} status={status?.embodiment?.mujoco ? 'green' : 'gray'} />
               <DetailRow label="Sandbox" value={status?.state === 'demo' ? 'Demo Mode' : 'Standby'} status="gray" />
               <DetailRow label="Current Cycle" value={`#${status?.iteration || 0}`} status="gray" />
               <DetailRow label="Runtime" value={status ? formatDuration(status.uptime * 1000) : '—'} status="gray" />

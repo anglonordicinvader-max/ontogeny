@@ -104,6 +104,10 @@ class TestNeoCorpusIntegration:
         assert library.embodiments.get(EmbodimentType.BLENDER) is not None
         assert library.embodiments.get(EmbodimentType.MUJOCO) is not None
         assert set(library.get_embodiment_status()) == {"blender", "mujoco"}
+        details = library.get_embodiment_details()
+        assert details["blender"]["lifecycle"] == "unavailable"
+        assert details["mujoco"]["lifecycle"] in {"ready", "unavailable"}
+        assert details["mujoco"]["embodiment_type"] == "mujoco"
 
     @pytest.mark.asyncio
     async def test_mujoco_simulation_routes_through_neocorpus(self):

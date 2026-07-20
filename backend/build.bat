@@ -1,8 +1,9 @@
 @echo off
+setlocal
 echo Building Ontogeny Backend...
-pip install -r requirements-ui.txt
-pip install pyinstaller
-pyinstaller backend.spec --clean
-pyinstaller mujoco.spec --clean
+python -m pip install -r requirements-ui.txt
+python -m pip install pyinstaller
+python build_demo.py
+if errorlevel 1 exit /b %errorlevel%
 echo Build complete!
-pause
+endlocal

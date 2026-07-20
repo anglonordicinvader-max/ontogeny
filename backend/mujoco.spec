@@ -1,15 +1,32 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from PyInstaller.utils.hooks import collect_all, collect_dynamic_libs
+
+mujoco_datas, mujoco_binaries, mujoco_hiddenimports = collect_all('mujoco')
+glfw_binaries = collect_dynamic_libs('glfw', destdir='glfw')
+
 a = Analysis(
     ['mujoco_simulation.py'],
     pathex=['.'],
-    binaries=[],
-    datas=[],
-    hiddenimports=['websockets'],
+    binaries=[*mujoco_binaries, *glfw_binaries],
+    datas=mujoco_datas,
+    hiddenimports=[
+        'websockets',
+        'glfw',
+        'mujoco.rendering.classic.renderer',
+        'mujoco.rendering.classic.gl_context',
+        *mujoco_hiddenimports,
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['pytest', 'notebook', 'IPython'],
+    # The standalone renderer reads MuJoCo sensors directly. Importing the
+    # crawler_agent package here pulls the complete training stack through its
+    # package initializer and is neither needed nor desirable in this process.
+    excludes=[
+        'pytest', 'notebook', 'IPython', 'crawler_agent', 'torch', 'tensorflow',
+        'transformers', 'datasets', 'pandas', 'scipy', 'sklearn', 'pyarrow',
+    ],
     noarchive=False,
 )
 

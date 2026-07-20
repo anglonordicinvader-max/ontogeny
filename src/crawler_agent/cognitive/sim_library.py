@@ -24,7 +24,14 @@ from .blender_sandbox import (
     SimulationSpec,
     SimulationType,
 )
-from .embodiment import EmbodimentAdapter, EmbodimentRegistry, EmbodimentType
+from .embodiment import (
+    EmbodimentAdapter,
+    EmbodimentLifecycle,
+    EmbodimentRegistry,
+    EmbodimentSnapshot,
+    EmbodimentTransport,
+    EmbodimentType,
+)
 
 logger = structlog.get_logger()
 
@@ -256,10 +263,17 @@ class MuJoCoBackend:
 class SimulationEmbodimentAdapter(EmbodimentAdapter):
     """NeoCorpus adapter over an existing batch simulation backend."""
 
-    def __init__(self, embodiment_type: EmbodimentType, backend: Any):
+    def __init__(
+        self,
+        embodiment_type: EmbodimentType,
+        backend: Any,
+        transport: EmbodimentTransport | None = None,
+    ):
         self._embodiment_type = embodiment_type
         self.backend = backend
         self._last_result: SimulationResult | None = None
+        self._running = False
+        self.transport = transport
 
     @property
     def embodiment_type(self) -> EmbodimentType:
@@ -267,9 +281,48 @@ class SimulationEmbodimentAdapter(EmbodimentAdapter):
 
     @property
     def is_available(self) -> bool:
+        if self.transport and self.transport.snapshot(self.embodiment_type.value).get("available"):
+            return True
         if self.backend is None:
             return False
         return bool(getattr(self.backend, "is_available", True))
+
+    @property
+    def lifecycle(self) -> EmbodimentLifecycle:
+        if self.transport:
+            live = self.transport.snapshot(self.embodiment_type.value)
+            if live.get("available"):
+                try:
+                    return EmbodimentLifecycle(live.get("lifecycle", "ready"))
+                except ValueError:
+                    return EmbodimentLifecycle.READY
+        if not self.is_available:
+            return EmbodimentLifecycle.UNAVAILABLE
+        if self._running:
+            return EmbodimentLifecycle.RUNNING
+        if self._last_result is not None and not self._last_result.success:
+            return EmbodimentLifecycle.ERROR
+        return EmbodimentLifecycle.READY
+
+    def snapshot(self) -> EmbodimentSnapshot:
+        telemetry: dict[str, Any] = {}
+        if self._last_result is not None:
+            telemetry = {
+                "success": self._last_result.success,
+                "error": self._last_result.error,
+                "stats": self._last_result.stats,
+            }
+        if self.transport:
+            live = self.transport.snapshot(self.embodiment_type.value)
+            telemetry["live"] = live.get("telemetry", {})
+            if live.get("last_error"):
+                telemetry["last_error"] = live["last_error"]
+        return EmbodimentSnapshot(
+            embodiment_type=self.embodiment_type,
+            lifecycle=self.lifecycle,
+            available=self.is_available,
+            telemetry=telemetry,
+        )
 
     async def run_simulation(self, spec: SimulationSpec) -> SimulationResult:
         if not self.is_available:
@@ -277,10 +330,21 @@ class SimulationEmbodimentAdapter(EmbodimentAdapter):
                 success=False,
                 error=f"{self.embodiment_type.value} embodiment not available",
             )
-        self._last_result = await self.backend.run_simulation(spec)
-        return self._last_result
+        self._running = True
+        try:
+            self._last_result = await self.backend.run_simulation(spec)
+            return self._last_result
+        finally:
+            self._running = False
 
     async def send_action(self, action: dict[str, Any]) -> dict[str, Any]:
+        if action.get("action") == "command":
+            if not self.transport:
+                return {"success": False, "error": "Live embodiment transport unavailable"}
+            command = action.get("command")
+            if not isinstance(command, str) or not command:
+                return {"success": False, "error": "Embodiment command required"}
+            return await self.transport.send_action(self.embodiment_type.value, command)
         if action.get("action") != "simulate":
             return {"success": False, "error": "Unsupported embodiment action"}
         spec = action.get("spec")
@@ -297,10 +361,12 @@ class SimulationEmbodimentAdapter(EmbodimentAdapter):
         }
 
     async def observe(self) -> dict[str, Any]:
+        live = self.transport.snapshot(self.embodiment_type.value) if self.transport else None
         if self._last_result is None:
-            return {"available": self.is_available, "last_result": None}
+            return {"available": self.is_available, "live": live, "last_result": None}
         return {
             "available": self.is_available,
+            "live": live,
             "last_result": {
                 "success": self._last_result.success,
                 "error": self._last_result.error,
@@ -570,16 +636,20 @@ SIMULATION_SCENARIOS: dict[str, ScenarioSpec] = {
 class SimulationLibrary:
     """Library of pre-built simulation scenarios with multi-backend support."""
 
-    def __init__(self, blender_sandbox: BlenderSandbox | None = None):
+    def __init__(
+        self,
+        blender_sandbox: BlenderSandbox | None = None,
+        embodiment_transport: EmbodimentTransport | None = None,
+    ):
         self.blender = blender_sandbox
         self.pybullet = PyBulletBackend()
         self.mujoco = MuJoCoBackend()
         self.embodiments = EmbodimentRegistry()
         self.embodiments.register(
-            SimulationEmbodimentAdapter(EmbodimentType.BLENDER, self.blender)
+            SimulationEmbodimentAdapter(EmbodimentType.BLENDER, self.blender, embodiment_transport)
         )
         self.embodiments.register(
-            SimulationEmbodimentAdapter(EmbodimentType.MUJOCO, self.mujoco)
+            SimulationEmbodimentAdapter(EmbodimentType.MUJOCO, self.mujoco, embodiment_transport)
         )
         self.scenarios = dict(SIMULATION_SCENARIOS)
         self.logger = logger.bind(component="sim_library")
@@ -659,6 +729,8 @@ class SimulationLibrary:
     def get_embodiment_status(self) -> dict[str, bool]:
         available = set(self.embodiments.available())
         return {
-            embodiment.value: embodiment in available
-            for embodiment in self.embodiments.all_types()
+            embodiment.value: embodiment in available for embodiment in self.embodiments.all_types()
         }
+
+    def get_embodiment_details(self) -> dict[str, dict[str, Any]]:
+        return self.embodiments.snapshots()

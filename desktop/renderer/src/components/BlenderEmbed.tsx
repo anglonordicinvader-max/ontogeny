@@ -3,6 +3,7 @@ import { Panel } from './Panel';
 
 interface BlenderEmbedProps {
   backendPort?: number;
+  onCommand?: (command: string) => void;
 }
 
 type Mode = 'sphere' | 'anatomy' | 'both';
@@ -16,7 +17,15 @@ interface BlenderHealth {
   running: boolean;
 }
 
-export function BlenderEmbed({ backendPort = 8766 }: BlenderEmbedProps) {
+interface WorkspaceWorld {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  available: boolean;
+}
+
+export function BlenderEmbed({ backendPort = 8766, onCommand }: BlenderEmbedProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -27,6 +36,8 @@ export function BlenderEmbed({ backendPort = 8766 }: BlenderEmbedProps) {
   const [drives, setDrives] = useState<Record<string, number>>({});
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [health, setHealth] = useState<BlenderHealth | null>(null);
+  const [worlds, setWorlds] = useState<WorkspaceWorld[]>([]);
+  const [worldSwitching, setWorldSwitching] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const frameCount = useRef(0);
   const lastFpsTime = useRef(Date.now());
@@ -41,10 +52,14 @@ export function BlenderEmbed({ backendPort = 8766 }: BlenderEmbedProps) {
   }, [backendPort]);
 
   const sendCommand = useCallback((command: string) => {
+    if (onCommand) {
+      onCommand(command);
+      return;
+    }
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'command', command }));
     }
-  }, []);
+  }, [onCommand]);
 
   useEffect(() => {
     let retryTimeout: ReturnType<typeof setTimeout>;
@@ -65,6 +80,7 @@ export function BlenderEmbed({ backendPort = 8766 }: BlenderEmbedProps) {
         retryCount = 0;
         // Request health status
         ws.send(JSON.stringify({ type: 'command', command: 'health' }));
+        ws.send(JSON.stringify({ type: 'command', command: 'worlds' }));
       };
 
       ws.onmessage = (event) => {
@@ -73,7 +89,10 @@ export function BlenderEmbed({ backendPort = 8766 }: BlenderEmbedProps) {
           if (msg.type === 'frame' && msg.data) {
             renderFrame(msg.data);
             if (msg.mode) setMode(msg.mode);
-            if (msg.world) setWorld(msg.world);
+            if (msg.world) {
+              setWorld(msg.world);
+              setWorldSwitching(false);
+            }
             if (msg.emotion) setEmotion(msg.emotion);
             if (msg.blend_drives) setDrives(msg.blend_drives);
             frameCount.current++;
@@ -97,6 +116,11 @@ export function BlenderEmbed({ backendPort = 8766 }: BlenderEmbedProps) {
             if (msg.payload.blend_world) setWorld({ name: msg.payload.blend_world, description: '', difficulty: 0.5, tags: [] });
             if (msg.payload.blend_emotion) setEmotion(msg.payload.blend_emotion);
             if (msg.payload.blend_drives) setDrives(msg.payload.blend_drives);
+          } else if (msg.type === 'world_catalog') {
+            setWorlds(msg.worlds || []);
+          } else if (msg.type === 'world_changed') {
+            setWorld(msg.world || null);
+            setWorldSwitching(false);
           }
         } catch { /* ignore */ }
       };
@@ -135,6 +159,11 @@ export function BlenderEmbed({ backendPort = 8766 }: BlenderEmbedProps) {
       }
     };
     img.src = `data:image/png;base64,${data}`;
+  };
+
+  const selectWorld = (worldId: string) => {
+    setWorldSwitching(true);
+    sendCommand(`world:${worldId}`);
   };
 
   return (
@@ -229,6 +258,37 @@ export function BlenderEmbed({ backendPort = 8766 }: BlenderEmbedProps) {
             )}
           </div>
         </Panel>
+      )}
+
+      {connected && worlds.length > 0 && (
+        <div className="absolute top-2 right-2 w-64 glass-panel rounded-lg p-3 text-xs animate-panel-in">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-medium text-text-primary">World Manager</span>
+            <span className="text-[10px] uppercase tracking-wide text-text-tertiary">
+              {worldSwitching ? 'switching' : 'synchronized'}
+            </span>
+          </div>
+          <select
+            value={world?.name || health?.world || ''}
+            disabled={worldSwitching}
+            onChange={(event) => selectWorld(event.target.value)}
+            className="w-full bg-surface-2 border border-border rounded-md px-2 py-1.5 text-text-primary outline-none"
+            aria-label="Select Blender world"
+          >
+            {worlds.map((entry) => (
+              <option key={entry.id} value={entry.id} disabled={!entry.available}>
+                {entry.title}
+              </option>
+            ))}
+          </select>
+          <p className="mt-2 leading-relaxed text-text-tertiary">
+            {worlds.find((entry) => entry.id === (world?.name || health?.world))?.description || 'Select an embodiment workspace.'}
+          </p>
+          <div className="mt-2 flex items-center gap-2 text-[10px] uppercase tracking-wide text-text-tertiary">
+            <span className="w-1.5 h-1.5 rounded-full bg-status-success" />
+            {worlds.find((entry) => entry.id === (world?.name || health?.world))?.status || 'available'}
+          </div>
+        </div>
       )}
 
       {/* Mode control */}

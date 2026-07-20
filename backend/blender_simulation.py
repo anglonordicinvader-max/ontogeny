@@ -20,12 +20,16 @@ backend_dir = os.path.dirname(os.path.abspath(__file__))
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
-# Add user site-packages for websockets
-user_site = os.path.join(
-    os.path.expanduser("~"), "AppData", "Roaming", "Python", "Python313", "site-packages"
-)
-if user_site not in sys.path:
-    sys.path.insert(0, user_site)
+# Prefer the packaged dependency bundle; retain user-site discovery for development.
+blender_vendor = os.path.join(backend_dir, "blender_vendor")
+if os.path.isdir(blender_vendor) and blender_vendor not in sys.path:
+    sys.path.insert(0, blender_vendor)
+for python_minor in ("Python314", "Python313", "Python312", "Python311"):
+    user_site = os.path.join(
+        os.path.expanduser("~"), "AppData", "Roaming", "Python", python_minor, "site-packages"
+    )
+    if os.path.isdir(user_site) and user_site not in sys.path:
+        sys.path.append(user_site)
 
 import base64
 import json
@@ -41,6 +45,7 @@ from blender_worlds import (
     SurvivalChallenge,
     WorldSelector,
     WorldType,
+    list_workspace_worlds,
 )
 
 ALL_WORLDS = {}
@@ -104,6 +109,7 @@ def _mat(name, color, metallic=0.0, roughness=0.5, emission=0.0):
 class BlenderSimulation:
     def __init__(self, world_name=None):
         self.clients = set()
+        self.frame_clients = set()
         self.running = True
         self.frame = 0
         self.mode = "anatomy"
@@ -111,6 +117,7 @@ class BlenderSimulation:
         self.valence = 0.0
         self.arousal = 0.5
         self.world_name = world_name
+        self.world_source = "manual" if world_name else "autonomous"
         self.world_info = None
         self.tmp_path = os.path.join(tempfile.gettempdir(), "ontogeny_rt.png")
         self._pending_frame = None
@@ -202,11 +209,19 @@ class BlenderSimulation:
     # ================================================================
     # WORLD
     # ================================================================
-    def _build_world_scene(self):
+    def _build_world_scene(self, preserve_camera: bool = False):
+        camera_location = self.cam.location.copy() if preserve_camera and self.cam else None
+        target_location = (
+            self.cam_target.location.copy() if preserve_camera and self.cam_target else None
+        )
         for obj in list(self.col_world.objects):
+            object_data = obj.data
             bpy.data.objects.remove(obj, do_unlink=True)
+            if object_data and getattr(object_data, "users", 0) == 0:
+                if isinstance(object_data, bpy.types.Mesh):
+                    bpy.data.meshes.remove(object_data)
 
-        if self.world_selector:
+        if self.world_source == "autonomous" and self.world_selector:
             try:
                 result = self.world_selector.select(SelectionCriteria(max_difficulty=1.0))
                 if result.world.name != self.world_name:
@@ -233,6 +248,7 @@ class BlenderSimulation:
         bpy.context.active_object.data.materials.append(mat_ground)
 
         for obj_def in world_data.objects:
+            obj = None
             obj_type = obj_def.get("type")
             if obj_type == "plane":
                 bpy.ops.mesh.primitive_plane_add(
@@ -300,13 +316,12 @@ class BlenderSimulation:
             goal_obj.data.materials.append(mat_goal)
             self._link_to_collection(goal_obj, self.col_world)
 
-        if self.cam:
-            self.cam.location = (
-                spawn[0] + 8 * math.cos(time.time() * 0.1),
-                spawn[1] + 8 * math.sin(time.time() * 0.1),
-                5,
-            )
+        if self.cam and camera_location is None:
+            self.cam.location = (spawn[0] + 7, spawn[1] - 7, 5)
             self.cam_target.location = tuple(spawn)
+        elif self.cam and camera_location is not None:
+            self.cam.location = camera_location
+            self.cam_target.location = target_location
 
         w_info = {
             "name": self.world_name,
@@ -743,21 +758,25 @@ class BlenderSimulation:
     def _cleanup_depsgraph_triggers(self):
         """Remove objects that trigger the Blender 5.2 depsgraph speaker crash."""
         import bpy
+
         # Remove ALL speaker objects
         for obj in list(bpy.data.objects):
-            if obj.type == 'SPEAKER':
+            if obj.type == "SPEAKER":
                 bpy.data.objects.remove(obj, do_unlink=True)
         # Remove orphan speaker data
         for speaker in list(bpy.data.speakers):
             bpy.data.speakers.remove(speaker)
         # Force garbage collection
         import gc
+
         gc.collect()
 
     def _try_render_cycles(self):
         """Attempt Cycles render with write_still to a temp file."""
-        import bpy
         import base64
+
+        import bpy
+
         scene = bpy.context.scene
         scene.render.engine = "CYCLES"
         scene.cycles.device = "CPU"
@@ -784,8 +803,10 @@ class BlenderSimulation:
 
     def _try_render_eevee(self):
         """Attempt Eevee render (different depsgraph path, may avoid crash)."""
-        import bpy
         import base64
+
+        import bpy
+
         scene = bpy.context.scene
         scene.render.engine = "BLENDER_EEVEE"
         scene.render.resolution_x = 480
@@ -844,7 +865,7 @@ class BlenderSimulation:
                             error_msg = json.dumps(
                                 {"type": "render_error", "error": self._render_error}
                             )
-                            for c in self.clients.copy():
+                            for c in self.frame_clients.copy():
                                 try:
                                     await c.send(error_msg)
                                 except Exception:
@@ -855,13 +876,18 @@ class BlenderSimulation:
 
         async def handler(ws):
             self.clients.add(ws)
+            self.frame_clients.add(ws)
             try:
                 async for message in ws:
                     try:
                         data = json.loads(message)
                         if data.get("type") == "command":
                             cmd = data.get("command", "")
-                            if cmd == "reset":
+                            request_id = data.get("request_id")
+                            handled = True
+                            if cmd == "subscribe:telemetry":
+                                self.frame_clients.discard(ws)
+                            elif cmd == "reset":
                                 self.frame = 0
                                 self.emotion = "neutral"
                             elif cmd == "pause":
@@ -886,35 +912,78 @@ class BlenderSimulation:
                                     except ValueError:
                                         pass
                             elif cmd == "health":
-                                await ws.send(json.dumps({
-                                    "type": "health",
-                                    "status": "ok",
-                                    "mode": self.mode,
-                                    "world": self.world_name,
-                                    "emotion": self.emotion,
-                                    "frame": self.frame,
-                                    "running": self.running,
-                                    "clients": len(self.clients),
-                                }))
+                                await ws.send(
+                                    json.dumps(
+                                        {
+                                            "type": "health",
+                                            "status": "ok",
+                                            "mode": self.mode,
+                                            "world": self.world_name,
+                                            "emotion": self.emotion,
+                                            "frame": self.frame,
+                                            "running": self.running,
+                                            "clients": len(self.clients),
+                                        }
+                                    )
+                                )
+                            elif cmd == "worlds":
+                                await ws.send(
+                                    json.dumps(
+                                        {
+                                            "type": "world_catalog",
+                                            "worlds": list_workspace_worlds(),
+                                            "active": self.world_name,
+                                        }
+                                    )
+                                )
                             elif cmd.startswith("world:"):
                                 new_world = cmd.split(":", 1)[1]
                                 if new_world in ALL_WORLDS or new_world == "none":
                                     self.world_name = new_world if new_world != "none" else None
-                                    self._build_world_scene()
+                                    self.world_source = "manual"
+                                    self._build_world_scene(preserve_camera=True)
                                     self._update_visibility()
+                                    await ws.send(
+                                        json.dumps(
+                                            {
+                                                "type": "world_changed",
+                                                "world": self.world_info,
+                                                "active": self.world_name,
+                                            }
+                                        )
+                                    )
+                                else:
+                                    handled = False
+                            else:
+                                handled = False
+                            if request_id:
+                                await ws.send(
+                                    json.dumps(
+                                        {
+                                            "type": "command_result",
+                                            "request_id": request_id,
+                                            "success": handled,
+                                            "command": cmd,
+                                            "running": self.running,
+                                            "world": self.world_name,
+                                            "frame": self.frame,
+                                        }
+                                    )
+                                )
                     except Exception:
                         pass
             except websockets.exceptions.ConnectionClosed:
                 pass
             finally:
                 self.clients.discard(ws)
+                self.frame_clients.discard(ws)
 
         async def agent_loop():
             """Sync with real agent state from main backend."""
             while True:
                 try:
                     # Get current agent status
-                    if AGENT_MANAGER_AVAILABLE and manager:
+                    if AGENT_MANAGER_AVAILABLE and manager and manager._agent:
                         status = manager.get_status()
 
                         # Get current CognitiveOrchestrator emotional state if available
@@ -926,7 +995,7 @@ class BlenderSimulation:
                         current_world_name = status.get("world", {}).get("name")
 
                         # Check for autonomous world selection based on agent goals and skills
-                        if self.world_selector:
+                        if self.world_source == "autonomous" and self.world_selector:
                             try:
                                 selector_criteria = SelectionCriteria(
                                     weak_skills=[],  # Will be populated from agent state if available
@@ -942,7 +1011,10 @@ class BlenderSimulation:
                             except Exception as e:
                                 print(f"[Blender] Autonomous selection error: {e}", flush=True)
 
-                        if current_world_name != self.world_name:
+                        if (
+                            self.world_source == "autonomous"
+                            and current_world_name != self.world_name
+                        ):
                             self.world_name = current_world_name
                             self._build_world_scene()
                             self._update_visibility()
@@ -998,18 +1070,20 @@ class BlenderSimulation:
                         for c in self.clients.copy():
                             try:
                                 await c.send(
-                                    json.dumps({
-                                        "type": "blend",
-                                        "payload": {
-                                            "blend_mode": self.mode,
-                                            "blend_world": self.world_name,
-                                            "blend_emotion": self.emotion,
-                                            "blend_drives": drives,
-                                            "blend_goals": len(current_goals)
-                                            if isinstance(current_goals, list)
-                                            else 0,
-                                        },
-                                    })
+                                    json.dumps(
+                                        {
+                                            "type": "blend",
+                                            "payload": {
+                                                "blend_mode": self.mode,
+                                                "blend_world": self.world_name,
+                                                "blend_emotion": self.emotion,
+                                                "blend_drives": drives,
+                                                "blend_goals": len(current_goals)
+                                                if isinstance(current_goals, list)
+                                                else 0,
+                                            },
+                                        }
+                                    )
                                 )
                             except Exception:
                                 pass

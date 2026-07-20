@@ -816,6 +816,87 @@ PRACTICAL_WORLDS: dict[str, PracticalWorld] = {
     ),
 }
 
+# Curated Build Week workspace views. These use the same PracticalWorld contract
+# as the broader training registry; they are not a parallel scene system.
+PRACTICAL_WORLDS.update(
+    {
+        "research_lab": PracticalWorld(
+            name="research_lab",
+            world_type=WorldType.BUILDING,
+            description="Quiet robotics research lab with benches and an evaluation bay",
+            difficulty=0.2,
+            tags=["indoor", "research", "robotics", "demonstration"],
+            spawn_point=[0, -4, 1],
+            goal_point=[0, 5, 1],
+            objects=[
+                {"type": "plane", "position": [0, 0, 0], "scale": [10, 8, 1], "mass": 0},
+                {"type": "cube", "position": [-4, 0, 0.5], "scale": [3, 0.8, 1], "mass": 0},
+                {"type": "cube", "position": [4, 0, 0.5], "scale": [3, 0.8, 1], "mass": 0},
+                {"type": "cube", "position": [0, 5, 0.15], "scale": [3, 2, 0.3], "mass": 0},
+            ],
+            interactive=[
+                InteractiveObject(InteractiveType.BUTTON, [-4, 0, 1.2], state="ready"),
+                InteractiveObject(InteractiveType.PLATFORM, [0, 5, 0.3], state="ready"),
+            ],
+        ),
+        "outdoor_test_area": PracticalWorld(
+            name="outdoor_test_area",
+            world_type=WorldType.OUTDOOR,
+            description="Open evaluation field with sparse obstacles and marked waypoints",
+            difficulty=0.35,
+            tags=["outdoor", "navigation", "evaluation", "open"],
+            spawn_point=[-6, 0, 1],
+            goal_point=[7, 0, 1],
+            objects=[
+                {"type": "plane", "position": [0, 0, 0], "scale": [18, 14, 1], "mass": 0},
+                {"type": "cube", "position": [-1, -3, 0.5], "scale": [1, 1, 1], "mass": 0},
+                {"type": "cylinder", "position": [2, 3, 0.7], "scale": [1, 1, 1.4], "mass": 0},
+                {"type": "cube", "position": [5, -2, 0.25], "scale": [2, 1, 0.5], "mass": 0},
+            ],
+            interactive=[InteractiveObject(InteractiveType.RAMP, [5, -2, 0.5], state="ready")],
+        ),
+        "procedural_sandbox": PracticalWorld(
+            name="procedural_sandbox",
+            world_type=WorldType.OBSTACLE_COURSE,
+            description="Deterministic primitive sandbox for rapid embodiment checks",
+            difficulty=0.4,
+            tags=["procedural", "sandbox", "primitives", "evaluation"],
+            spawn_point=[-5, -5, 1],
+            goal_point=[5, 5, 1],
+            objects=[
+                {"type": "plane", "position": [0, 0, 0], "scale": [14, 14, 1], "mass": 0},
+                {"type": "cube", "position": [-2, 0, 0.5], "scale": [1, 1, 1], "mass": 0},
+                {"type": "sphere", "position": [1, -1, 0.75], "scale": [1.5, 1.5, 1.5], "mass": 0},
+                {"type": "cylinder", "position": [3, 2, 1], "scale": [1, 1, 2], "mass": 0},
+                {"type": "cone", "position": [0, 4, 1], "scale": [1, 1, 2], "mass": 0},
+            ],
+            interactive=[InteractiveObject(InteractiveType.PUSHABLE, [0, 0, 0.4], state="ready")],
+        ),
+    }
+)
+
+DEMO_WORKSPACE_WORLD_KEYS = (
+    "research_lab",
+    "small_house",
+    "warehouse",
+    "outdoor_test_area",
+    "procedural_sandbox",
+)
+
+
+def list_workspace_worlds() -> list[dict]:
+    """Return the curated World Manager catalog using canonical world data."""
+    return [
+        {
+            "id": key,
+            "title": PRACTICAL_WORLDS[key].name.replace("_", " ").title(),
+            "description": PRACTICAL_WORLDS[key].description,
+            "status": "available",
+            "available": True,
+        }
+        for key in DEMO_WORKSPACE_WORLD_KEYS
+    ]
+
 
 def get_practical_world(name: str) -> PracticalWorld | None:
     """Get a practical world by name."""

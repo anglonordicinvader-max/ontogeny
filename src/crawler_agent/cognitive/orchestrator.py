@@ -97,6 +97,7 @@ from .contrastive_trainer import ContrastiveTrainer
 from .curiosity import CuriosityEngine
 from .custom_model_manager import CustomModelManager
 from .distillation import KnowledgeDistiller, create_knowledge_distiller
+from .embodiment import EmbodimentType
 from .emergent_curriculum import EmergentCurriculum
 from .emotional import EmotionalProcessor
 from .evo_architecture import EvoArchitecture
@@ -161,9 +162,10 @@ class AgentState(StrEnum):
 class CognitiveOrchestrator:
     """Full cognitive architecture orchestrator."""
 
-    def __init__(self):
+    def __init__(self, embodiment_transport=None):
         self.settings = load_settings()
         self.logger = structlog.get_logger()
+        self.embodiment_transport = embodiment_transport
 
         # State
         self.state = AgentState.IDLE
@@ -428,7 +430,10 @@ class CognitiveOrchestrator:
         )
 
         # Initialize advanced cognitive modules
-        self.knowledge_graph = KnowledgeGraph(backend=self.backend)
+        self.knowledge_graph = KnowledgeGraph(
+            backend=self.backend,
+            storage_path="data/knowledge_graph.json",
+        )
         self.causal_reasoner = CausalReasoner(backend=self.backend)
         self.skill_composer = SkillComposer(backend=self.backend)
         self.uncertainty_tracker = UncertaintyTracker(backend=self.backend)
@@ -501,6 +506,7 @@ class CognitiveOrchestrator:
                 "execute",
                 "blender_simulate",
                 "blender_render",
+                "embodiment_command",
                 "github_api",
                 "arxiv_api",
                 "ros2_publish",
@@ -513,7 +519,10 @@ class CognitiveOrchestrator:
         await self.tool_manager.initialize()
 
         # Initialize simulation library
-        self.sim_library = SimulationLibrary(blender_sandbox=self.blender_sandbox)
+        self.sim_library = SimulationLibrary(
+            blender_sandbox=self.blender_sandbox,
+            embodiment_transport=self.embodiment_transport,
+        )
         self.embodiment_registry = self.sim_library.embodiments
 
         # Initialize self-auditor
@@ -843,7 +852,7 @@ class CognitiveOrchestrator:
                         goal_description=goal.description,
                         context=context,
                         available_actions=list(self.crawlers.keys())
-                        + ["think", "search", "execute"],
+                        + ["think", "search", "execute", "embodiment_command"],
                     )
 
                     if self.current_plan.steps:
@@ -1514,6 +1523,27 @@ class CognitiveOrchestrator:
             step.status = StepStatus.COMPLETED
             step.result = f"Crawled {len(results)} items"
             return {"success": True, "count": len(results), "items": [r.title for r in results[:5]]}
+
+        elif action == "embodiment_command":
+            if not self.embodiment_registry:
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": "NeoCorpus embodiment registry unavailable"}
+            embodiment_name = str(step.parameters.get("embodiment", ""))
+            command = str(step.parameters.get("command", ""))
+            try:
+                embodiment_type = EmbodimentType(embodiment_name)
+                adapter = self.embodiment_registry.get(embodiment_type)
+            except (ValueError, KeyError):
+                step.status = StepStatus.FAILED
+                return {"success": False, "error": f"Unknown embodiment: {embodiment_name}"}
+            result = await adapter.send_action({"action": "command", "command": command})
+            step.status = StepStatus.COMPLETED if result.get("success") else StepStatus.FAILED
+            step.result = (
+                f"{embodiment_name} command completed: {command}"
+                if result.get("success")
+                else result.get("error", "Embodiment command failed")
+            )
+            return result
 
         elif action == "search":
             # Search across all crawlers, trying multiple method names
@@ -2808,7 +2838,8 @@ class CognitiveOrchestrator:
             # Tools & Simulation
             "tools": list(self.tool_manager.tools.keys()) if self.tool_manager else [],
             "simulation": sim_status,
-            "embodiment": self.sim_library.get_embodiment_status()
+            "embodiment": self.sim_library.get_embodiment_status() if self.sim_library else {},
+            "embodiment_details": self.sim_library.get_embodiment_details()
             if self.sim_library
             else {},
             # Learning

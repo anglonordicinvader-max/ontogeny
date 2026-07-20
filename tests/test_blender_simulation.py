@@ -97,6 +97,16 @@ class TestBlenderSimulationSyntax:
         assert "useState<number>(backendPort);" in source
         assert "useState<number>(backendPort + 1);" not in source
 
+    def test_world_manager_protocol_preserves_manual_ownership(self):
+        path = os.path.join(os.path.dirname(__file__), "..", "backend", "blender_simulation.py")
+        with open(path, encoding="utf-8") as f:
+            source = f.read()
+        assert 'cmd == "worlds"' in source
+        assert '"type": "world_catalog"' in source
+        assert '"type": "world_changed"' in source
+        assert 'self.world_source = "manual"' in source
+        assert 'self.world_source == "autonomous"' in source
+
 
 class TestBlenderSimulationImportChain:
     """Verify the import chain in blender_simulation.py doesn't crash."""
@@ -112,8 +122,22 @@ class TestBlenderSimulationImportChain:
             WorldType,
         )
 
-        assert len(PRACTICAL_WORLDS) == 9
+        assert len(PRACTICAL_WORLDS) == 12
         assert len(ALL_SURVIVAL_WORLDS) == 30
+
+    def test_curated_workspace_worlds_use_canonical_registry(self):
+        from blender_worlds import PRACTICAL_WORLDS, list_workspace_worlds
+
+        catalog = list_workspace_worlds()
+        assert [entry["id"] for entry in catalog] == [
+            "research_lab",
+            "small_house",
+            "warehouse",
+            "outdoor_test_area",
+            "procedural_sandbox",
+        ]
+        assert all(entry["available"] for entry in catalog)
+        assert all(entry["id"] in PRACTICAL_WORLDS for entry in catalog)
 
     def test_no_sqlalchemy_import_from_blender_worlds(self):
         """blender_worlds.py must not import sqlalchemy or cognitive stack."""

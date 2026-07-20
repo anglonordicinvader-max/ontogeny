@@ -2,12 +2,13 @@ import { MuJoCoEmbed } from './MuJoCoEmbed';
 
 interface MuJoCoPanelProps {
   backendPort?: number;
+  onCommand?: (command: string) => void;
 }
 
-export function MuJoCoPanel({ backendPort = 8768 }: MuJoCoPanelProps) {
+export function MuJoCoPanel({ backendPort = 8768, onCommand }: MuJoCoPanelProps) {
   return (
     <div className="h-full flex flex-col relative">
-      <MuJoCoEmbed backendPort={backendPort} />
+      <MuJoCoEmbed backendPort={backendPort} onCommand={onCommand} />
 
       {/* Feature overlay */}
       <div className="absolute top-2 right-2 glass-panel rounded-lg p-3 text-xs max-w-xs animate-panel-in">

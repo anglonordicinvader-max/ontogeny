@@ -15,13 +15,11 @@ import io
 import json
 import math
 import os
-import struct
 import sys
 import tempfile
 import threading
 import warnings
 import xml.etree.ElementTree as ET
-import zlib
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -39,11 +37,12 @@ if backend_dir not in sys.path:
 try:
     import mujoco
     import numpy as np
+    from mujoco.rendering.classic.renderer import Renderer as MuJoCoRenderer
 
     MUJOCO_AVAILABLE = True
-except ImportError:
+except ImportError as exc:
     MUJOCO_AVAILABLE = False
-    print("[MuJoCo] mujoco package not installed", flush=True)
+    print(f"[MuJoCo] mujoco import failed: {exc}", flush=True)
 
 import websockets
 
@@ -82,24 +81,68 @@ G1_XML = os.path.join(G1_DIR, "g1.xml")
 # right_shoulder_roll, right_shoulder_yaw, right_elbow, right_wrist_roll, right_wrist_pitch,
 # right_wrist_yaw
 G1_STANDING_POSE = [
-    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,      # left leg (hip_pitch=0, hip_roll=0, hip_yaw=0, knee=0, ankle_pitch=0, ankle_roll=0)
-    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,      # right leg
-    0.0, 0.0, 0.0,                       # waist (yaw, roll, pitch)
-    0.2, 0.2, 0.0, 1.28, 0.0, 0.0, 0.0, # left arm
-    0.2, -0.2, 0.0, 1.28, 0.0, 0.0, 0.0 # right arm
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,  # left leg (hip_pitch=0, hip_roll=0, hip_yaw=0, knee=0, ankle_pitch=0, ankle_roll=0)
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,  # right leg
+    0.0,
+    0.0,
+    0.0,  # waist (yaw, roll, pitch)
+    0.2,
+    0.2,
+    0.0,
+    1.28,
+    0.0,
+    0.0,
+    0.0,  # left arm
+    0.2,
+    -0.2,
+    0.0,
+    1.28,
+    0.0,
+    0.0,
+    0.0,  # right arm
 ]
 
 # G1 joint info — 29 DOF, all position-controlled with kp=500
 G1_JOINT_NAMES = [
-    "left_hip_pitch_joint", "left_hip_roll_joint", "left_hip_yaw_joint",
-    "left_knee_joint", "left_ankle_pitch_joint", "left_ankle_roll_joint",
-    "right_hip_pitch_joint", "right_hip_roll_joint", "right_hip_yaw_joint",
-    "right_knee_joint", "right_ankle_pitch_joint", "right_ankle_roll_joint",
-    "waist_yaw_joint", "waist_roll_joint", "waist_pitch_joint",
-    "left_shoulder_pitch_joint", "left_shoulder_roll_joint", "left_shoulder_yaw_joint",
-    "left_elbow_joint", "left_wrist_roll_joint", "left_wrist_pitch_joint", "left_wrist_yaw_joint",
-    "right_shoulder_pitch_joint", "right_shoulder_roll_joint", "right_shoulder_yaw_joint",
-    "right_elbow_joint", "right_wrist_roll_joint", "right_wrist_pitch_joint", "right_wrist_yaw_joint",
+    "left_hip_pitch_joint",
+    "left_hip_roll_joint",
+    "left_hip_yaw_joint",
+    "left_knee_joint",
+    "left_ankle_pitch_joint",
+    "left_ankle_roll_joint",
+    "right_hip_pitch_joint",
+    "right_hip_roll_joint",
+    "right_hip_yaw_joint",
+    "right_knee_joint",
+    "right_ankle_pitch_joint",
+    "right_ankle_roll_joint",
+    "waist_yaw_joint",
+    "waist_roll_joint",
+    "waist_pitch_joint",
+    "left_shoulder_pitch_joint",
+    "left_shoulder_roll_joint",
+    "left_shoulder_yaw_joint",
+    "left_elbow_joint",
+    "left_wrist_roll_joint",
+    "left_wrist_pitch_joint",
+    "left_wrist_yaw_joint",
+    "right_shoulder_pitch_joint",
+    "right_shoulder_roll_joint",
+    "right_shoulder_yaw_joint",
+    "right_elbow_joint",
+    "right_wrist_roll_joint",
+    "right_wrist_pitch_joint",
+    "right_wrist_yaw_joint",
 ]
 
 G1_JOINT_FUNCTIONS = {
@@ -135,12 +178,19 @@ G1_JOINT_FUNCTIONS = {
 }
 
 EMOTION_STATES = [
-    "neutral", "thinking", "curious", "excited",
-    "focused", "confused", "satisfied", "alert",
+    "neutral",
+    "thinking",
+    "curious",
+    "excited",
+    "focused",
+    "confused",
+    "satisfied",
+    "alert",
 ]
 
 
 # ─── Control Modes ────────────────────────────────────────────────────────
+
 
 class RobotModel(Enum):
     TOCABI = "tocabi"
@@ -165,13 +215,17 @@ class WalkPhase(Enum):
 # ─── TOCABI Joint Map ─────────────────────────────────────────────────────
 # Maps URDF joint names to body-side + function for gait control.
 
+
 @dataclass
 class JointInfo:
     """Metadata for a single revolute joint in TOCABI."""
+
     name: str
     mj_index: int
-    side: str          # "left", "right", "center"
-    function: str      # "hip_pitch", "hip_roll", "knee", "ankle_pitch", "ankle_roll", "waist", "arm", etc.
+    side: str  # "left", "right", "center"
+    function: (
+        str  # "hip_pitch", "hip_roll", "knee", "ankle_pitch", "ankle_roll", "waist", "arm", etc.
+    )
     lower: float
     upper: float
     standing_angle: float  # target angle (rad) for standing pose
@@ -181,7 +235,9 @@ STANDING_POSE: dict[str, float] = {}
 JOINT_INFO_MAP: dict[str, JointInfo] = {}
 
 
-def _classify_joint(joint_name: str, child_link: str, axis: tuple[float, float, float]) -> tuple[str, str]:
+def _classify_joint(
+    joint_name: str, child_link: str, axis: tuple[float, float, float]
+) -> tuple[str, str]:
     """Classify a TOCABI joint by its child link name and axis direction into (side, function).
 
     TOCABI naming: LL_ = left leg, LR_ = right leg, UL_ = left arm, UR_ = right arm, U_ = center.
@@ -208,7 +264,7 @@ def _classify_joint(joint_name: str, child_link: str, axis: tuple[float, float, 
     # Function from child link + axis
     if "hip" in cl:
         # Classify by axis direction
-        if abs(ax[2]) > 0.5:    # z-axis → pitch
+        if abs(ax[2]) > 0.5:  # z-axis → pitch
             func = "hip_pitch"
         elif abs(ax[0]) > 0.5:  # x-axis → roll
             func = "hip_roll"
@@ -219,7 +275,7 @@ def _classify_joint(joint_name: str, child_link: str, axis: tuple[float, float, 
     elif "knee" in cl:
         func = "knee"
     elif "ankle" in cl:
-        if abs(ax[1]) > 0.5:    # y-axis → pitch (for ankle in leg)
+        if abs(ax[1]) > 0.5:  # y-axis → pitch (for ankle in leg)
             func = "ankle_pitch"
         elif abs(ax[0]) > 0.5:  # x-axis → roll
             func = "ankle_roll"
@@ -271,6 +327,7 @@ def _standing_angle(side: str, func: str) -> float:
 
 
 # ─── URDF → MJCF Converter ──────────────────────────────────────────────
+
 
 def _normalize_axis(axis_str: str) -> tuple[float, float, float]:
     parts = [float(x) for x in axis_str.split()]
@@ -401,48 +458,58 @@ def _convert_urdf_to_mjcf(urdf_path: str, meshes_dir: str) -> str:
         origin_elem = joint_elem.find("origin")
         xyz, rpy = _parse_origin(origin_elem)
         axis_elem = joint_elem.find("axis")
-        axis = _normalize_axis(axis_elem.get("xyz", "0 0 1")) if axis_elem is not None else (0, 0, 1)
+        axis = (
+            _normalize_axis(axis_elem.get("xyz", "0 0 1")) if axis_elem is not None else (0, 0, 1)
+        )
         limit_elem = joint_elem.find("limit")
         lower = -3.14159
         upper = 3.14159
         if limit_elem is not None:
             lower = float(limit_elem.get("lower", "-3.14159"))
             upper = float(limit_elem.get("upper", "3.14159"))
-        joints.append({
-            "name": name,
-            "type": jtype,
-            "parent": parent_link,
-            "child": child_link,
-            "xyz": xyz,
-            "rpy": rpy,
-            "axis": axis,
-            "lower": lower,
-            "upper": upper,
-        })
+        joints.append(
+            {
+                "name": name,
+                "type": jtype,
+                "parent": parent_link,
+                "child": child_link,
+                "xyz": xyz,
+                "rpy": rpy,
+                "axis": axis,
+                "lower": lower,
+                "upper": upper,
+            }
+        )
 
     global STANDING_POSE, JOINT_INFO_MAP
 
     lines = ['<mujoco model="tocabi">']
-    lines.append('  <compiler meshdir="{}" balanceinertia="true" autolimits="true"/>'.format(
-        meshes_dir.replace("\\", "/")
-    ))
+    lines.append(
+        '  <compiler meshdir="{}" balanceinertia="true" autolimits="true"/>'.format(
+            meshes_dir.replace("\\", "/")
+        )
+    )
     lines.append('  <option timestep="0.002" gravity="0 0 -9.81" integrator="implicit"/>')
-    lines.append('  <default>')
+    lines.append("  <default>")
     lines.append('    <joint armature="0.02" damping="30" limited="true"/>')
     lines.append('    <geom condim="4" friction="1.0 0.5 0.01" margin="0.005" solref="0.02 1"/>')
-    lines.append('  </default>')
-    lines.append('  <asset>')
-    lines.append('    <texture type="2d" name="ground" builtin="checker" '
-                 'rgb1="0.2 0.3 0.4" rgb2="0.1 0.15 0.2" width="512" height="512"/>')
+    lines.append("  </default>")
+    lines.append("  <asset>")
+    lines.append(
+        '    <texture type="2d" name="ground" builtin="checker" '
+        'rgb1="0.2 0.3 0.4" rgb2="0.1 0.15 0.2" width="512" height="512"/>'
+    )
     lines.append('    <material name="ground_mat" texture="ground" texrepeat="20 20"/>')
     lines.append('    <material name="robot_mat" rgba="0.6 0.65 0.7 1"/>')
     lines.append('    <material name="robot_left" rgba="0.3 0.6 0.9 1"/>')
     lines.append('    <material name="robot_right" rgba="0.9 0.4 0.3 1"/>')
-    lines.append('  </asset>')
+    lines.append("  </asset>")
     # Sensors are read directly from data.contact / data.sensordata
-    lines.append('  <worldbody>')
-    lines.append('    <geom name="floor" type="plane" size="5 5 0.1" material="ground_mat" '
-                 'condim="4" friction="1.0 0.5 0.01"/>')
+    lines.append("  <worldbody>")
+    lines.append(
+        '    <geom name="floor" type="plane" size="5 5 0.1" material="ground_mat" '
+        'condim="4" friction="1.0 0.5 0.01"/>'
+    )
     lines.append('    <light pos="0 0 3" dir="0 0 -1" diffuse="0.8 0.8 0.8"/>')
     lines.append('    <light pos="2 2 2" dir="-1 -1 -1" diffuse="0.4 0.4 0.4"/>')
 
@@ -461,7 +528,9 @@ def _convert_urdf_to_mjcf(urdf_path: str, meshes_dir: str) -> str:
             continue
         children_map.setdefault(j["parent"], []).append(j)
 
-    def _emit_body(link_name: str, depth: int = 0, body_offset: list[float] | None = None) -> list[str]:
+    def _emit_body(
+        link_name: str, depth: int = 0, body_offset: list[float] | None = None
+    ) -> list[str]:
         result = []
         indent = "      " + "  " * depth
         link = links[link_name]
@@ -485,15 +554,19 @@ def _convert_urdf_to_mjcf(urdf_path: str, meshes_dir: str) -> str:
         body_name = link_name.replace(" ", "_")
         if body_offset:
             bo = body_offset
-            result.append(f'{indent}<body name="{body_name}" pos="{bo[0]:.6f} {bo[1]:.6f} {bo[2]:.6f}">')
+            result.append(
+                f'{indent}<body name="{body_name}" pos="{bo[0]:.6f} {bo[1]:.6f} {bo[2]:.6f}">'
+            )
         else:
             result.append(f'{indent}<body name="{body_name}">')
 
         com = link["com"]
-        inertial_line = (f'{indent}  <inertial pos="{com[0]:.6f} {com[1]:.6f} {com[2]:.6f}" '
-                         f'mass="{link["mass"]:.4f}" '
-                         f'diaginertia="{link["inertia"][0]:.6f} {link["inertia"][1]:.6f} '
-                         f'{link["inertia"][2]:.6f}"/>')
+        inertial_line = (
+            f'{indent}  <inertial pos="{com[0]:.6f} {com[1]:.6f} {com[2]:.6f}" '
+            f'mass="{link["mass"]:.4f}" '
+            f'diaginertia="{link["inertia"][0]:.6f} {link["inertia"][1]:.6f} '
+            f'{link["inertia"][2]:.6f}"/>'
+        )
         result.append(inertial_line)
 
         offset = link["geom_offset"]
@@ -546,12 +619,12 @@ def _convert_urdf_to_mjcf(urdf_path: str, meshes_dir: str) -> str:
             result.append(
                 f'{indent}  <joint name="{j["name"]}" type="hinge" '
                 f'axis="{axis[0]:.4f} {axis[1]:.4f} {axis[2]:.4f}" '
-                f'{joint_range}/>'
+                f"{joint_range}/>"
             )
             child_lines = _emit_body(j["child"], depth + 1, body_offset=j["xyz"])
             result.extend(child_lines)
 
-        result.append(f'{indent}</body>')
+        result.append(f"{indent}</body>")
         return result
 
     all_meshes: dict[str, tuple[str, list[float]]] = {}
@@ -564,7 +637,7 @@ def _convert_urdf_to_mjcf(urdf_path: str, meshes_dir: str) -> str:
             f'scale="{scale[0]} {scale[1]} {scale[2]}"/>'
         )
 
-    asset_end = lines.index('  </asset>')
+    asset_end = lines.index("  </asset>")
     for decl in mesh_decls:
         lines.insert(asset_end, decl)
 
@@ -574,9 +647,9 @@ def _convert_urdf_to_mjcf(urdf_path: str, meshes_dir: str) -> str:
     for line in body_lines:
         if "<mesh" not in line:
             lines.append(line)
-    lines.append('    </body>')
-    lines.append('  </worldbody>')
-    lines.append('  <actuator>')
+    lines.append("    </body>")
+    lines.append("  </worldbody>")
+    lines.append("  <actuator>")
     mj_joint_idx = 0
     for j in joints:
         if j["type"] == "revolute":
@@ -598,13 +671,14 @@ def _convert_urdf_to_mjcf(urdf_path: str, meshes_dir: str) -> str:
                 f'ctrlrange="-500 500" ctrllimited="true" kv="100"/>'
             )
             mj_joint_idx += 1
-    lines.append('  </actuator>')
-    lines.append('</mujoco>')
+    lines.append("  </actuator>")
+    lines.append("</mujoco>")
 
     return "\n".join(lines)
 
 
 # ─── Standing + Walking Controller ───────────────────────────────────────
+
 
 class TocabiController:
     """PD position controller + sinusoidal bipedal gait for TOCABI."""
@@ -617,13 +691,23 @@ class TocabiController:
         self.walk_yaw_rate = 0.0
         self.walk_cmd_linear = 0.0
         self.walk_cmd_angular = 0.0
+        self.walk_cmd_target_linear = 0.0
+        self.walk_cmd_target_angular = 0.0
         self.time = 0.0
 
     def set_walk_cmd(self, linear: float, angular: float):
-        self.walk_cmd_linear = max(-1.0, min(1.0, linear))
-        self.walk_cmd_angular = max(-1.0, min(1.0, angular))
+        self.walk_cmd_target_linear = max(-1.0, min(1.0, linear))
+        self.walk_cmd_target_angular = max(-1.0, min(1.0, angular))
 
-    def compute_ctrl(self, model, data) -> list[float]:
+    def _update_walk_command(self, dt: float):
+        def approach(current: float, target: float, rate: float) -> float:
+            delta = max(-rate * dt, min(rate * dt, target - current))
+            return current + delta
+
+        self.walk_cmd_linear = approach(self.walk_cmd_linear, self.walk_cmd_target_linear, 1.5)
+        self.walk_cmd_angular = approach(self.walk_cmd_angular, self.walk_cmd_target_angular, 2.0)
+
+    def compute_ctrl(self, model, data, dt: float = 0.002) -> list[float]:
         """Compute joint target positions for position actuators.
 
         ctrl[i] = target angle for position actuator i.
@@ -646,7 +730,7 @@ class TocabiController:
                 if info.mj_index < n_joints:
                     targets[info.mj_index] = info.standing_angle
         elif self.mode == ControlMode.WALK:
-            targets = self._gait_targets(n_joints)
+            targets = self._gait_targets(n_joints, dt)
 
         return targets.tolist()
 
@@ -690,12 +774,11 @@ class TocabiController:
 
         return torques
 
-    def _gait_targets(self, n_joints: int) -> np.ndarray:
+    def _gait_targets(self, n_joints: int, dt: float = 0.002) -> np.ndarray:
         """Generate sinusoidal gait target angles for bipedal walking."""
         targets = np.zeros(n_joints)
-        self.walk_phase += self.walk_frequency * 0.002
-        if self.walk_phase > 2 * math.pi:
-            self.walk_phase -= 2 * math.pi
+        self._update_walk_command(dt)
+        self.walk_phase = (self.walk_phase + 2 * math.pi * self.walk_frequency * dt) % (2 * math.pi)
 
         speed_factor = abs(self.walk_cmd_linear)
         if speed_factor < 0.01:
@@ -712,9 +795,13 @@ class TocabiController:
                 continue
             if info.function == "hip_pitch":
                 if info.side == "left":
-                    targets[info.mj_index] = info.standing_angle + 0.3 * speed_factor * math.sin(phase)
+                    targets[info.mj_index] = info.standing_angle + 0.3 * speed_factor * math.sin(
+                        phase
+                    )
                 elif info.side == "right":
-                    targets[info.mj_index] = info.standing_angle + 0.3 * speed_factor * math.sin(phase + math.pi)
+                    targets[info.mj_index] = info.standing_angle + 0.3 * speed_factor * math.sin(
+                        phase + math.pi
+                    )
             elif info.function == "knee":
                 # Knees bend during swing phase
                 if info.side == "left":
@@ -725,9 +812,13 @@ class TocabiController:
                     targets[info.mj_index] = info.standing_angle + 0.4 * speed_factor * swing
             elif info.function == "ankle_pitch":
                 if info.side == "left":
-                    targets[info.mj_index] = info.standing_angle - 0.15 * speed_factor * math.sin(phase)
+                    targets[info.mj_index] = info.standing_angle - 0.15 * speed_factor * math.sin(
+                        phase
+                    )
                 elif info.side == "right":
-                    targets[info.mj_index] = info.standing_angle - 0.15 * speed_factor * math.sin(phase + math.pi)
+                    targets[info.mj_index] = info.standing_angle - 0.15 * speed_factor * math.sin(
+                        phase + math.pi
+                    )
             elif info.function == "hip_roll":
                 roll_amp = 0.05 * speed_factor
                 if info.side == "left":
@@ -742,6 +833,7 @@ class TocabiController:
 
 # ─── G1 Controller ────────────────────────────────────────────────────────
 
+
 class G1Controller:
     """PD position controller for Unitree G1 (29 DOF, kp=500)."""
 
@@ -752,6 +844,8 @@ class G1Controller:
         self.walk_speed = 0.4
         self.walk_cmd_linear = 0.0
         self.walk_cmd_angular = 0.0
+        self.walk_cmd_target_linear = 0.0
+        self.walk_cmd_target_angular = 0.0
         self.time = 0.0
         self._ctrl_index_map: dict[str, int] = {}
 
@@ -759,10 +853,18 @@ class G1Controller:
         self._ctrl_index_map = mapping
 
     def set_walk_cmd(self, linear: float, angular: float):
-        self.walk_cmd_linear = max(-1.0, min(1.0, linear))
-        self.walk_cmd_angular = max(-1.0, min(1.0, angular))
+        self.walk_cmd_target_linear = max(-1.0, min(1.0, linear))
+        self.walk_cmd_target_angular = max(-1.0, min(1.0, angular))
 
-    def compute_ctrl(self, model, data) -> list[float]:
+    def _update_walk_command(self, dt: float):
+        def approach(current: float, target: float, rate: float) -> float:
+            delta = max(-rate * dt, min(rate * dt, target - current))
+            return current + delta
+
+        self.walk_cmd_linear = approach(self.walk_cmd_linear, self.walk_cmd_target_linear, 1.5)
+        self.walk_cmd_angular = approach(self.walk_cmd_angular, self.walk_cmd_target_angular, 2.0)
+
+    def compute_ctrl(self, model, data, dt: float = 0.002) -> list[float]:
         n_joints = min(model.nu, data.ctrl.shape[0])
         targets = np.zeros(n_joints)
 
@@ -782,19 +884,20 @@ class G1Controller:
                 if ctrl_idx < n_joints and ctrl_idx < len(G1_STANDING_POSE):
                     targets[ctrl_idx] = G1_STANDING_POSE[ctrl_idx]
         elif self.mode == ControlMode.WALK:
-            targets = self._gait_targets(n_joints)
+            targets = self._gait_targets(n_joints, dt)
 
         return targets.tolist()
 
-    def _gait_targets(self, n_joints: int) -> np.ndarray:
+    def _gait_targets(self, n_joints: int, dt: float = 0.002) -> np.ndarray:
         """Sinusoidal gait for G1 bipedal walking."""
         targets = np.zeros(n_joints)
-        self.walk_phase += self.walk_frequency * 0.002
-        if self.walk_phase > 2 * math.pi:
-            self.walk_phase -= 2 * math.pi
+        self._update_walk_command(dt)
+        self.walk_phase = (self.walk_phase + 2 * math.pi * self.walk_frequency * dt) % (2 * math.pi)
 
         speed_factor = abs(self.walk_cmd_linear)
-        if speed_factor < 0.01:
+        turn_factor = self.walk_cmd_angular
+        travel_direction = -1.0 if self.walk_cmd_linear < 0.0 else 1.0
+        if speed_factor < 0.01 and abs(turn_factor) < 0.01:
             for jname, ctrl_idx in self._ctrl_index_map.items():
                 if ctrl_idx < n_joints and ctrl_idx < len(G1_STANDING_POSE):
                     targets[ctrl_idx] = G1_STANDING_POSE[ctrl_idx]
@@ -811,12 +914,19 @@ class G1Controller:
 
             standing = G1_STANDING_POSE[ctrl_idx] if ctrl_idx < len(G1_STANDING_POSE) else 0.0
 
+            side_scale = max(
+                0.15,
+                min(
+                    1.0,
+                    speed_factor + (0.25 * turn_factor if side == "left" else -0.25 * turn_factor),
+                ),
+            )
             if func == "hip_pitch":
-                amp = 0.3 * speed_factor
+                amp = 0.28 * side_scale
                 offset = math.pi if side == "right" else 0.0
-                targets[ctrl_idx] = standing + amp * math.sin(phase + offset)
+                targets[ctrl_idx] = standing + travel_direction * amp * math.sin(phase + offset)
             elif func == "knee":
-                amp = 0.4 * speed_factor
+                amp = 0.38 * side_scale
                 if side == "left":
                     swing = max(0, math.sin(phase))
                     targets[ctrl_idx] = standing + amp * swing
@@ -824,19 +934,24 @@ class G1Controller:
                     swing = max(0, math.sin(phase + math.pi))
                     targets[ctrl_idx] = standing + amp * swing
             elif func == "ankle_pitch":
-                amp = 0.15 * speed_factor
+                amp = 0.14 * side_scale
                 offset = math.pi if side == "right" else 0.0
                 targets[ctrl_idx] = standing - amp * math.sin(phase + offset)
             elif func == "hip_roll":
-                amp = 0.05 * speed_factor
+                amp = 0.045 * side_scale
                 if side == "left":
                     targets[ctrl_idx] = standing + amp * math.sin(phase)
                 else:
                     targets[ctrl_idx] = standing - amp * math.sin(phase)
+            elif func == "hip_yaw":
+                targets[ctrl_idx] = standing + 0.12 * turn_factor
+            elif func == "waist_yaw":
+                targets[ctrl_idx] = standing + 0.08 * turn_factor
             else:
                 targets[ctrl_idx] = standing
 
         return targets
+
 
 class MuJoCoSensorReader:
     """Reads MuJoCo data and feeds it to the sensor_sim modules."""
@@ -845,7 +960,8 @@ class MuJoCoSensorReader:
         self.imu = None
         self.force_torque = None
         try:
-            from crawler_agent.cognitive.sensor_sim import IMUSensor, ForceTorqueSensor
+            from crawler_agent.cognitive.sensor_sim import ForceTorqueSensor, IMUSensor
+
             self.imu = IMUSensor()
             self.force_torque = ForceTorqueSensor()
         except ImportError:
@@ -854,7 +970,7 @@ class MuJoCoSensorReader:
     def read_imu(self, data, model=None) -> dict:
         """Read IMU from MuJoCo root body or named sensors."""
         # Try MuJoCo named sensors first (G1 has built-in IMU sensors)
-        if model is not None and hasattr(data, 'sensordata') and len(data.sensordata) > 0:
+        if model is not None and hasattr(data, "sensordata") and len(data.sensordata) > 0:
             # G1 sensor order: imu-torso-angular-velocity(3), imu-torso-linear-acceleration(3),
             #                   imu-pelvis-angular-velocity(3), imu-pelvis-linear-acceleration(3)
             gyro = [0.0, 0.0, 0.0]
@@ -863,7 +979,7 @@ class MuJoCoSensorReader:
                 sname = model.sensor(i).name
                 adr = model.sensor(i).adr[0]
                 dim = model.sensor(i).dim[0]
-                vals = data.sensordata[adr:adr+dim].tolist()
+                vals = data.sensordata[adr : adr + dim].tolist()
                 if "torso" in sname and "angular" in sname:
                     gyro = vals
                 elif "torso" in sname and "linear" in sname:
@@ -905,12 +1021,14 @@ class MuJoCoSensorReader:
                 geom2_name = model.geom(c.geom2).name
             force = np.zeros(6)
             mujoco.mj_contactForce(model, data, i, force)
-            contacts.append({
-                "geom1": geom1_name,
-                "geom2": geom2_name,
-                "force": force[:3].tolist(),
-                "torque": force[3:].tolist(),
-            })
+            contacts.append(
+                {
+                    "geom1": geom1_name,
+                    "geom2": geom2_name,
+                    "force": force[:3].tolist(),
+                    "torque": force[3:].tolist(),
+                }
+            )
 
         total_force = [0.0, 0.0, 0.0]
         for c in contacts:
@@ -954,17 +1072,23 @@ class MuJoCoSensorReader:
         try:
             result["contacts"] = self.read_contacts(data, model)
         except Exception:
-            result["contacts"] = {"num_contacts": 0, "total_force": [0, 0, 0], "foot_contact": {"left": False, "right": False}}
+            result["contacts"] = {
+                "num_contacts": 0,
+                "total_force": [0, 0, 0],
+                "foot_contact": {"left": False, "right": False},
+            }
         return result
 
 
 # ─── MuJoCo Simulation ──────────────────────────────────────────────────
+
 
 class MuJoCoSimulation:
     """MuJoCo physics simulation with WebSocket streaming."""
 
     def __init__(self, world_name: str | None = None, robot_model: str = "tocabi"):
         self.clients: set = set()
+        self.frame_clients: set = set()
         self.running = True
         self.frame = 0
         self.mode = "anatomy"
@@ -978,6 +1102,10 @@ class MuJoCoSimulation:
         self._render_lock = threading.Lock()
         self._pending_frame: str | None = None
         self._render_ready = False
+        self.render_error: str | None = None
+        self.demo_active = False
+        self.demo_elapsed = 0.0
+        self.demo_stage = "idle"
 
         self.model = None
         self.data = None
@@ -1036,7 +1164,7 @@ class MuJoCoSimulation:
 
             self.model = mujoco.MjModel.from_xml_path(augmented_xml_path)
             self.data = mujoco.MjData(self.model)
-            self.renderer = mujoco.Renderer(self.model, height=480, width=640)
+            self.renderer = MuJoCoRenderer(self.model, height=480, width=640)
             self.camera = mujoco.MjvCamera()
             mujoco.mjv_defaultCamera(self.camera)
             self.camera.type = mujoco.mjtCamera.mjCAMERA_TRACKING
@@ -1059,15 +1187,19 @@ class MuJoCoSimulation:
             self.controller.set_ctrl_index_map(ctrl_index_map)
             self._reset_simulation_state()
 
-            print(f"[MuJoCo] G1 loaded: {self.model.nbody} bodies, "
-                  f"{self.model.njnt} joints, {self.model.ngeom} geoms, "
-                  f"{self.model.nu} actuators", flush=True)
+            print(
+                f"[MuJoCo] G1 loaded: {self.model.nbody} bodies, "
+                f"{self.model.njnt} joints, {self.model.ngeom} geoms, "
+                f"{self.model.nu} actuators",
+                flush=True,
+            )
             for jname, ci in sorted(ctrl_index_map.items(), key=lambda x: x[1]):
                 side, func = G1_JOINT_FUNCTIONS.get(jname, ("?", "?"))
                 print(f"  ctrl[{ci:2d}] {jname:30s} side={side:5s} func={func}", flush=True)
         except Exception as e:
             print(f"[MuJoCo] Failed to load G1: {e}", flush=True)
             import traceback
+
             traceback.print_exc()
             self.model = None
         finally:
@@ -1087,7 +1219,7 @@ class MuJoCoSimulation:
 
             self.model = mujoco.MjModel.from_xml_path(mjcf_path)
             self.data = mujoco.MjData(self.model)
-            self.renderer = mujoco.Renderer(self.model, height=480, width=640)
+            self.renderer = MuJoCoRenderer(self.model, height=480, width=640)
 
             # Build correct ctrl-index mapping from MuJoCo's actuator table
             # ctrl[i] -> joint at model.actuator(i).trnid[0]
@@ -1106,15 +1238,22 @@ class MuJoCoSimulation:
 
             self._reset_simulation_state()
 
-            print(f"[MuJoCo] Model loaded: {self.model.nbody} bodies, "
-                  f"{self.model.njnt} joints, {self.model.ngeom} geoms", flush=True)
+            print(
+                f"[MuJoCo] Model loaded: {self.model.nbody} bodies, "
+                f"{self.model.njnt} joints, {self.model.ngeom} geoms",
+                flush=True,
+            )
             print(f"[MuJoCo] Joint info map: {len(JOINT_INFO_MAP)} joints classified", flush=True)
             print(f"[MuJoCo] Standing pose targets: {len(STANDING_POSE)} joints", flush=True)
             for name, info in sorted(JOINT_INFO_MAP.items(), key=lambda x: x[1].mj_index):
-                print(f"  ctrl[{info.mj_index:2d}] {name:20s} side={info.side} func={info.function:15s} stand={info.standing_angle:.3f}", flush=True)
+                print(
+                    f"  ctrl[{info.mj_index:2d}] {name:20s} side={info.side} func={info.function:15s} stand={info.standing_angle:.3f}",
+                    flush=True,
+                )
         except Exception as e:
             print(f"[MuJoCo] Failed to load model: {e}", flush=True)
             import traceback
+
             traceback.print_exc()
             self.model = None
 
@@ -1125,6 +1264,8 @@ class MuJoCoSimulation:
         self.controller.walk_phase = 0.0
         self.controller.walk_cmd_linear = 0.0
         self.controller.walk_cmd_angular = 0.0
+        self.controller.walk_cmd_target_linear = 0.0
+        self.controller.walk_cmd_target_angular = 0.0
         self.controller.time = 0.0
 
         if self.model is None or self.data is None:
@@ -1152,7 +1293,7 @@ class MuJoCoSimulation:
         if self.model is None or self.data is None:
             return
         try:
-            targets = self.controller.compute_ctrl(self.model, self.data)
+            targets = self.controller.compute_ctrl(self.model, self.data, dt)
             n = min(self.model.nu, len(targets))
             for i in range(n):
                 self.data.ctrl[i] = targets[i]
@@ -1166,48 +1307,67 @@ class MuJoCoSimulation:
     def _should_step_physics(self) -> bool:
         return self.running and self.controller.mode != ControlMode.FREEZE
 
+    def _cancel_demo(self):
+        self.demo_active = False
+        self.demo_elapsed = 0.0
+        self.demo_stage = "idle"
+
+    def _start_demo(self):
+        self._reset_simulation_state()
+        self.demo_active = True
+        self.demo_elapsed = 0.0
+        self.demo_stage = "initialize"
+
+    def _update_demo(self, dt: float):
+        """Advance the deterministic, server-owned demonstration sequence."""
+        if not self.demo_active:
+            return
+        self.demo_elapsed += dt
+        elapsed = self.demo_elapsed
+        if elapsed < 1.0:
+            stage, mode, linear, angular = "initialize", ControlMode.STAND, 0.0, 0.0
+        elif elapsed < 4.0:
+            stage, mode, linear, angular = "walk_out", ControlMode.WALK, 0.40, 0.0
+        elif elapsed < 5.0:
+            stage, mode, linear, angular = "stop", ControlMode.STAND, 0.0, 0.0
+        elif elapsed < 7.0:
+            stage, mode, linear, angular = "turn", ControlMode.WALK, 0.12, 0.65
+        elif elapsed < 10.0:
+            stage, mode, linear, angular = "return", ControlMode.WALK, -0.32, 0.0
+        elif elapsed < 11.0:
+            stage, mode, linear, angular = "settle", ControlMode.STAND, 0.0, 0.0
+        else:
+            self._reset_simulation_state()
+            self._cancel_demo()
+            return
+        self.demo_stage = stage
+        self.controller.mode = mode
+        self.controller.set_walk_cmd(linear, angular)
+
     def _render_frame(self) -> str | None:
         if self.model is None or self.data is None or self.renderer is None:
-            return self._placeholder_frame()
+            self.render_error = "renderer_unavailable"
+            return None
         try:
             self.renderer.update_scene(self.data, camera=self.camera)
             pixels = self.renderer.render()
+            self.render_error = None
             return self._encode_png(pixels)
         except Exception as e:
             print(f"[MuJoCo] Render error: {e}", flush=True)
-            return self._placeholder_frame()
+            self.render_error = str(e)
+            return None
 
     def _encode_png(self, pixels) -> str:
         try:
             from PIL import Image
+
             img = Image.fromarray(pixels)
             buf = io.BytesIO()
             img.save(buf, format="PNG", optimize=True)
             return base64.b64encode(buf.getvalue()).decode("ascii")
-        except ImportError:
-            return base64.b64encode(pixels.tobytes()).decode("ascii")
-
-    def _placeholder_frame(self) -> str:
-        width, height = 640, 480
-        base = (26, 26, 30) if self.mode == "anatomy" else (22, 22, 26)
-        raw_data = bytes(base) * (width * height)
-
-        def make_png(w, h, pixels):
-            def chunk(ctype, data):
-                c = ctype + data
-                crc = zlib.crc32(c) & 0xFFFFFFFF
-                return struct.pack(">I", len(data)) + c + struct.pack(">I", crc)
-            sig = b"\x89PNG\r\n\x1a\n"
-            ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
-            raw = b""
-            for y in range(h):
-                raw += b"\x00" + pixels[y * w * 3 : (y + 1) * w * 3]
-            idat = chunk(b"IDAT", zlib.compress(raw))
-            iend = chunk(b"IEND", b"")
-            return sig + ihdr + idat + iend
-
-        png_data = make_png(width, height, raw_data)
-        return base64.b64encode(png_data).decode("ascii")
+        except ImportError as exc:
+            raise RuntimeError("Pillow is required for MuJoCo frame encoding") from exc
 
     def _get_joint_state(self) -> dict:
         if self.model is None or self.data is None:
@@ -1239,8 +1399,12 @@ class MuJoCoSimulation:
             0,
         )
         return {
-            "pos": self.data.xpos[body_idx].tolist() if len(self.data.xpos) > body_idx else [0, 0, 1],
-            "quat": self.data.xquat[body_idx].tolist() if len(self.data.xquat) > body_idx else [1, 0, 0, 0],
+            "pos": self.data.xpos[body_idx].tolist()
+            if len(self.data.xpos) > body_idx
+            else [0, 0, 1],
+            "quat": self.data.xquat[body_idx].tolist()
+            if len(self.data.xquat) > body_idx
+            else [1, 0, 0, 0],
             "vel": velocity[3:6].tolist(),
             "angvel": velocity[0:3].tolist(),
         }
@@ -1287,7 +1451,18 @@ class MuJoCoSimulation:
                 "walk_phase": self.controller.walk_phase,
                 "walk_speed": self.controller.walk_speed,
                 "walk_cmd": [self.controller.walk_cmd_linear, self.controller.walk_cmd_angular],
+                "walk_cmd_target": [
+                    self.controller.walk_cmd_target_linear,
+                    self.controller.walk_cmd_target_angular,
+                ],
             },
+            "demo": {
+                "active": self.demo_active,
+                "stage": self.demo_stage,
+                "elapsed": self.demo_elapsed,
+                "duration": 11.0,
+            },
+            "render_error": self.render_error,
             "world": self.world_info,
         }
 
@@ -1303,6 +1478,7 @@ class MuJoCoSimulation:
                 try:
                     if self.running:
                         if self._should_step_physics():
+                            self._update_demo(physics_dt)
                             self._step_physics(physics_dt)
                         self.frame += 1
 
@@ -1312,16 +1488,18 @@ class MuJoCoSimulation:
                             self._render_ready = True
 
                     if self._render_ready and self._pending_frame:
-                        msg = json.dumps({
-                            "type": "frame",
-                            "data": self._pending_frame,
-                            "mode": self.mode,
-                            "emotion": self.emotion,
-                            "frame": self.frame,
-                            "world": self.world_info,
-                        })
+                        msg = json.dumps(
+                            {
+                                "type": "frame",
+                                "data": self._pending_frame,
+                                "mode": self.mode,
+                                "emotion": self.emotion,
+                                "frame": self.frame,
+                                "world": self.world_info,
+                            }
+                        )
                         dead = []
-                        for c in self.clients.copy():
+                        for c in self.frame_clients.copy():
                             try:
                                 await c.send(msg)
                             except Exception:
@@ -1346,18 +1524,33 @@ class MuJoCoSimulation:
 
         async def handler(ws):
             self.clients.add(ws)
+            self.frame_clients.add(ws)
             try:
                 async for message in ws:
                     try:
                         data = json.loads(message)
                         if data.get("type") == "command":
                             cmd = data.get("command", "")
-                            if cmd == "reset":
+                            request_id = data.get("request_id")
+                            handled = True
+                            if cmd == "subscribe:telemetry":
+                                self.frame_clients.discard(ws)
+                            elif cmd == "reset":
                                 self.emotion = "neutral"
+                                self._cancel_demo()
                                 self._reset_simulation_state()
+                            elif cmd == "demo_start":
+                                self._start_demo()
+                            elif cmd == "demo_stop":
+                                self._cancel_demo()
+                                self.controller.mode = ControlMode.STAND
+                                self.controller.set_walk_cmd(0.0, 0.0)
                             elif cmd.startswith("model:"):
                                 new_model = cmd.split(":", 1)[1].lower()
-                                if new_model in ("tocabi", "g1") and new_model != self.robot_model.value:
+                                if (
+                                    new_model in ("tocabi", "g1")
+                                    and new_model != self.robot_model.value
+                                ):
                                     try:
                                         self.robot_model = RobotModel(new_model)
                                     except ValueError:
@@ -1368,7 +1561,10 @@ class MuJoCoSimulation:
                                 self.running = True
                             elif cmd.startswith("mode:"):
                                 new_mode = cmd.split(":", 1)[1]
-                                if new_mode in ("sphere", "anatomy", "both") and new_mode != self.mode:
+                                if (
+                                    new_mode in ("sphere", "anatomy", "both")
+                                    and new_mode != self.mode
+                                ):
                                     self.mode = new_mode
                             elif cmd.startswith("emotion:"):
                                 parts = cmd.split(":", 2)
@@ -1384,24 +1580,32 @@ class MuJoCoSimulation:
                                 if new_world in ALL_WORLDS or new_world == "none":
                                     self.world_name = new_world if new_world != "none" else None
                             elif cmd == "stand":
+                                self._cancel_demo()
                                 self.controller.mode = ControlMode.STAND
+                                self.controller.set_walk_cmd(0.0, 0.0)
                                 print("[MuJoCo] Mode → STAND", flush=True)
                             elif cmd == "walk":
+                                self._cancel_demo()
                                 self.controller.mode = ControlMode.WALK
-                                if abs(self.controller.walk_cmd_linear) < 0.01:
+                                if abs(self.controller.walk_cmd_target_linear) < 0.01:
                                     self.controller.set_walk_cmd(
                                         self.controller.walk_speed,
                                         self.controller.walk_cmd_angular,
                                     )
                                 print("[MuJoCo] Mode → WALK", flush=True)
                             elif cmd == "freeze":
+                                self._cancel_demo()
                                 self.controller.mode = ControlMode.FREEZE
                                 print("[MuJoCo] Mode → FREEZE", flush=True)
                             elif cmd.startswith("walk_cmd:"):
+                                self._cancel_demo()
                                 parts = cmd.split(":", 1)[1].split(",")
                                 if len(parts) >= 2:
                                     self.controller.set_walk_cmd(float(parts[0]), float(parts[1]))
-                                    print(f"[MuJoCo] Walk cmd: linear={parts[0]} angular={parts[1]}", flush=True)
+                                    print(
+                                        f"[MuJoCo] Walk cmd: linear={parts[0]} angular={parts[1]}",
+                                        flush=True,
+                                    )
                             elif cmd == "health":
                                 telem = self._get_telemetry()
                                 telem["type"] = "health"
@@ -1412,18 +1616,40 @@ class MuJoCoSimulation:
                             elif cmd == "telemetry":
                                 telem = self._get_telemetry()
                                 await ws.send(json.dumps(telem))
+                            else:
+                                handled = False
+                            if request_id:
+                                await ws.send(
+                                    json.dumps(
+                                        {
+                                            "type": "command_result",
+                                            "request_id": request_id,
+                                            "success": handled,
+                                            "command": cmd,
+                                            "running": self.running,
+                                            "frame": self.frame,
+                                            "controller": {
+                                                "mode": self.controller.mode.value,
+                                                "linear": self.controller.walk_cmd_target_linear,
+                                                "angular": self.controller.walk_cmd_angular,
+                                            },
+                                        }
+                                    )
+                                )
                     except Exception:
                         pass
             except websockets.exceptions.ConnectionClosed:
                 pass
             finally:
                 self.clients.discard(ws)
+                self.frame_clients.discard(ws)
 
         async def agent_loop():
             while True:
                 try:
                     try:
                         from agent_manager import manager
+
                         AGENT_AVAILABLE = True
                     except ImportError:
                         AGENT_AVAILABLE = False
@@ -1436,15 +1662,19 @@ class MuJoCoSimulation:
                             self.emotion = mood
                         for c in self.clients.copy():
                             try:
-                                await c.send(json.dumps({
-                                    "type": "blend",
-                                    "payload": {
-                                        "blend_mode": self.mode,
-                                        "blend_world": self.world_name,
-                                        "blend_emotion": self.emotion,
-                                        "blend_drives": drives,
-                                    },
-                                }))
+                                await c.send(
+                                    json.dumps(
+                                        {
+                                            "type": "blend",
+                                            "payload": {
+                                                "blend_mode": self.mode,
+                                                "blend_world": self.world_name,
+                                                "blend_emotion": self.emotion,
+                                                "blend_drives": drives,
+                                            },
+                                        }
+                                    )
+                                )
                             except Exception:
                                 pass
                     await asyncio.sleep(2)
@@ -1453,7 +1683,10 @@ class MuJoCoSimulation:
                     await asyncio.sleep(5)
 
         async with websockets.serve(handler, "127.0.0.1", self.port):
-            print(f"[MuJoCo] ws://127.0.0.1:{self.port} | mode={self.mode} | world={self.world_name}", flush=True)
+            print(
+                f"[MuJoCo] ws://127.0.0.1:{self.port} | mode={self.mode} | world={self.world_name}",
+                flush=True,
+            )
             render_task = asyncio.create_task(render_loop())
             agent_sync_task = asyncio.create_task(agent_loop())
             await asyncio.Event().wait()

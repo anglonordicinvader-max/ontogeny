@@ -14,6 +14,7 @@ from pydantic import BaseModel
 sys.path.insert(0, os.path.dirname(__file__))
 from agent_manager import manager
 from demo_fixtures import demo_session
+from embodiment_transport import EmbodimentTransportService
 
 app = FastAPI(title="Ontogeny Backend")
 
@@ -26,6 +27,11 @@ app.add_middleware(
 )
 
 connected_clients: set[WebSocket] = set()
+embodiment_transport = EmbodimentTransportService(
+    blender_port=int(os.environ.get("ONTOGENY_BLENDER_PORT", "8766")),
+    mujoco_port=int(os.environ.get("ONTOGENY_MUJOCO_PORT", "8767")),
+)
+manager.set_embodiment_transport(embodiment_transport)
 
 
 def find_available_port() -> int:
@@ -70,8 +76,14 @@ async def event_broadcast_loop():
 
 @app.on_event("startup")
 async def startup():
+    await embodiment_transport.start()
     asyncio.create_task(status_broadcast_loop())
     asyncio.create_task(event_broadcast_loop())
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    await embodiment_transport.stop()
 
 
 @app.websocket("/ws")
@@ -118,17 +130,56 @@ async def handle_message(message: dict, websocket: WebSocket):
             result = demo_session.start()
             await websocket.send_json({"type": "command_result", "payload": result})
             await broadcast({"type": "status", "payload": _demo_full_status()})
-            await broadcast({"type": "event", "payload": {"id": str(int(time.time() * 1000)), "timestamp": int(time.time() * 1000), "type": "demo", "message": "Demo Mode started"}})
+            await broadcast(
+                {
+                    "type": "event",
+                    "payload": {
+                        "id": str(int(time.time() * 1000)),
+                        "timestamp": int(time.time() * 1000),
+                        "type": "demo",
+                        "message": "Demo Mode started",
+                    },
+                }
+            )
         elif cmd == "demo_advance":
             result = demo_session.advance()
             await websocket.send_json({"type": "command_result", "payload": result})
             await broadcast({"type": "status", "payload": _demo_full_status()})
             step_name = result.get("stepName", "Unknown")
-            await broadcast({"type": "event", "payload": {"id": str(int(time.time() * 1000)), "timestamp": int(time.time() * 1000), "type": "demo", "message": f"Demo step: {step_name}"}})
+            await broadcast(
+                {
+                    "type": "event",
+                    "payload": {
+                        "id": str(int(time.time() * 1000)),
+                        "timestamp": int(time.time() * 1000),
+                        "type": "demo",
+                        "message": f"Demo step: {step_name}",
+                    },
+                }
+            )
         elif cmd == "demo_reset":
             result = demo_session.reset()
             await websocket.send_json({"type": "command_result", "payload": result})
             await broadcast({"type": "status", "payload": _demo_full_status()})
+        elif cmd == "embodiment_command":
+            result = await embodiment_transport.send_action(
+                str(payload.get("embodiment", "")), str(payload.get("action", ""))
+            )
+            await websocket.send_json({"type": "command_result", "payload": result})
+            if result.get("success"):
+                await broadcast(
+                    {
+                        "type": "event",
+                        "payload": {
+                            "id": result.get("request_id", str(int(time.time() * 1000))),
+                            "timestamp": int(time.time() * 1000),
+                            "type": "embodiment",
+                            "message": (
+                                f"{payload.get('embodiment')} embodiment: {payload.get('action')}"
+                            ),
+                        },
+                    }
+                )
 
     elif msg_type == "action":
         action = payload.get("action")
@@ -156,12 +207,17 @@ async def get_status():
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "agent_running": manager._running}
+    return {
+        "status": "ok",
+        "agent_running": manager._running,
+        "embodiment_transport": embodiment_transport.snapshots(),
+    }
 
 
 @app.get("/api/simulator-health")
 async def simulator_health():
     """Check if simulator ports are reachable."""
+
     async def reachable(port: int) -> bool:
         try:
             _, writer = await asyncio.wait_for(
@@ -170,7 +226,7 @@ async def simulator_health():
             writer.close()
             await writer.wait_closed()
             return True
-        except (OSError, asyncio.TimeoutError):
+        except (TimeoutError, OSError):
             return False
 
     blender_port = int(os.environ.get("ONTOGENY_BLENDER_PORT", "8766"))
@@ -221,12 +277,17 @@ async def get_events(limit: int = Query(50)):
 @app.post("/api/demo/start")
 async def demo_start():
     result = demo_session.start()
-    await broadcast({"type": "event", "payload": {
-        "id": str(int(time.time() * 1000)),
-        "timestamp": int(time.time() * 1000),
-        "type": "demo",
-        "message": "Demo Mode started",
-    }})
+    await broadcast(
+        {
+            "type": "event",
+            "payload": {
+                "id": str(int(time.time() * 1000)),
+                "timestamp": int(time.time() * 1000),
+                "type": "demo",
+                "message": "Demo Mode started",
+            },
+        }
+    )
     return result
 
 
@@ -235,24 +296,34 @@ async def demo_advance():
     result = demo_session.advance()
     await broadcast({"type": "status", "payload": _demo_full_status()})
     step_name = result.get("stepName", "")
-    await broadcast({"type": "event", "payload": {
-        "id": str(int(time.time() * 1000)),
-        "timestamp": int(time.time() * 1000),
-        "type": "demo",
-        "message": f"Demo step: {step_name}",
-    }})
+    await broadcast(
+        {
+            "type": "event",
+            "payload": {
+                "id": str(int(time.time() * 1000)),
+                "timestamp": int(time.time() * 1000),
+                "type": "demo",
+                "message": f"Demo step: {step_name}",
+            },
+        }
+    )
     return result
 
 
 @app.post("/api/demo/reset")
 async def demo_reset():
     result = demo_session.reset()
-    await broadcast({"type": "event", "payload": {
-        "id": str(int(time.time() * 1000)),
-        "timestamp": int(time.time() * 1000),
-        "type": "demo",
-        "message": "Demo Mode reset",
-    }})
+    await broadcast(
+        {
+            "type": "event",
+            "payload": {
+                "id": str(int(time.time() * 1000)),
+                "timestamp": int(time.time() * 1000),
+                "type": "demo",
+                "message": "Demo Mode reset",
+            },
+        }
+    )
     return result
 
 

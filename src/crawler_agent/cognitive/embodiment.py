@@ -6,8 +6,9 @@ duplicating Blender's wiring.
 """
 
 from abc import ABC, abstractmethod
-from enum import Enum, StrEnum
-from typing import Any
+from dataclasses import asdict, dataclass, field
+from enum import StrEnum
+from typing import Any, Protocol
 
 
 class EmbodimentType(StrEnum):
@@ -15,6 +16,35 @@ class EmbodimentType(StrEnum):
     MUJOCO = "mujoco"
     ROS2 = "ros2"
     PHYSICAL = "physical"
+
+
+class EmbodimentLifecycle(StrEnum):
+    UNAVAILABLE = "unavailable"
+    READY = "ready"
+    RUNNING = "running"
+    ERROR = "error"
+
+
+@dataclass(frozen=True)
+class EmbodimentSnapshot:
+    embodiment_type: EmbodimentType
+    lifecycle: EmbodimentLifecycle
+    available: bool
+    telemetry: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        value = asdict(self)
+        value["embodiment_type"] = self.embodiment_type.value
+        value["lifecycle"] = self.lifecycle.value
+        return value
+
+
+class EmbodimentTransport(Protocol):
+    """Transport contract implemented by the backend runtime."""
+
+    def snapshot(self, embodiment: str) -> dict[str, Any]: ...
+
+    async def send_action(self, embodiment: str, command: str) -> dict[str, Any]: ...
 
 
 class EmbodimentAdapter(ABC):
@@ -27,6 +57,13 @@ class EmbodimentAdapter(ABC):
     @property
     @abstractmethod
     def is_available(self) -> bool: ...
+
+    @property
+    @abstractmethod
+    def lifecycle(self) -> EmbodimentLifecycle: ...
+
+    @abstractmethod
+    def snapshot(self) -> EmbodimentSnapshot: ...
 
     @abstractmethod
     async def observe(self) -> dict[str, Any]: ...
@@ -65,3 +102,9 @@ class EmbodimentRegistry:
 
     def all_types(self) -> list[EmbodimentType]:
         return list(self._adapters.keys())
+
+    def snapshots(self) -> dict[str, dict[str, Any]]:
+        return {
+            embodiment_type.value: adapter.snapshot().to_dict()
+            for embodiment_type, adapter in self._adapters.items()
+        }

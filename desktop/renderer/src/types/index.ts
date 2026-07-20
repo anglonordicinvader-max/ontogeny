@@ -20,8 +20,19 @@ export interface AgentStatus {
   metacognition?: Record<string, unknown>;
   backend?: Record<string, string | number>;
   embodiment?: Record<string, boolean>;
+  embodimentDetails?: Record<string, {
+    embodiment_type: string;
+    lifecycle: 'unavailable' | 'ready' | 'running' | 'error';
+    available: boolean;
+    telemetry: Record<string, unknown>;
+  }>;
   planning?: Record<string, unknown>;
-  knowledgeGraph?: { nodes: KnowledgeNode[]; edges: KnowledgeEdge[] };
+  knowledgeGraph?: {
+    revision?: number;
+    updatedAt?: string | null;
+    nodes: KnowledgeNode[];
+    edges: KnowledgeEdge[];
+  };
   demo?: DemoStats;
 }
 

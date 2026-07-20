@@ -188,6 +188,13 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
                 )
                 print(f"  Routing:     {routes}")
                 print(f"  NeoCorpus:   {status.get('embodiment', {})}")
+                details = status.get("embodiment_details", {})
+                if details:
+                    lifecycles = ", ".join(
+                        f"{name}={detail.get('lifecycle', 'unknown')}"
+                        for name, detail in details.items()
+                    )
+                    print(f"  Embodiment:  {lifecycles}")
                 print(f"  Crawlers:    {status.get('crawlers', [])}")
                 proxy_stats = agent.proxy_pool.get_stats()
                 healthy_color = green if proxy_stats["healthy"] > 0 else red
@@ -200,11 +207,15 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
             elif command == "embodiment":
                 status = await agent.get_status()
                 embodiments = status.get("embodiment", {})
+                details = status.get("embodiment_details", {})
                 print(f"\n{bold(cyan('NeoCorpus Embodiment'))}")
                 for name in ("blender", "mujoco"):
                     available = embodiments.get(name, False)
                     marker = green("available") if available else red("unavailable")
-                    print(f"  {name.capitalize():8} {marker}")
+                    lifecycle = details.get(name, {}).get(
+                        "lifecycle", "ready" if available else "unavailable"
+                    )
+                    print(f"  {name.capitalize():8} {marker:20} {dim(lifecycle)}")
 
             elif command == "memory":
                 context = await agent.memory.get_context_window()
@@ -342,9 +353,7 @@ async def interactive_mode(agent: CognitiveOrchestrator, persistence: StatePersi
                 result = await agent.simulate_plan(steps)
                 confidence = result["confidence"]
                 conf_str = f"{confidence:.0%}"
-                print(
-                    f"\n{bold(cyan(f'Plan simulation (confidence: {green(conf_str)}):'))}"
-                )
+                print(f"\n{bold(cyan(f'Plan simulation (confidence: {green(conf_str)}):'))}")
                 print(f"  Outcomes: {result['outcomes']}")
                 for detail in result.get("step_details", [])[:5]:
                     print(f"    {green('•')} {detail.get('description', detail)}")

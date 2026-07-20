@@ -97,7 +97,15 @@ class TestMuJoCoModelAssets:
 
     def test_tocabi_urdf_exists(self):
         path = os.path.join(
-            os.path.dirname(__file__), "..", "data", "blender", "models", "tocabi", "combined", "urdf", "FullBody.urdf"
+            os.path.dirname(__file__),
+            "..",
+            "data",
+            "blender",
+            "models",
+            "tocabi",
+            "combined",
+            "urdf",
+            "FullBody.urdf",
         )
         assert os.path.exists(path), f"TOCABI URDF not found at {path}"
 
@@ -109,6 +117,7 @@ class TestMuJoCoDependencyDetection:
         """Verify we can detect whether mujoco is installed."""
         try:
             import mujoco
+
             mujoco_available = True
         except ImportError:
             mujoco_available = False
@@ -143,13 +152,13 @@ class TestMuJoCoControlBehavior:
         assert ".xvelr" not in source
 
     def test_g1_walk_targets_leave_standing_pose(self):
-        from mujoco_simulation import G1Controller, G1_JOINT_NAMES, G1_STANDING_POSE
+        from mujoco_simulation import G1_JOINT_NAMES, G1_STANDING_POSE, G1Controller
 
         controller = G1Controller()
         controller.set_ctrl_index_map({name: i for i, name in enumerate(G1_JOINT_NAMES)})
         controller.set_walk_cmd(controller.walk_speed, 0.0)
 
-        targets = controller._gait_targets(len(G1_JOINT_NAMES))
+        targets = controller._gait_targets(len(G1_JOINT_NAMES), dt=0.1)
 
         assert targets.tolist() != G1_STANDING_POSE
         assert targets[0] != G1_STANDING_POSE[0]
@@ -170,7 +179,60 @@ class TestMuJoCoControlBehavior:
             source = f.read()
 
         assert "self.controller.walk_speed" in source
-        assert "abs(self.controller.walk_cmd_linear) < 0.01" in source
+        assert "abs(self.controller.walk_cmd_target_linear) < 0.01" in source
+
+    def test_walk_commands_are_smoothed_and_timestep_driven(self):
+        from mujoco_simulation import G1Controller
+
+        controller = G1Controller()
+        controller.set_walk_cmd(1.0, 1.0)
+        controller._gait_targets(0, dt=0.1)
+
+        assert 0.0 < controller.walk_cmd_linear <= 0.151
+        assert 0.0 < controller.walk_cmd_angular <= 0.201
+        assert abs(controller.walk_phase - (2 * 3.141592653589793 * 0.2)) < 1e-9
+
+    def test_turn_command_changes_g1_yaw_targets(self):
+        from mujoco_simulation import G1_JOINT_NAMES, G1Controller
+
+        controller = G1Controller()
+        mapping = {name: i for i, name in enumerate(G1_JOINT_NAMES)}
+        controller.set_ctrl_index_map(mapping)
+        controller.set_walk_cmd(0.0, 1.0)
+        targets = controller._gait_targets(len(G1_JOINT_NAMES), dt=0.5)
+
+        assert targets[mapping["left_hip_yaw_joint"]] > 0.0
+        assert targets[mapping["waist_yaw_joint"]] > 0.0
+
+    def test_demo_sequence_is_deterministic(self):
+        from mujoco_simulation import ControlMode, MuJoCoSimulation
+
+        simulation = MuJoCoSimulation.__new__(MuJoCoSimulation)
+        simulation.controller = type(
+            "Controller",
+            (),
+            {
+                "mode": ControlMode.STAND,
+                "set_walk_cmd": lambda self, linear, angular: setattr(
+                    self, "command", (linear, angular)
+                ),
+            },
+        )()
+        simulation.demo_active = True
+        simulation.demo_elapsed = 4.9
+        simulation.demo_stage = "stop"
+        simulation._update_demo(0.2)
+
+        assert simulation.demo_stage == "turn"
+        assert simulation.controller.mode == ControlMode.WALK
+        assert simulation.controller.command == (0.12, 0.65)
+
+    def test_renderer_failure_never_emits_placeholder_frames(self):
+        path = os.path.join(os.path.dirname(__file__), "..", "backend", "mujoco_simulation.py")
+        with open(path, encoding="utf-8") as f:
+            source = f.read()
+
+        assert "_placeholder_frame" not in source
 
     def test_velocity_controls_preserve_both_components(self):
         path = os.path.join(

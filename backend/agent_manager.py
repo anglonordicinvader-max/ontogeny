@@ -17,6 +17,7 @@ class AgentManager:
     _start_time: float = 0
     _initialized: bool = False
     _status_cache: dict | None = None
+    _embodiment_transport: Any = None
 
     def __new__(cls) -> "AgentManager":
         if cls._instance is None:
@@ -28,6 +29,9 @@ class AgentManager:
 
         return CognitiveOrchestrator
 
+    def set_embodiment_transport(self, transport: Any) -> None:
+        self._embodiment_transport = transport
+
     async def start(self, max_cycles: int | None = None) -> dict:
         if self._running:
             return {"status": "already_running"}
@@ -37,7 +41,7 @@ class AgentManager:
                 await self._agent.close()
                 self._agent = None
             OrchestratorClass = self._get_orchestrator_class()
-            self._agent = OrchestratorClass()
+            self._agent = OrchestratorClass(embodiment_transport=self._embodiment_transport)
             await self._agent.initialize()
             self._running = True
             self._stop_event = asyncio.Event()
@@ -143,6 +147,10 @@ class AgentManager:
             },
             "backend": {},
             "embodiment": {"blender": False, "mujoco": False},
+            "embodimentDetails": {},
+            "embodimentTransport": self._embodiment_transport.snapshots()
+            if self._embodiment_transport
+            else {},
         }
 
     def _map_status(self, raw: dict) -> dict:
@@ -220,6 +228,10 @@ class AgentManager:
             "metacognition": raw.get("metacognition", {}),
             "backend": backend,
             "embodiment": raw.get("embodiment", {}),
+            "embodimentDetails": raw.get("embodiment_details", {}),
+            "embodimentTransport": self._embodiment_transport.snapshots()
+            if self._embodiment_transport
+            else {},
             "planning": raw.get("plans", {}),
         }
 
@@ -322,9 +334,7 @@ class AgentManager:
         try:
             goals_mgr = self._agent.goals
             active = (
-                await goals_mgr.get_active_goals()
-                if hasattr(goals_mgr, "get_active_goals")
-                else []
+                await goals_mgr.get_active_goals() if hasattr(goals_mgr, "get_active_goals") else []
             )
             return [
                 {
@@ -344,6 +354,8 @@ class AgentManager:
             return {"nodes": [], "edges": []}
         try:
             kg = self._agent.knowledge_graph
+            if hasattr(kg, "snapshot"):
+                return kg.snapshot()
             if hasattr(kg, "concepts") and hasattr(kg, "graph"):
                 nodes = [
                     {

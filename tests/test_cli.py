@@ -31,6 +31,10 @@ class _FakeAgent:
                 "modifier_backend": "maldoror",
             },
             "embodiment": {"blender": True, "mujoco": True},
+            "embodiment_details": {
+                "blender": {"lifecycle": "ready"},
+                "mujoco": {"lifecycle": "running"},
+            },
             "crawlers": ["arxiv"],
             "current_plan": None,
         }
@@ -62,3 +66,5 @@ async def test_embodiment_command_reports_registered_backends(monkeypatch, capsy
     assert "Blender" in output
     assert "Mujoco" in output
     assert output.count("available") >= 2
+    assert "ready" in output
+    assert "running" in output

@@ -97,9 +97,9 @@ function App() {
       case 'production':
         return <ProductionPanel status={status} />;
       case 'blender':
-        return <BlenderPanel backendPort={backendPort + 1} />;
+        return <BlenderPanel backendPort={backendPort + 1} onCommand={(action) => handleCommand('embodiment_command', { embodiment: 'blender', action })} />;
       case 'mujoco':
-        return <MuJoCoPanel backendPort={backendPort + 2} />;
+        return <MuJoCoPanel backendPort={backendPort + 2} onCommand={(action) => handleCommand('embodiment_command', { embodiment: 'mujoco', action })} />;
       case 'settings':
         return <SettingsPanel />;
       default:

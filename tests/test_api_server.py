@@ -53,7 +53,7 @@ class TestBlenderWorlds:
     def test_import_practical_worlds(self):
         from blender_worlds import PRACTICAL_WORLDS
 
-        assert len(PRACTICAL_WORLDS) == 9
+        assert len(PRACTICAL_WORLDS) == 12
 
     def test_import_survival_worlds(self):
         from blender_worlds import ALL_SURVIVAL_WORLDS

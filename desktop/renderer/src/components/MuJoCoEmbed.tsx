@@ -3,6 +3,7 @@ import { Panel } from './Panel';
 
 interface MuJoCoEmbedProps {
   backendPort?: number;
+  onCommand?: (command: string) => void;
 }
 
 interface Telemetry {
@@ -20,10 +21,11 @@ interface Telemetry {
     imu: { acceleration: number[]; angular_velocity: number[] };
     contacts: { num_contacts: number; total_force: number[]; foot_contact: { left: boolean; right: boolean } };
   };
-  controller: { mode: string; walk_phase: number; walk_speed: number; walk_cmd: number[] };
+  controller: { mode: string; walk_phase: number; walk_speed: number; walk_cmd: number[]; walk_cmd_target: number[] };
+  demo: { active: boolean; stage: string; elapsed: number; duration: number };
 }
 
-export function MuJoCoEmbed({ backendPort = 8768 }: MuJoCoEmbedProps) {
+export function MuJoCoEmbed({ backendPort = 8768, onCommand }: MuJoCoEmbedProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -47,10 +49,14 @@ export function MuJoCoEmbed({ backendPort = 8768 }: MuJoCoEmbedProps) {
   }, [backendPort]);
 
   const sendCommand = useCallback((command: string) => {
+    if (onCommand) {
+      onCommand(command);
+      return;
+    }
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'command', command }));
     }
-  }, []);
+  }, [onCommand]);
 
   useEffect(() => {
     let retryTimeout: ReturnType<typeof setTimeout>;
@@ -86,9 +92,9 @@ export function MuJoCoEmbed({ backendPort = 8768 }: MuJoCoEmbedProps) {
           } else if (msg.type === 'telemetry' || msg.type === 'health') {
             setTelemetry(msg as Telemetry);
             if (msg.controller?.mode) setControlMode(msg.controller.mode);
-            if (msg.controller?.walk_cmd) {
-              setWalkLinear(msg.controller.walk_cmd[0]);
-              setWalkAngular(msg.controller.walk_cmd[1]);
+            if (msg.controller?.walk_cmd_target) {
+              setWalkLinear(msg.controller.walk_cmd_target[0]);
+              setWalkAngular(msg.controller.walk_cmd_target[1]);
             }
           }
         } catch { /* ignore */ }
@@ -263,6 +269,7 @@ export function MuJoCoEmbed({ backendPort = 8768 }: MuJoCoEmbedProps) {
           )}
           <div className="glass-panel rounded-lg p-1 flex gap-1">
             {[
+              { key: 'demo', label: telemetry?.demo?.active ? telemetry.demo.stage.replace('_', ' ') : 'Demo' },
               { key: 'stand', label: 'Stand' },
               { key: 'walk', label: 'Walk' },
               { key: 'freeze', label: 'Freeze' },
@@ -271,7 +278,9 @@ export function MuJoCoEmbed({ backendPort = 8768 }: MuJoCoEmbedProps) {
               <button
                 key={btn.key}
                 onClick={() => {
-                  if (btn.key === 'reset') {
+                  if (btn.key === 'demo') {
+                    sendCommand(telemetry?.demo?.active ? 'demo_stop' : 'demo_start');
+                  } else if (btn.key === 'reset') {
                     sendCommand('reset');
                     setControlMode('stand');
                   } else {
@@ -279,7 +288,7 @@ export function MuJoCoEmbed({ backendPort = 8768 }: MuJoCoEmbedProps) {
                   }
                 }}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-150 ${
-                  (btn.key === 'reset' ? false : controlMode === btn.key)
+                  (btn.key === 'demo' ? telemetry?.demo?.active : btn.key === 'reset' ? false : controlMode === btn.key)
                     ? 'bg-surface-elevated text-text-primary shadow-md'
                     : 'text-text-secondary hover:text-text-primary hover:bg-surface-3'
                 }`}
