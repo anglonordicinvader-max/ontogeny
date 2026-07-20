@@ -96,6 +96,7 @@ async function startPythonBackend() {
   
   if (fs.existsSync(PYTHON_EXE)) {
     pythonProcess = spawn(PYTHON_EXE, ['--port', backendPort], {
+      cwd: isPackaged ? process.resourcesPath : path.join(__dirname, '..', '..'),
       stdio: ['pipe', 'pipe', 'pipe'],
       env: backendEnv
     });
@@ -130,6 +131,7 @@ async function startBlender() {
       '--python', BLENDER_SCRIPT,
       '--', '--port', String(backendPort + 1)
     ], {
+      cwd: isPackaged ? process.resourcesPath : path.join(__dirname, '..', '..'),
       stdio: ['pipe', 'pipe', 'pipe']
     });
 
@@ -151,6 +153,7 @@ async function startMuJoCo() {
       ? ['--port', String(backendPort + 2), '--model', modelArg]
       : [MUJOCO_SERVER, '--port', String(backendPort + 2), '--model', modelArg];
     mujocoProcess = spawn(executable, args, {
+      cwd: isPackaged ? process.resourcesPath : path.join(__dirname, '..', '..'),
       stdio: ['pipe', 'pipe', 'pipe'],
       env: {
         ...process.env,
@@ -166,6 +169,10 @@ async function startMuJoCo() {
 
     mujocoProcess.stderr.on('data', (data) => {
       console.error(`MuJoCo Error: ${data}`);
+    });
+
+    mujocoProcess.on('error', (error) => {
+      console.error(`MuJoCo failed to start: ${error.message}`);
     });
   }
 }

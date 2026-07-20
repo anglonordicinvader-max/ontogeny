@@ -52,25 +52,31 @@ async def broadcast(message: dict):
 
 async def status_broadcast_loop():
     while True:
-        if demo_session.active:
-            status = _demo_full_status()
-        else:
-            status = await manager.refresh_status()
-        await broadcast({"type": "status", "payload": status})
+        try:
+            if demo_session.active:
+                status = _demo_full_status()
+            else:
+                status = await manager.refresh_status()
+            await broadcast({"type": "status", "payload": status})
+        except Exception as exc:
+            print(f"[MAIN] status broadcast failed: {exc}")
         await asyncio.sleep(1)
 
 
 async def event_broadcast_loop():
     seen_event_ids: set[str] = set()
     while True:
-        events = manager.get_recent_events(limit=100)
-        for event in events:
-            if event["id"] in seen_event_ids:
-                continue
-            await broadcast({"type": "event", "payload": event})
-            seen_event_ids.add(event["id"])
-        current_ids = {event["id"] for event in events}
-        seen_event_ids.intersection_update(current_ids)
+        try:
+            events = manager.get_recent_events(limit=100)
+            for event in events:
+                if event["id"] in seen_event_ids:
+                    continue
+                await broadcast({"type": "event", "payload": event})
+                seen_event_ids.add(event["id"])
+            current_ids = {event["id"] for event in events}
+            seen_event_ids.intersection_update(current_ids)
+        except Exception as exc:
+            print(f"[MAIN] event broadcast failed: {exc}")
         await asyncio.sleep(1)
 
 

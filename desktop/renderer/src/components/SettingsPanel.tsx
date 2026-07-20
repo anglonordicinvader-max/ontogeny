@@ -208,7 +208,7 @@ export function SettingsPanel() {
       <Panel title="About">
         <div className="space-y-2">
           <div className="text-xs text-text-secondary font-medium">Ontogeny v{APP_VERSION}</div>
-          <div className="text-2xs text-text-tertiary">Proto-AGI Research Workstation</div>
+          <div className="text-2xs text-text-tertiary">AI Research Workstation</div>
           <div className="text-2xs text-text-tertiary">License: AGPL-3.0</div>
         </div>
       </Panel>

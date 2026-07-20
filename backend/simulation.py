@@ -321,6 +321,13 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/status")
+async def status():
+    cycle = int(time.time() - start_time)
+    t = time.time() - start_time
+    return generate_status(cycle, t)
+
+
 if __name__ == "__main__":
     import uvicorn
 
