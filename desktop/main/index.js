@@ -21,7 +21,7 @@ function getIsPortable() {
   return isPackaged && !fs.existsSync(path.join(process.resourcesPath, 'app-update.yml'));
 }
 
-const isPackaged = !!process.resourcesPath;
+const isPackaged = app.isPackaged;
 
 const PYTHON_EXE = isPackaged
   ? path.join(process.resourcesPath, 'backend', 'ontogeny-backend.exe')
@@ -118,15 +118,19 @@ async function startBlender() {
 }
 
 async function startMuJoCo() {
+  console.log(`[MUJOCO] Starting... script=${MUJOCO_SCRIPT}, exists=${fs.existsSync(MUJOCO_SCRIPT)}`);
   if (fs.existsSync(MUJOCO_SCRIPT)) {
     const pythonExe = fs.existsSync(PYTHON_EXE) ? PYTHON_EXE : 'python';
     const modelArg = process.env.MUJOCO_MODEL || 'g1';
+    const cwd = path.join(__dirname, '..', '..');
+    console.log(`[MUJOCO] Spawning: ${pythonExe} ${MUJOCO_SCRIPT} --port ${backendPort + 2} --model ${modelArg} cwd=${cwd}`);
     mujocoProcess = spawn(pythonExe, [
       MUJOCO_SCRIPT,
       '--port', String(backendPort + 2),
       '--model', modelArg
     ], {
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe'],
+      cwd
     });
 
     mujocoProcess.stdout.on('data', (data) => {
@@ -136,17 +140,27 @@ async function startMuJoCo() {
     mujocoProcess.stderr.on('data', (data) => {
       console.error(`MuJoCo Error: ${data}`);
     });
+
+    mujocoProcess.on('error', (err) => {
+      console.error(`MuJoCo failed to start: ${err.message}`);
+    });
+
+    mujocoProcess.on('close', (code) => {
+      console.log(`MuJoCo exited with code ${code}`);
+    });
   }
 }
 
 async function startSimulation() {
   if (fs.existsSync(SIMULATION_SCRIPT)) {
     const pythonExe = fs.existsSync(PYTHON_EXE) ? PYTHON_EXE : 'python';
+    const cwd = path.join(__dirname, '..', '..');
     simulationProcess = spawn(pythonExe, [
       SIMULATION_SCRIPT,
       '--port', '8765'
     ], {
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe'],
+      cwd
     });
 
     simulationProcess.stdout.on('data', (data) => {
