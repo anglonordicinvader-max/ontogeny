@@ -115,7 +115,7 @@ async function startBlender() {
 async function startMuJoCo() {
   if (fs.existsSync(MUJOCO_SCRIPT)) {
     const pythonExe = fs.existsSync(PYTHON_EXE) ? PYTHON_EXE : 'python';
-    const modelArg = process.env.MUJOCO_MODEL || 'tocabi';
+    const modelArg = process.env.MUJOCO_MODEL || 'g1';
     mujocoProcess = spawn(pythonExe, [
       MUJOCO_SCRIPT,
       '--port', String(backendPort + 2),
