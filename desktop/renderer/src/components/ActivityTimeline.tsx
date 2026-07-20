@@ -10,6 +10,7 @@ interface ActivityTimelineProps {
 const eventIcons = {
   action: Zap,
   learning: Brain,
+  planning: Brain,
   modification: Code,
   error: AlertCircle,
   training: RefreshCw,
@@ -20,6 +21,7 @@ const eventIcons = {
 const eventColors = {
   action: 'text-accent',
   learning: 'text-status-success',
+  planning: 'text-text-secondary',
   modification: 'text-status-warning',
   error: 'text-status-error',
   training: 'text-status-info',

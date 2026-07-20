@@ -70,7 +70,7 @@ export function StatusBar({ status, connected }: StatusBarProps) {
                 Last cycle <span className="text-text-secondary" style={{ fontFamily: "'Geist Mono', monospace" }}>{formatDuration(status.uptime * 1000)}</span>
               </span>
               <span className="text-2xs text-text-tertiary" style={{ fontFamily: "'Geist Mono', monospace" }}>
-                {formatDuration(Date.now() - status.uptime * 1000)}
+                runtime {formatDuration(status.uptime * 1000)}
               </span>
             </>
           )}
@@ -106,9 +106,11 @@ export function StatusBar({ status, connected }: StatusBarProps) {
               <DetailRow label="Backend API" value={connected ? 'Online' : 'Offline'} status={connected ? 'green' : 'red'} />
               <DetailRow label="WebSocket" value={connected ? 'Open' : 'Closed'} status={connected ? 'green' : 'red'} />
               <DetailRow label="Active Model" value={modelVersion} status="gray" />
+              <DetailRow label="Blender" value={status?.embodiment?.blender ? 'Available' : 'Unavailable'} status={status?.embodiment?.blender ? 'green' : 'gray'} />
+              <DetailRow label="MuJoCo" value={status?.embodiment?.mujoco ? 'Available' : 'Unavailable'} status={status?.embodiment?.mujoco ? 'green' : 'gray'} />
               <DetailRow label="Sandbox" value={status?.state === 'demo' ? 'Demo Mode' : 'Standby'} status="gray" />
               <DetailRow label="Current Cycle" value={`#${status?.iteration || 0}`} status="gray" />
-              <DetailRow label="Runtime" value={status ? formatDuration(Date.now() - status.uptime * 1000) : '—'} status="gray" />
+              <DetailRow label="Runtime" value={status ? formatDuration(status.uptime * 1000) : '—'} status="gray" />
               <DetailRow label="State" value={stateLabel} status={status?.state === 'error' ? 'red' : 'green'} />
               <DetailRow label="Version" value={`v${APP_VERSION}`} status="gray" />
             </div>

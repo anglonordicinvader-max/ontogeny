@@ -2,7 +2,7 @@
 import { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 import { Panel } from './Panel';
-import type { AgentStatus } from '@/types';
+import type { AgentStatus, KnowledgeEdge, KnowledgeNode } from '@/types';
 
 interface KnowledgeGraphProps {
   status: AgentStatus | null;
@@ -24,11 +24,6 @@ const GROUPS = [
   ['metacognition','curiosity','exploration','uncertainty','confidence','surprise','novelty','self-reflection','planning','monitoring'],
 ];
 const N = 6;
-
-function pickLabel(g: number, c: number) {
-  const l = GROUPS[g % N];
-  return l[c % l.length] + (c >= l.length ? ` ${Math.floor(c / l.length) + 1}` : '');
-}
 
 class GraphEngine {
   private svg: d3.Selection<SVGSVGElement, unknown, null, undefined>;
@@ -116,65 +111,31 @@ class GraphEngine {
       .attr('x', (d: any) => d.x).attr('y', (d: any) => d.y);
   }
 
-  addNode() {
-    if (this.destroyed || this.nodes.length >= 80) return;
-    const g = this.nodes.length % N;
-    const gc = this.nodes.filter((n) => n.g === g).length;
+  addNode(source: KnowledgeNode) {
+    if (this.destroyed || this.nodes.length >= 80 || this.nodes.some((n) => n.id === source.id)) return;
+    const normalized = source.name.toLowerCase();
+    const matchedGroup = GROUPS.findIndex((terms) => terms.some((term) => normalized.includes(term)));
+    const g = matchedGroup >= 0 ? matchedGroup : this.nodes.length % N;
     const c = this.centroids[g];
     const node = {
-      id: this.nodes.length,
-      label: pickLabel(g, gc),
+      id: source.id,
+      label: source.name,
       g,
-      r: gc === 0 ? 7 : 3 + Math.floor(Math.random() * 2),
-      x: c.x + (Math.random() - 0.5) * 50,
-      y: c.y + (Math.random() - 0.5) * 50,
+      r: Math.max(3, Math.min(7, 3 + source.strength * 4)),
+      x: c.x + ((this.nodes.length * 17) % 50) - 25,
+      y: c.y + ((this.nodes.length * 29) % 50) - 25,
     };
     this.nodes.push(node);
-
-    // Add 1-2 intra-group links
-    const sameGroup = this.nodes.filter((n) => n.g === g && n.id !== node.id);
-    if (sameGroup.length > 0) {
-      const target = sameGroup[Math.floor(Math.random() * sameGroup.length)];
-      const key = `${Math.min(node.id, target.id)}-${Math.max(node.id, target.id)}`;
-      if (!this.linkSet.has(key)) {
-        this.linkSet.add(key);
-        this.links.push({ source: node.id, target: target.id });
-      }
-    }
-
-    // Maybe add 1 inter-group link
-    if (Math.random() < 0.4 && this.nodes.length > N) {
-      const otherG = (g + 1 + Math.floor(Math.random() * (N - 1))) % N;
-      const others = this.nodes.filter((n) => n.g === otherG);
-      if (others.length > 0) {
-        const target = others[Math.floor(Math.random() * others.length)];
-        const key = `${Math.min(node.id, target.id)}-${Math.max(node.id, target.id)}`;
-        if (!this.linkSet.has(key)) {
-          this.linkSet.add(key);
-          this.links.push({ source: node.id, target: target.id });
-        }
-      }
-    }
-
     this.render();
   }
 
-  addEdge() {
-    if (this.destroyed || this.nodes.length < 2) return;
-    let attempts = 0;
-    while (attempts < 10) {
-      attempts++;
-      const a = this.nodes[Math.floor(Math.random() * this.nodes.length)];
-      const b = this.nodes[Math.floor(Math.random() * this.nodes.length)];
-      if (a.id === b.id) continue;
-      const key = `${Math.min(a.id, b.id)}-${Math.max(a.id, b.id)}`;
-      if (!this.linkSet.has(key)) {
-        this.linkSet.add(key);
-        this.links.push({ source: a.id, target: b.id });
-        this.render();
-        return;
-      }
-    }
+  addEdge(edge: KnowledgeEdge) {
+    if (this.destroyed || !this.nodes.some((n) => n.id === edge.source) || !this.nodes.some((n) => n.id === edge.target)) return;
+    const key = `${edge.source}->${edge.target}:${edge.type}`;
+    if (this.linkSet.has(key)) return;
+    this.linkSet.add(key);
+    this.links.push({ source: edge.source, target: edge.target, type: edge.type, weight: edge.weight });
+    this.render();
   }
 
   render() {
@@ -249,8 +210,6 @@ class GraphEngine {
     this.tooltip.remove();
   }
 
-  getNodeCount() { return this.nodes.length; }
-  getEdgeCount() { return this.links.length; }
 }
 
 export function KnowledgeGraph({ status }: KnowledgeGraphProps) {
@@ -258,6 +217,7 @@ export function KnowledgeGraph({ status }: KnowledgeGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<GraphEngine | null>(null);
   const knowledge = status?.knowledge || { nodes: 0, edges: 0 };
+  const graph = status?.knowledgeGraph || { nodes: [], edges: [] };
 
   useEffect(() => {
     if (!svgRef.current || !containerRef.current) return;
@@ -279,19 +239,9 @@ export function KnowledgeGraph({ status }: KnowledgeGraphProps) {
     const engine = engineRef.current;
     if (!engine) return;
 
-    const targetN = Math.min(knowledge.nodes, 80);
-    const targetE = Math.min(knowledge.edges, targetN * 3);
-
-    const nodeDelta = targetN - engine.getNodeCount();
-    const edgeDelta = targetE - engine.getEdgeCount();
-
-    for (let i = 0; i < Math.min(nodeDelta, 5); i++) {
-      engine.addNode();
-    }
-    for (let i = 0; i < Math.min(edgeDelta, 3); i++) {
-      engine.addEdge();
-    }
-  }, [knowledge.nodes, knowledge.edges]);
+    graph.nodes.slice(0, 80).forEach((node) => engine.addNode(node));
+    graph.edges.slice(0, 100).forEach((edge) => engine.addEdge(edge));
+  }, [graph]);
 
   return (
     <div className="h-full overflow-y-auto p-4 space-y-4">

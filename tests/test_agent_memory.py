@@ -8,6 +8,8 @@ import os
 import sys
 
 import pytest
+import networkx as nx
+from types import SimpleNamespace
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -28,6 +30,74 @@ class TestAgentManager:
         a = AgentManager()
         b = AgentManager()
         assert a is b
+
+    @pytest.mark.asyncio
+    async def test_refresh_status_awaits_orchestrator_and_maps_live_state(self):
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+        from agent_manager import AgentManager
+
+        graph = nx.DiGraph()
+        graph.add_edge("core", "body", relation_type="embodies", weight=0.8)
+        concept = SimpleNamespace(id="core", name="Ontogeny Core", strength=1.0)
+
+        async def get_status():
+            return {
+                "state": "planning",
+                "iteration": 4,
+                "uptime_seconds": 8,
+                "goals": {"drives": {"curiosity": 0.7}},
+                "memory": {"semantic_count": 3},
+                "knowledge_graph": {"concepts": 1, "relations": 1},
+                "maldoror": {"current_version": "v3", "avg_loss": 0.2},
+                "backend": {"modifier_backend": "maldoror"},
+                "embodiment": {"blender": True, "mujoco": True},
+            }
+
+        manager = AgentManager()
+        manager._status_cache = None
+        manager._agent = SimpleNamespace(
+            get_status=get_status,
+            knowledge_graph=SimpleNamespace(concepts={"core": concept}, graph=graph),
+        )
+
+        status = await manager.refresh_status()
+
+        assert status["state"] == "planning"
+        assert status["memory"]["semantic"] == 3
+        assert status["maldoror"]["version"] == "v3"
+        assert status["embodiment"] == {"blender": True, "mujoco": True}
+        assert status["knowledgeGraph"]["nodes"][0]["name"] == "Ontogeny Core"
+        assert status["knowledgeGraph"]["edges"][0]["type"] == "embodies"
+
+    @pytest.mark.asyncio
+    async def test_goal_serialization_awaits_goal_manager(self):
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+        from agent_manager import AgentManager
+        from crawler_agent.cognitive.goals import GoalPriority, GoalStatus
+
+        async def active_goals():
+            return [
+                SimpleNamespace(
+                    id="g1",
+                    description="Validate embodiment",
+                    status=GoalStatus.ACTIVE,
+                    progress=0.5,
+                    priority=GoalPriority.HIGH,
+                )
+            ]
+
+        manager = AgentManager()
+        manager._agent = SimpleNamespace(goals=SimpleNamespace(get_active_goals=active_goals))
+
+        goals = await manager.get_goals()
+
+        assert goals == [{
+            "id": "g1",
+            "description": "Validate embodiment",
+            "status": "active",
+            "progress": 0.5,
+            "priority": "high",
+        }]
 
 
 class TestMemorySystem:

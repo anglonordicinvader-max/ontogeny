@@ -49,19 +49,22 @@ async def status_broadcast_loop():
         if demo_session.active:
             status = _demo_full_status()
         else:
-            status = manager.get_status()
+            status = await manager.refresh_status()
         await broadcast({"type": "status", "payload": status})
         await asyncio.sleep(1)
 
 
 async def event_broadcast_loop():
-    last_count = 0
+    seen_event_ids: set[str] = set()
     while True:
         events = manager.get_recent_events(limit=100)
-        new_events = events[last_count:]
-        for event in new_events:
+        for event in events:
+            if event["id"] in seen_event_ids:
+                continue
             await broadcast({"type": "event", "payload": event})
-        last_count = len(events)
+            seen_event_ids.add(event["id"])
+        current_ids = {event["id"] for event in events}
+        seen_event_ids.intersection_update(current_ids)
         await asyncio.sleep(1)
 
 
@@ -148,7 +151,7 @@ class AskRequest(BaseModel):
 
 @app.get("/api/status")
 async def get_status():
-    return manager.get_status()
+    return await manager.refresh_status()
 
 
 @app.get("/api/health")
@@ -159,11 +162,24 @@ async def health():
 @app.get("/api/simulator-health")
 async def simulator_health():
     """Check if simulator ports are reachable."""
-    result = {"blender": {"available": False}, "mujoco": {"available": False}}
-    # The simulators run on the same host. We check if their WebSocket ports accept connections.
-    # In the Electron app, the main process knows the ports. Here we just report based on
-    # whether the processes were spawned. The frontend handles its own health checks.
-    return result
+    async def reachable(port: int) -> bool:
+        try:
+            _, writer = await asyncio.wait_for(
+                asyncio.open_connection("127.0.0.1", port), timeout=0.25
+            )
+            writer.close()
+            await writer.wait_closed()
+            return True
+        except (OSError, asyncio.TimeoutError):
+            return False
+
+    blender_port = int(os.environ.get("ONTOGENY_BLENDER_PORT", "8766"))
+    mujoco_port = int(os.environ.get("ONTOGENY_MUJOCO_PORT", "8767"))
+    blender, mujoco = await asyncio.gather(reachable(blender_port), reachable(mujoco_port))
+    return {
+        "blender": {"available": blender, "port": blender_port},
+        "mujoco": {"available": mujoco, "port": mujoco_port},
+    }
 
 
 @app.post("/api/agent/start")
@@ -189,7 +205,7 @@ async def ask_agent(req: AskRequest):
 
 @app.get("/api/goals")
 async def get_goals():
-    return manager.get_goals()
+    return await manager.get_goals()
 
 
 @app.get("/api/knowledge")

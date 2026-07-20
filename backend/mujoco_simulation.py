@@ -62,15 +62,15 @@ except ImportError:
     ALL_WORLDS = {}
     WorldSelector = None
 
-TOCABI_DIR = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "data", "blender", "models", "tocabi"
+DATA_ROOT = os.environ.get(
+    "ONTOGENY_DATA_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data"),
 )
+TOCABI_DIR = os.path.join(DATA_ROOT, "blender", "models", "tocabi")
 TOCABI_URDF = os.path.join(TOCABI_DIR, "combined", "urdf", "FullBody.urdf")
 TOCABI_MESHES = os.path.join(TOCABI_DIR, "combined", "meshes")
 
-G1_DIR = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "data", "mujoco", "models", "unitree_g1"
-)
+G1_DIR = os.path.join(DATA_ROOT, "mujoco", "models", "unitree_g1")
 G1_XML = os.path.join(G1_DIR, "g1.xml")
 
 # G1 standing pose from official keyframe (29 joint actuators)

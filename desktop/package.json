@@ -43,6 +43,22 @@
       {
         "from": "../backend/dist/ontogeny-backend.exe",
         "to": "backend/ontogeny-backend.exe"
+      },
+      {
+        "from": "../backend/dist/ontogeny-mujoco.exe",
+        "to": "backend/ontogeny-mujoco.exe"
+      },
+      {
+        "from": "../backend/blender_simulation.py",
+        "to": "backend/blender_simulation.py"
+      },
+      {
+        "from": "../backend/blender_worlds.py",
+        "to": "backend/blender_worlds.py"
+      },
+      {
+        "from": "../data",
+        "to": "data"
       }
     ],
     "win": {

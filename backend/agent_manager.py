@@ -16,6 +16,7 @@ class AgentManager:
     _cycle_results: list = []
     _start_time: float = 0
     _initialized: bool = False
+    _status_cache: dict | None = None
 
     def __new__(cls) -> "AgentManager":
         if cls._instance is None:
@@ -32,6 +33,9 @@ class AgentManager:
             return {"status": "already_running"}
 
         try:
+            if self._agent:
+                await self._agent.close()
+                self._agent = None
             OrchestratorClass = self._get_orchestrator_class()
             self._agent = OrchestratorClass()
             await self._agent.initialize()
@@ -39,6 +43,7 @@ class AgentManager:
             self._stop_event = asyncio.Event()
             self._start_time = time.time()
             self._cycle_results = []
+            await self.refresh_status()
             self._task = asyncio.create_task(self._loop(max_cycles))
             self._initialized = True
             return {"status": "started"}
@@ -46,7 +51,7 @@ class AgentManager:
             return {"status": "error", "message": str(e)}
 
     async def stop(self) -> dict:
-        if not self._running:
+        if not self._agent:
             return {"status": "not_running"}
 
         self._running = False
@@ -61,6 +66,7 @@ class AgentManager:
         if self._agent:
             await self._agent.close()
             self._agent = None
+        self._status_cache = self._idle_status()
         return {"status": "stopped"}
 
     async def run_single_cycle(self) -> dict | None:
@@ -69,6 +75,7 @@ class AgentManager:
         try:
             result = await self._agent.run_cycle()
             self._cycle_results.append(result)
+            await self.refresh_status()
             return result
         except Exception as e:
             return {"error": str(e)}
@@ -91,14 +98,20 @@ class AgentManager:
             self._running = False
 
     def get_status(self) -> dict:
-        if not self._agent:
-            return self._idle_status()
+        return self._status_cache or self._idle_status()
 
+    async def refresh_status(self) -> dict:
+        if not self._agent:
+            self._status_cache = self._idle_status()
+            return self._status_cache
         try:
-            raw = self._agent.get_status()
-            return self._map_status(raw)
+            raw = await self._agent.get_status()
+            self._status_cache = self._map_status(raw)
+            self._status_cache["knowledgeGraph"] = self.get_knowledge_graph()
         except Exception:
-            return self._idle_status()
+            if self._status_cache is None:
+                self._status_cache = self._idle_status()
+        return self._status_cache
 
     def _idle_status(self) -> dict:
         return {
@@ -117,7 +130,7 @@ class AgentManager:
             "memory": {"working": 0, "episodic": 0, "semantic": 0, "procedural": 0},
             "crawlers": {"active": 0, "total": 0, "requestsToday": 0, "bandwidthUsed": 0},
             "maldoror": {
-                "version": "v1.0.0",
+                "version": "unavailable",
                 "qualityGate": "pending",
                 "improvementPct": 0.0,
                 "lastTrainingLoss": 0.0,
@@ -128,6 +141,8 @@ class AgentManager:
                 "errorRate": 0.0,
                 "circuitBreaker": "closed",
             },
+            "backend": {},
+            "embodiment": {"blender": False, "mujoco": False},
         }
 
     def _map_status(self, raw: dict) -> dict:
@@ -138,8 +153,9 @@ class AgentManager:
         health = raw.get("health", {})
         crawlers_list = raw.get("crawlers", [])
         scheduler = raw.get("scheduler", {})
-        sm_stats = raw.get("self_modification", {})
         rm_stats = raw.get("recursive_modification", {})
+        maldoror = raw.get("maldoror", {})
+        backend = raw.get("backend", {})
 
         return {
             "state": raw.get("state", "idle"),
@@ -148,9 +164,7 @@ class AgentManager:
             "mood": mood_data.get("current_mood", "neutral")
             if isinstance(mood_data, dict)
             else str(mood_data),
-            "activeGoal": raw.get("current_plan", {}).get("goal", {}).get("description")
-            if raw.get("current_plan")
-            else None,
+            "activeGoal": raw.get("current_plan"),
             "drives": {
                 "curiosity": drives.get("curiosity", 0.0),
                 "mastery": drives.get("mastery", 0.0),
@@ -175,32 +189,28 @@ class AgentManager:
                 else 0,
             },
             "maldoror": {
-                "version": sm_stats.get("version", "v1.0.0")
-                if isinstance(sm_stats, dict)
-                else "v1.0.0",
+                "version": maldoror.get("current_version", "unavailable"),
                 "qualityGate": "pass"
                 if rm_stats and isinstance(rm_stats, dict) and rm_stats.get("applied")
                 else "pending",
                 "improvementPct": rm_stats.get("performance_delta", 0.0) * 100
                 if isinstance(rm_stats, dict)
                 else 0.0,
-                "lastTrainingLoss": sm_stats.get("last_loss", 0.0)
-                if isinstance(sm_stats, dict)
-                else 0.0,
+                "lastTrainingLoss": maldoror.get("avg_loss", 0.0),
             },
             "production": {
                 "latency": 0,
-                "qualityScore": 0.95,
-                "errorRate": 0.01,
+                "qualityScore": 0.0,
+                "errorRate": 0.0,
                 "circuitBreaker": health.get("circuit_breakers", {}).get("default", "closed")
                 if isinstance(health, dict)
                 else "closed",
             },
             "knowledge": {
-                "nodes": raw.get("knowledge_graph", {}).get("concept_count", 0)
+                "nodes": raw.get("knowledge_graph", {}).get("concepts", 0)
                 if isinstance(raw.get("knowledge_graph"), dict)
                 else 0,
-                "edges": raw.get("knowledge_graph", {}).get("relation_count", 0)
+                "edges": raw.get("knowledge_graph", {}).get("relations", 0)
                 if isinstance(raw.get("knowledge_graph"), dict)
                 else 0,
             },
@@ -208,6 +218,9 @@ class AgentManager:
             "rlAgent": raw.get("rl_agent", {}),
             "curiosity": raw.get("curiosity", {}),
             "metacognition": raw.get("metacognition", {}),
+            "backend": backend,
+            "embodiment": raw.get("embodiment", {}),
+            "planning": raw.get("plans", {}),
         }
 
     def get_recent_events(self, limit: int = 50) -> list:
@@ -215,6 +228,39 @@ class AgentManager:
         for result in self._cycle_results[-limit:]:
             iteration = result.get("iteration", 0)
             ts = int(time.time() * 1000) - (limit - len(events)) * 1000
+
+            if result.get("selected_goal"):
+                events.append(
+                    {
+                        "id": f"{iteration}-goal-selected",
+                        "timestamp": ts,
+                        "type": "planning",
+                        "message": f"Goal selected: {result['selected_goal']}",
+                    }
+                )
+
+            if result.get("plan_created"):
+                events.append(
+                    {
+                        "id": f"{iteration}-plan-created",
+                        "timestamp": ts,
+                        "type": "planning",
+                        "message": f"Plan created with {result['plan_created']} steps",
+                    }
+                )
+
+            for index, progress in enumerate(result.get("goals_progress", [])):
+                events.append(
+                    {
+                        "id": f"{iteration}-goal-progress-{index}",
+                        "timestamp": ts,
+                        "type": "planning",
+                        "message": (
+                            f"Goal progress: {progress.get('goal', 'active goal')} "
+                            f"({progress.get('progress', 0):.0%})"
+                        ),
+                    }
+                )
 
             for action in result.get("actions", []):
                 events.append(
@@ -270,23 +316,23 @@ class AgentManager:
 
         return events[-limit:]
 
-    def get_goals(self) -> list:
+    async def get_goals(self) -> list:
         if not self._agent:
             return []
         try:
             goals_mgr = self._agent.goals
-            active = goals_mgr.get_active_goals() if hasattr(goals_mgr, "get_active_goals") else []
+            active = (
+                await goals_mgr.get_active_goals()
+                if hasattr(goals_mgr, "get_active_goals")
+                else []
+            )
             return [
                 {
                     "id": str(getattr(g, "id", i)),
                     "description": getattr(g, "description", str(g)),
-                    "status": getattr(g, "status", "active").lower()
-                    if hasattr(g, "status")
-                    else "active",
+                    "status": getattr(getattr(g, "status", "active"), "value", "active"),
                     "progress": getattr(g, "progress", 0.0),
-                    "priority": getattr(g, "priority", "medium").lower()
-                    if hasattr(g, "priority")
-                    else "medium",
+                    "priority": getattr(getattr(g, "priority", "medium"), "value", "medium"),
                 }
                 for i, g in enumerate(active)
             ]
@@ -298,14 +344,14 @@ class AgentManager:
             return {"nodes": [], "edges": []}
         try:
             kg = self._agent.knowledge_graph
-            if hasattr(kg, "concepts") and hasattr(kg, "relations"):
+            if hasattr(kg, "concepts") and hasattr(kg, "graph"):
                 nodes = [
                     {
-                        "id": c.get("id", str(i)),
-                        "name": c.get("name", "?"),
+                        "id": getattr(c, "id", str(i)),
+                        "name": getattr(c, "name", "?"),
                         "type": "concept",
                         "connections": 0,
-                        "strength": c.get("strength", 0.0),
+                        "strength": getattr(c, "strength", 0.0),
                     }
                     for i, c in enumerate(
                         list(kg.concepts.values())[:50] if isinstance(kg.concepts, dict) else []
@@ -313,14 +359,12 @@ class AgentManager:
                 ]
                 edges = [
                     {
-                        "source": r.get("source_id", ""),
-                        "target": r.get("target_id", ""),
-                        "type": r.get("relation_type", ""),
-                        "weight": r.get("weight", 1.0),
+                        "source": source,
+                        "target": target,
+                        "type": attrs.get("relation_type", ""),
+                        "weight": attrs.get("weight", 1.0),
                     }
-                    for r in (
-                        list(kg.relations.values())[:100] if isinstance(kg.relations, dict) else []
-                    )
+                    for source, target, attrs in list(kg.graph.edges(data=True))[:100]
                 ]
                 return {"nodes": nodes, "edges": edges}
         except Exception:

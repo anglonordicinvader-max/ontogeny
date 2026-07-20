@@ -11,8 +11,10 @@ export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttempts = useRef(0);
   const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
+  const disposed = useRef(false);
 
   const connect = useCallback(async () => {
+    if (disposed.current) return;
     try {
       let port: number;
       if (window.electronAPI) {
@@ -48,7 +50,7 @@ export function useWebSocket() {
       ws.onclose = () => {
         setConnected(false);
         wsRef.current = null;
-        if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
+        if (!disposed.current && reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
           reconnectTimeout.current = setTimeout(() => {
             reconnectAttempts.current++;
             connect();
@@ -65,8 +67,10 @@ export function useWebSocket() {
   }, []);
 
   useEffect(() => {
+    disposed.current = false;
     connect();
     return () => {
+      disposed.current = true;
       wsRef.current?.close();
       if (reconnectTimeout.current) {
         clearTimeout(reconnectTimeout.current);

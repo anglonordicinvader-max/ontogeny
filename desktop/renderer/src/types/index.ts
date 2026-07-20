@@ -18,6 +18,10 @@ export interface AgentStatus {
   rlAgent?: Record<string, unknown>;
   curiosity?: Record<string, unknown>;
   metacognition?: Record<string, unknown>;
+  backend?: Record<string, string | number>;
+  embodiment?: Record<string, boolean>;
+  planning?: Record<string, unknown>;
+  knowledgeGraph?: { nodes: KnowledgeNode[]; edges: KnowledgeEdge[] };
   demo?: DemoStats;
 }
 
@@ -65,7 +69,7 @@ export interface KnowledgeStats {
 export interface ActivityEvent {
   id: string;
   timestamp: number;
-  type: 'action' | 'learning' | 'modification' | 'error' | 'training' | 'acquisition' | 'demo';
+  type: 'action' | 'learning' | 'planning' | 'modification' | 'error' | 'training' | 'acquisition' | 'demo';
   message: string;
   metadata?: Record<string, unknown>;
 }
