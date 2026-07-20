@@ -1424,7 +1424,7 @@ class MuJoCoSimulation:
 def main():
     port = 8767
     world_name = None
-    robot_model = "tocabi"
+    robot_model = "g1"
     for i, arg in enumerate(sys.argv):
         if arg == "--port" and i + 1 < len(sys.argv):
             port = int(sys.argv[i + 1])
