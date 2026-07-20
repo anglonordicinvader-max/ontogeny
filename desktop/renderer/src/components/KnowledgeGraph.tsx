@@ -13,8 +13,16 @@ const GL = ['Core Architecture','Reasoning & Logic','Memory & Learning','Percept
 function getCSSVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888';
 }
-const GC = Array.from({ length: 6 }, (_, i) => getCSSVar(`--kg-group-${i}`));
-const GH = Array.from({ length: 6 }, (_, i) => getCSSVar(`--kg-halo-${i}`));
+let _gcCache: string[] | null = null;
+function getGC(): string[] {
+  if (!_gcCache) _gcCache = Array.from({ length: 6 }, (_, i) => getCSSVar(`--kg-group-${i}`));
+  return _gcCache;
+}
+let _ghCache: string[] | null = null;
+function getGH(): string[] {
+  if (!_ghCache) _ghCache = Array.from({ length: 6 }, (_, i) => getCSSVar(`--kg-halo-${i}`));
+  return _ghCache;
+}
 const GROUPS = [
   ['transformer','attention','embedding','recurrence','architecture','encoder','decoder','feedforward','normalization','residual'],
   ['reasoning','logic','causal','inference','deduction','induction','abstraction','generalization','composition','analogy'],
@@ -80,11 +88,11 @@ class GraphEngine {
     for (let i = 0; i < N; i++) {
       const c = this.centroids[i];
       haloG.append('circle').attr('cx', c.x).attr('cy', c.y).attr('r', hr)
-        .attr('fill', GH[i]).attr('stroke', GC[i].replace('0.95', '0.12'))
+        .attr('fill', getGH()[i]).attr('stroke', getGC()[i].replace('0.95', '0.12'))
         .attr('stroke-width', 1).attr('stroke-dasharray', '4,4');
       glG.append('text').attr('x', c.x).attr('y', c.y - hr - 8)
         .attr('text-anchor', 'middle').attr('font-size', '9px').attr('font-weight', '600')
-        .attr('fill', GC[i].replace('0.95', '0.6')).text(GL[i]);
+        .attr('fill', getGC()[i].replace('0.95', '0.6')).text(GL[i]);
     }
 
     this.tooltip = d3.select(container).append('div')
@@ -187,7 +195,7 @@ class GraphEngine {
     this.linkG.selectAll<SVGLineElement, any>('line')
       .data(this.links)
       .join('line')
-      .attr('stroke', (d: any) => d.source.g === d.target.g ? GC[d.source.g % N].replace('0.95', '0.15') : getCSSVar('--kg-link'))
+      .attr('stroke', (d: any) => d.source.g === d.target.g ? getGC()[d.source.g % N].replace('0.95', '0.15') : getCSSVar('--kg-link'))
       .attr('stroke-width', (d: any) => d.source.g === d.target.g ? 0.8 : 0.4);
 
     const self = this;
@@ -196,14 +204,14 @@ class GraphEngine {
       .join(
         (enter) => enter.append('circle')
           .attr('r', 0)
-          .attr('fill', (d: any) => GC[d.g % N])
+          .attr('fill', (d: any) => getGC()[d.g % N])
           .attr('filter', 'url(#ng)')
           .attr('opacity', 0.9)
           .style('cursor', 'pointer')
           .on('mouseover', function (ev: MouseEvent, d: any) {
             d3.select(this).attr('opacity', 1).attr('r', d.r + 3);
             self.tooltip.style('opacity', '1')
-              .html(`<strong style="color:${GC[d.g % N]}">${d.label}</strong><br/><span style="opacity:0.6;font-size:10px">${GL[d.g % N]}</span>`)
+              .html(`<strong style="color:${getGC()[d.g % N]}">${d.label}</strong><br/><span style="opacity:0.6;font-size:10px">${GL[d.g % N]}</span>`)
               .style('left', `${ev.offsetX + 14}px`).style('top', `${ev.offsetY - 12}px`);
             const conn = new Set<number>();
             self.links.forEach((l: any) => {
@@ -214,7 +222,7 @@ class GraphEngine {
             self.nodeG.selectAll<SVGCircleElement, any>('circle').attr('opacity', (n: any) => conn.has(n.id) ? 1 : 0.15);
             self.labelG.selectAll<SVGTextElement, any>('text').attr('opacity', (n: any) => conn.has(n.id) ? 1 : 0.1);
             self.linkG.selectAll<SVGLineElement, any>('line')
-              .attr('stroke', (l: any) => (l.source.id === d.id || l.target.id === d.id) ? GC[d.g % N].replace('0.95', '0.7') : getCSSVar('--kg-link-dim'))
+              .attr('stroke', (l: any) => (l.source.id === d.id || l.target.id === d.id) ? getGC()[d.g % N].replace('0.95', '0.7') : getCSSVar('--kg-link-dim'))
               .attr('stroke-width', (l: any) => (l.source.id === d.id || l.target.id === d.id) ? 1.5 : 0.3);
           })
           .on('mouseout', function (this: SVGCircleElement, _: MouseEvent, d: any) {
@@ -223,7 +231,7 @@ class GraphEngine {
             self.nodeG.selectAll<SVGCircleElement, any>('circle').attr('opacity', 0.9);
             self.labelG.selectAll<SVGTextElement, any>('text').attr('opacity', 1);
             self.linkG.selectAll<SVGLineElement, any>('line')
-              .attr('stroke', (l: any) => l.source.g === l.target.g ? GC[l.source.g % N].replace('0.95', '0.15') : getCSSVar('--kg-link'))
+              .attr('stroke', (l: any) => l.source.g === l.target.g ? getGC()[l.source.g % N].replace('0.95', '0.15') : getCSSVar('--kg-link'))
               .attr('stroke-width', (l: any) => l.source.g === l.target.g ? 0.8 : 0.4);
           })
           .call(d3.drag<SVGCircleElement, any>()
@@ -325,7 +333,7 @@ export function KnowledgeGraph({ status }: KnowledgeGraphProps) {
             <span
               key={n.id}
               className="px-2 py-1 text-2xs rounded-md border border-border bg-surface-2 text-text-secondary"
-              style={{ borderColor: GC[n.g % N].replace('0.95', '0.25') }}
+              style={{ borderColor: getGC()[n.g % N].replace('0.95', '0.25') }}
             >
               {n.label}
             </span>

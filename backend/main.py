@@ -26,6 +26,7 @@ app.add_middleware(
 )
 
 connected_clients: set[WebSocket] = set()
+_sim_events: list[dict] = []
 
 
 def find_available_port() -> int:
@@ -46,22 +47,29 @@ async def broadcast(message: dict):
 
 async def status_broadcast_loop():
     while True:
-        if demo_session.active:
-            status = _demo_full_status()
-        else:
-            status = manager.get_status()
-        await broadcast({"type": "status", "payload": status})
+        try:
+            if demo_session.active:
+                status = _demo_full_status()
+            else:
+                status = manager.get_status()
+            await broadcast({"type": "status", "payload": status})
+        except Exception as e:
+            print(f"[MAIN] status_broadcast_loop error: {e}")
         await asyncio.sleep(1)
 
 
 async def event_broadcast_loop():
     last_count = 0
     while True:
-        events = manager.get_recent_events(limit=100)
-        new_events = events[last_count:]
-        for event in new_events:
-            await broadcast({"type": "event", "payload": event})
-        last_count = len(events)
+        try:
+            manager_events = manager.get_recent_events(limit=100)
+            all_events = manager_events + _sim_events[-50:]
+            new_events = all_events[last_count:]
+            for event in new_events:
+                await broadcast({"type": "event", "payload": event})
+            last_count = len(all_events)
+        except Exception as e:
+            print(f"[MAIN] event_broadcast_loop error: {e}")
         await asyncio.sleep(1)
 
 
@@ -280,12 +288,119 @@ async def demo_maldoror():
     return demo_session.get_maldoror_proposal()
 
 
+@app.get("/api/demo/subsystems")
+async def demo_subsystems():
+    return demo_session.get_subsystems()
+
+
+@app.get("/api/demo/loading-stages")
+async def demo_loading_stages():
+    return demo_session.get_loading_stages()
+
+
+@app.get("/api/demo/maldoror-pipeline")
+async def demo_maldoror_pipeline():
+    return demo_session.get_maldoror_pipeline()
+
+
+@app.get("/api/demo/runtime-metrics")
+async def demo_runtime_metrics():
+    return demo_session.get_runtime_metrics()
+
+
+@app.get("/api/demo/behavior-stats")
+async def demo_behavior_stats():
+    return demo_session.get_behavior_stats()
+
+
+@app.get("/api/demo/model-routing")
+async def demo_model_routing():
+    return demo_session.get_model_routing()
+
+
 def _demo_full_status() -> dict:
-    base = manager.get_status()
-    base["demo"] = demo_session.get_status()
+    # Generate simulation data directly
+    sim_data = {}
+    sim_events = []
+    try:
+        import sys as _sys
+        _backend_dir = os.path.dirname(__file__)
+        if _backend_dir not in _sys.path:
+            _sys.path.insert(0, _backend_dir)
+        from simulation import generate_status as _gen_status, generate_event as _gen_event, start_time as _start_time
+        import time as _time
+        _t = _time.time() - _start_time
+        _cycle = int(_t)
+        sim_data = _gen_status(_cycle, _t)
+        # Generate a few events for the activity timeline
+        for i in range(3):
+            ev = _gen_event(_cycle - i, _t - i * 1.5)
+            sim_events.append(ev)
+    except Exception:
+        pass
+
+    # Inject dynamic knowledge graph from simulation
+    if sim_data and "knowledge" in sim_data:
+        import random as _rnd
+        _cycle = sim_data.get("iteration", 0)
+        _rnd.seed(_cycle)
+        _kg = sim_data["knowledge"]
+        _n = _kg.get("nodes", 0)
+        _e = _kg.get("edges", 0)
+        _concepts = [
+            "Neural Architecture", "Attention Mechanism", "Memory Consolidation",
+            "Causal Reasoning", "Knowledge Transfer", "Self-Modification",
+            "Pattern Recognition", "Goal Management", "World Model",
+            "Curiosity Engine", "Emotional State", "Meta-cognition",
+            "Sensor Fusion", "Locomotion Control", "Object Detection",
+            "Reinforcement Learning", "Skill Composition", "Uncertainty Tracking",
+        ]
+        _types = ["concept", "algorithm", "metric", "capability", "module"]
+        _nodes = []
+        for i in range(min(_n, 18)):
+            _nodes.append({
+                "id": f"n{i}",
+                "name": _concepts[i % len(_concepts)],
+                "type": _types[i % len(_types)],
+                "connections": _rnd.randint(1, 5),
+                "strength": round(0.7 + _rnd.random() * 0.3, 2),
+            })
+        _edges = []
+        for i in range(min(_e, 24)):
+            _s = _rnd.randint(0, max(0, len(_nodes) - 1))
+            _t_idx = _rnd.randint(0, max(0, len(_nodes) - 1))
+            if _s != _t_idx:
+                _edges.append({
+                    "source": f"n{_s}",
+                    "target": f"n{_t_idx}",
+                    "type": _rnd.choice(["uses", "improves", "relates_to", "depends_on"]),
+                    "weight": round(0.5 + _rnd.random() * 0.5, 2),
+                })
+        sim_data["knowledge_graph"] = {"nodes": _nodes, "edges": _edges}
+
     if demo_session.active:
+        base = sim_data if sim_data else manager.get_status()
+        base["demo"] = demo_session.get_status()
         base["state"] = "demo"
-    return base
+        base["demo"]["subsystems"] = demo_session.get_subsystems()
+        base["demo"]["maldororPipeline"] = demo_session.get_maldoror_pipeline()
+        base["demo"]["runtimeMetrics"] = demo_session.get_runtime_metrics()
+        base["demo"]["behaviorStats"] = demo_session.get_behavior_stats()
+        base["demo"]["modelRouting"] = demo_session.get_model_routing()
+        base["demo"]["loadingStages"] = demo_session.get_loading_stages()
+        # Inject simulation events into activity timeline
+        for ev in sim_events:
+            _sim_events.append(ev)
+        if len(_sim_events) > 200:
+            del _sim_events[:-200]
+        return base
+    else:
+        # Also inject events when not in demo mode
+        for ev in sim_events:
+            _sim_events.append(ev)
+        if len(_sim_events) > 200:
+            del _sim_events[:-200]
+        return sim_data if sim_data else manager.get_status()
 
 
 if __name__ == "__main__":

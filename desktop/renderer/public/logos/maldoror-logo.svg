@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <!-- Star at top -->
+  <g fill="white">
+    <polygon points="100,8 103,22 117,22 106,30 110,44 100,36 90,44 94,30 83,22 97,22"/>
+  </g>
+  <!-- Vertical spike from star down through eye -->
+  <line x1="100" y1="22" x2="100" y2="185" stroke="white" stroke-width="2"/>
+  <!-- M shape with wings -->
+  <g stroke="white" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Left wing -->
+    <path d="M 22 72 C 38 48, 58 42, 72 48"/>
+    <!-- Left leg of M -->
+    <path d="M 35 175 L 55 55 L 100 100"/>
+    <!-- Right leg of M -->
+    <path d="M 165 175 L 145 55 L 100 100"/>
+    <!-- Right wing -->
+    <path d="M 178 72 C 162 48, 142 42, 128 48"/>
+  </g>
+  <!-- Wing feather details -->
+  <g stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.6">
+    <line x1="30" y1="68" x2="42" y2="54"/>
+    <line x1="38" y1="62" x2="50" y2="50"/>
+    <line x1="170" y1="68" x2="158" y2="54"/>
+    <line x1="162" y1="62" x2="150" y2="50"/>
+  </g>
+  <!-- Eye -->
+  <g transform="translate(100, 130)">
+    <!-- Eye outline -->
+    <path d="M -28 0 C -28 -16, 28 -16, 28 0 C 28 16, -28 16, -28 0 Z" stroke="white" stroke-width="2.5" fill="none"/>
+    <!-- Iris -->
+    <circle cx="0" cy="0" r="10" stroke="white" stroke-width="2" fill="none"/>
+    <!-- Pupil -->
+    <circle cx="0" cy="0" r="4.5" fill="white"/>
+  </g>
+  <!-- Bottom spike -->
+  <line x1="100" y1="175" x2="100" y2="192" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

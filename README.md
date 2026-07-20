@@ -1,8 +1,8 @@
 # Ontogeny
 
-**Proto-AGI cognitive agent with recursive self-improvement, 30 acquisition engines, multi-layer persistent memory, grounded physics simulation, MuJoCo robotics, sensor simulation, YOLOv8 vision, Maldoror custom fine-tuned model, Monte Carlo Tree Search planning, and an Electron desktop UI.**
+**Cognitive agent with recursive self-improvement, 30 acquisition engines, multi-layer persistent memory, grounded physics simulation, MuJoCo robotics, NeoCorpus embodiment abstraction, sensor simulation, YOLOv8 vision, Maldoror custom fine-tuned model, Monte Carlo Tree Search planning, and an Electron desktop UI.**
 
-Runs on Ollama with **four-tier hybrid LLM routing**: llama3.2 (routine), deepseek-coder-v2:16b (code), qwen2.5:72b (reasoning), **maldoror 7B** (self-modification).
+Runs on Ollama with **hybrid model routing**: Llama3.2 (routine), DeepSeek-Coder-V2:16B (code), Qwen2.5:72B (reasoning), **Maldoror** (recursive self-improvement engine).
 
 ---
 
@@ -34,15 +34,20 @@ An **Electron desktop UI** provides a real-time native-AI interface with 11 pane
 │  └───────────┘  └───────────┘  └────────────────────────────┘   │
 │                                                                   │
 │  ┌───────────────────────────────────────────────────────────┐   │
-│  │          Four-Tier Hybrid LLM Backend                      │   │
-│  │  routine (llama3.2) → code (deepseek-coder-v2)            │   │
-│  │  → reasoning (qwen2.5:72b) → modifier (maldoror)          │   │
+│  │          Hybrid Model Backend                               │   │
+│  │  routine (Llama3.2) → code (DeepSeek-Coder-V2)            │   │
+│  │  → reasoning (Qwen2.5:72B) → self-improvement (Maldoror)  │   │
 │  └───────────────────────────────────────────────────────────┘   │
 │                                                                   │
 │  ┌───────────────────────────────────────────────────────────┐   │
 │  │                  Sensor & Simulation                       │   │
 │  │  9 Sensors · 5 Locomotion · 4 Manipulation · Social       │   │
 │  │  YOLOv8 Vision · Navigation · Weather · Failure Injection  │   │
+│  └───────────────────────────────────────────────────────────┘   │
+│                                                                   │
+│  ┌───────────────────────────────────────────────────────────┐   │
+│  │        NeoCorpus — Embodiment Abstraction                   │   │
+│  │  Blender · MuJoCo · ROS2 · Physical (unified adapter API)  │   │
 │  └───────────────────────────────────────────────────────────┘   │
 │                                                                   │
 │  ┌───────────────────────────────────────────────────────────┐   │
@@ -97,14 +102,14 @@ A 10-module subsystem under `crawlers/acquisition/` that transforms raw data ret
 | **NetworkTransportLayer** | Health tracking, regional routing, failover for network endpoints |
 | **AcquisitionObservability** | Real-time metrics dashboard for the acquisition pipeline |
 
-### Four-Tier Hybrid LLM Backend
+### Hybrid Model Routing
 
 | Tier | Model | Purpose |
 |------|-------|---------|
-| **Routine** | llama3.2 | Memory queries, goal generation, simple reasoning, classification |
-| **Code** | deepseek-coder-v2:16b | Code generation, self-modification, optimization |
-| **Reasoning** | qwen2.5:72b | Planning, causal reasoning, complex analysis |
-| **Modifier** | maldoror (fine-tuned) | Recursive self-modification, architecture rewrites |
+| **Routine** | Llama3.2 | Memory queries, goal generation, simple reasoning, classification |
+| **Code** | DeepSeek-Coder-V2:16B | Code generation, self-modification, optimization |
+| **Reasoning** | Qwen2.5:72B | Planning, causal reasoning, complex analysis |
+| **Self-Improvement** | Maldoror | Recursive self-modification engine (not an LLM — a dedicated self-improvement pipeline) |
 
 Routing is automatic based on task keywords. The modifier tier hot-swaps when a new maldoror version is deployed.
 
@@ -202,6 +207,18 @@ Real-time physics simulation with two robot models:
 - **Hot-swappable models** — switch between TOCABI and G1 at runtime
 - **CLI flag** — `--model tocabi` or `--model g1`
 - **Desktop UI** — MuJoCo panel with canvas rendering, telemetry display, Stand/Walk/Freeze/Reset controls
+
+### NeoCorpus — Embodiment Abstraction
+
+A thin internal abstraction layer (`cognitive/embodiment.py`) between the cognitive core and physical simulators/robots. Provides a unified interface so the orchestrator can swap simulators without duplicating wiring:
+
+| Component | Purpose |
+|-----------|---------|
+| **EmbodimentType** | Enum: `BLENDER`, `MUJOCO`, `ROS2`, `PHYSICAL` |
+| **EmbodimentAdapter** | ABC — `observe()`, `send_action()`, `reset_environment()`, `get_joint_state()`, `get_sensor_data()` |
+| **EmbodimentRegistry** | Register and look up adapters by type |
+
+The cognitive loop talks to NeoCorpus, not directly to Blender or MuJoCo. This means adding a new simulator (e.g. Isaac Sim, NVIDIA Omniverse) requires only implementing `EmbodimentAdapter` — no changes to the orchestrator.
 
 ### Electron Desktop UI
 
@@ -303,6 +320,10 @@ cd desktop && npx electron . --dev
 
 # Simulation mode (no Python backend needed)
 cd desktop && npx electron . --dev --simulate
+
+# Demo mode (start demo from UI — runs deterministic cognitive walkthrough)
+# Click "Demo" tab in sidebar → "Start Demo"
+# Demo mode also starts simulated data across all panels automatically
 ```
 
 ### Blender Physics Sandbox (Optional)
@@ -763,7 +784,7 @@ Each cycle:
 ## Testing
 
 ```bash
-# Run all tests (307 tests)
+# Run all tests (324 tests)
 python -m pytest tests/ -v
 
 # Run specific suites
@@ -781,7 +802,8 @@ python -m pytest tests/test_agent_memory.py -v             # 10 agent/memory tes
 python -m pytest tests/test_api_server.py -v               # 8 API server tests
 python -m pytest tests/test_world_selector.py -v           # 7 world selector tests
 python -m pytest tests/test_emergent_curriculum.py -v      # 6 curriculum tests
-python -m pytest tests/test_blender_simulation.py -v       # 5 blender tests
+python -m pytest tests/test_blender_simulation.py -v       # 7 blender tests
+python -m pytest tests/test_mujoco_simulation.py -v        # 14 MuJoCo tests
 python -m pytest tests/test_adversarial_trainer.py -v      # 5 adversarial tests
 ```
 

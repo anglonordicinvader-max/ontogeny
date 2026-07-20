@@ -111,6 +111,11 @@ export interface MuJoCoStats {
   robotModel: string;
 }
 
+export interface DemoSubsystem {
+  name: string;
+  [key: string]: unknown;
+}
+
 export interface DemoStats {
   active: boolean;
   step: number;
@@ -122,6 +127,49 @@ export interface DemoStats {
   reflectionSummary: string | null;
   maldororProposal: string | null;
   startedAt: number | null;
+  subsystems?: Record<string, DemoSubsystem>;
+  maldororPipeline?: {
+    stages: { name: string; status: string; description: string; input_sources: string[]; metrics: Record<string, unknown> }[];
+    version: string;
+    quality_gate: string;
+    improvement_pct: number;
+    last_training_loss: number;
+    total_improvements: number;
+    rollback_count: number;
+  };
+  runtimeMetrics?: {
+    latency_ms: number;
+    error_rate: number;
+    uptime_sec: number;
+    requests_per_sec: number;
+    active_connections: number;
+    cpu_usage_pct: number;
+    memory_usage_mb: number;
+    gc_collections: number;
+    event_loop_utilization: number;
+  };
+  behaviorStats?: {
+    queries_total: number;
+    discoveries_total: number;
+    modifications_total: number;
+    reflections_total: number;
+    improvements_total: number;
+    curiosity_score: number;
+    mastery_score: number;
+    competence_score: number;
+    autonomy_score: number;
+    session_duration_sec: number;
+    avg_response_time_ms: number;
+  };
+  modelRouting?: {
+    current_model: string;
+    available_models: string[];
+    routing_table: { task_type: string; model: string; reason: string }[];
+    decisions_this_session: number;
+    avg_latency_ms: number;
+    fallback_count: number;
+  };
+  loadingStages?: { stage: number; name: string; description: string; duration_ms: number }[];
 }
 
 export interface DemoReflection {

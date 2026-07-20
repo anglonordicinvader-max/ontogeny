@@ -9,6 +9,7 @@ let mainWindow;
 let pythonProcess;
 let blenderProcess;
 let mujocoProcess;
+let simulationProcess;
 let backendPort;
 
 // Lazy-evaluated environment checks - avoid module-load-time issues in ASAR
@@ -32,6 +33,10 @@ const BLENDER_EXE = isPackaged
 const MUJOCO_SCRIPT = isPackaged
   ? path.join(process.resourcesPath, 'backend', 'mujoco_simulation.py')
   : path.join(__dirname, '..', '..', 'backend', 'mujoco_simulation.py');
+
+const SIMULATION_SCRIPT = isPackaged
+  ? path.join(process.resourcesPath, 'backend', 'simulation.py')
+  : path.join(__dirname, '..', '..', 'backend', 'simulation.py');
 
 // Configure auto-updater based on environment
 function configureAutoUpdater() {
@@ -134,6 +139,30 @@ async function startMuJoCo() {
   }
 }
 
+async function startSimulation() {
+  if (fs.existsSync(SIMULATION_SCRIPT)) {
+    const pythonExe = fs.existsSync(PYTHON_EXE) ? PYTHON_EXE : 'python';
+    simulationProcess = spawn(pythonExe, [
+      SIMULATION_SCRIPT,
+      '--port', '8765'
+    ], {
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    simulationProcess.stdout.on('data', (data) => {
+      console.log(`Simulation: ${data}`);
+    });
+
+    simulationProcess.stderr.on('data', (data) => {
+      console.error(`Simulation Error: ${data}`);
+    });
+
+    simulationProcess.on('close', (code) => {
+      console.log(`Simulation process exited with code ${code}`);
+    });
+  }
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1920,
@@ -143,6 +172,7 @@ function createWindow() {
     frame: false,
     titleBarStyle: 'hidden',
     backgroundColor: '#0a0a0a',
+    icon: path.join(__dirname, '..', 'renderer', 'public', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'preload.js'),
       contextIsolation: true,
@@ -236,6 +266,7 @@ app.whenReady().then(async () => {
   }
   await startBlender();
   await startMuJoCo();
+  await startSimulation();
   createWindow();
   setupAutoUpdater();
   
@@ -261,6 +292,7 @@ app.on('window-all-closed', () => {
   if (pythonProcess) pythonProcess.kill();
   if (blenderProcess) blenderProcess.kill();
   if (mujocoProcess) mujocoProcess.kill();
+  if (simulationProcess) simulationProcess.kill();
   if (process.platform !== 'darwin') {
     app.quit();
   }

@@ -9,26 +9,20 @@ export function TitleBar({ title = 'Ontogeny' }: TitleBarProps) {
   const handleMaximize = () => window.electronAPI?.maximize();
   const handleClose = () => window.electronAPI?.close();
 
+  const isLight = document.documentElement.classList.contains('light');
+
   return (
     <div
       className="flex items-center justify-between h-11 glass-titlebar select-none drag"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
-      <div className="flex items-center gap-2.5 px-4">
-        {/* Subtle monogram logo */}
-        <div
-          className="flex items-center justify-center w-5 h-5 rounded-[4px] text-[10px] font-bold tracking-tight"
-          style={{
-            background: 'rgba(255, 255, 255, 0.06)',
-            color: 'var(--text-tertiary)',
-            fontFamily: "'Geist Mono', monospace",
-          }}
-        >
-          O
-        </div>
+      <div className="flex items-center px-4">
         <span
-          className="text-[13px] font-semibold tracking-[0.18em] text-text-secondary"
-          style={{ fontFamily: "'Geist', 'Geist Sans', sans-serif" }}
+          className="text-[13px] font-semibold text-text-secondary"
+          style={{
+            fontFamily: "'Geist', 'Geist Sans', sans-serif",
+            letterSpacing: '0.32em',
+          }}
         >
           {title.toUpperCase()}
         </span>
@@ -41,21 +35,30 @@ export function TitleBar({ title = 'Ontogeny' }: TitleBarProps) {
         <button
           onClick={handleMinimize}
           aria-label="Minimize"
-          className="flex items-center justify-center w-11 h-11 hover:bg-white/[0.05] transition-colors rounded-md"
+          className="flex items-center justify-center w-11 h-11 transition-colors rounded-md"
+          style={{ background: 'transparent' }}
+          onMouseEnter={(e) => e.currentTarget.style.background = isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)'}
+          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
         >
           <Minus className="w-3.5 h-3.5 text-text-tertiary hover:text-text-secondary transition-colors" />
         </button>
         <button
           onClick={handleMaximize}
           aria-label="Maximize"
-          className="flex items-center justify-center w-11 h-11 hover:bg-white/[0.05] transition-colors rounded-md"
+          className="flex items-center justify-center w-11 h-11 transition-colors rounded-md"
+          style={{ background: 'transparent' }}
+          onMouseEnter={(e) => e.currentTarget.style.background = isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)'}
+          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
         >
           <Square className="w-2.5 h-2.5 text-text-tertiary hover:text-text-secondary transition-colors" />
         </button>
         <button
           onClick={handleClose}
           aria-label="Close"
-          className="flex items-center justify-center w-11 h-11 hover:bg-white/[0.08] transition-colors rounded-md group"
+          className="flex items-center justify-center w-11 h-11 transition-colors rounded-md group"
+          style={{ background: 'transparent' }}
+          onMouseEnter={(e) => e.currentTarget.style.background = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)'}
+          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
         >
           <X className="w-3.5 h-3.5 text-text-tertiary group-hover:text-text-secondary transition-colors" />
         </button>

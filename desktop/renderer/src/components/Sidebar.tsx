@@ -9,7 +9,6 @@ import {
   Settings,
   Target,
   Workflow,
-  Cpu,
   Eye,
   PanelLeftClose,
   PanelLeftOpen,
@@ -17,6 +16,7 @@ import {
   Box,
   Play,
 } from 'lucide-react';
+import { MaldororIcon } from './MaldororIcon';
 
 interface SidebarProps {
   activeTab: string;
@@ -33,7 +33,7 @@ const tabs = [
   { id: 'goals', label: 'Goals', icon: Target },
   { id: 'knowledge', label: 'Knowledge', icon: GitBranch },
   { id: 'crawlers', label: 'Acquisition', icon: Workflow },
-  { id: 'maldoror', label: 'Maldoror', icon: Cpu },
+  { id: 'maldoror', label: 'Maldoror', icon: 'maldoror' as never },
   { id: 'production', label: 'Production', icon: Monitor },
   { id: 'blender', label: 'Blender', icon: Eye },
   { id: 'mujoco', label: 'MuJoCo', icon: Box },
@@ -94,7 +94,11 @@ export function Sidebar({ activeTab, onTabChange, onSearchOpen, connected }: Sid
               aria-label={tab.label}
               data-tooltip={collapsed ? tab.label : undefined}
             >
-              <Icon className="w-4 h-4 shrink-0" />
+              {tab.id === 'maldoror' ? (
+                <MaldororIcon className="w-4 h-4 shrink-0" />
+              ) : (
+                <Icon className="w-4 h-4 shrink-0" />
+              )}
               {!collapsed && <span>{tab.label}</span>}
             </button>
           );

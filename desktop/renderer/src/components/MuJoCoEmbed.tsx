@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Panel } from './Panel';
+import { Box } from 'lucide-react';
 
 interface MuJoCoEmbedProps {
   backendPort?: number;
@@ -154,9 +155,7 @@ export function MuJoCoEmbed({ backendPort = 8768 }: MuJoCoEmbedProps) {
         <div className="absolute inset-0 flex items-center justify-center glass-panel p-4">
           <div className="text-center max-w-md">
             <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-surface-3 flex items-center justify-center">
-              <svg className="w-6 h-6 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-              </svg>
+              <Box className="w-6 h-6 text-text-tertiary" />
             </div>
             <p className="text-text-primary font-medium mb-1">MuJoCo Offline</p>
             <p className="text-text-secondary text-sm mb-1">
