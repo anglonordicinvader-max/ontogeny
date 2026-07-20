@@ -123,6 +123,72 @@ class TestMuJoCoDependencyDetection:
         assert "import mujoco" in source
 
 
+class TestMuJoCoControlBehavior:
+    def test_g1_runtime_scene_adds_ground_without_modifying_asset(self):
+        path = os.path.join(os.path.dirname(__file__), "..", "backend", "mujoco_simulation.py")
+        with open(path, encoding="utf-8") as f:
+            source = f.read()
+
+        assert 'name="ontogeny_ground"' in source
+        assert "mjCAMERA_TRACKING" in source
+        assert "trackbodyid" in source
+
+    def test_body_velocity_uses_supported_mujoco_api(self):
+        path = os.path.join(os.path.dirname(__file__), "..", "backend", "mujoco_simulation.py")
+        with open(path, encoding="utf-8") as f:
+            source = f.read()
+
+        assert "mj_objectVelocity" in source
+        assert ".xvelp" not in source
+        assert ".xvelr" not in source
+
+    def test_g1_walk_targets_leave_standing_pose(self):
+        from mujoco_simulation import G1Controller, G1_JOINT_NAMES, G1_STANDING_POSE
+
+        controller = G1Controller()
+        controller.set_ctrl_index_map({name: i for i, name in enumerate(G1_JOINT_NAMES)})
+        controller.set_walk_cmd(controller.walk_speed, 0.0)
+
+        targets = controller._gait_targets(len(G1_JOINT_NAMES))
+
+        assert targets.tolist() != G1_STANDING_POSE
+        assert targets[0] != G1_STANDING_POSE[0]
+
+    def test_freeze_disables_physics_steps_without_stopping_stream(self):
+        from mujoco_simulation import ControlMode, MuJoCoSimulation
+
+        simulation = MuJoCoSimulation.__new__(MuJoCoSimulation)
+        simulation.running = True
+        simulation.controller = type("Controller", (), {"mode": ControlMode.FREEZE})()
+
+        assert not simulation._should_step_physics()
+        assert simulation.running
+
+    def test_walk_command_applies_existing_default_speed(self):
+        path = os.path.join(os.path.dirname(__file__), "..", "backend", "mujoco_simulation.py")
+        with open(path, encoding="utf-8") as f:
+            source = f.read()
+
+        assert "self.controller.walk_speed" in source
+        assert "abs(self.controller.walk_cmd_linear) < 0.01" in source
+
+    def test_velocity_controls_preserve_both_components(self):
+        path = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "desktop",
+            "renderer",
+            "src",
+            "components",
+            "MuJoCoEmbed.tsx",
+        )
+        with open(path, encoding="utf-8") as f:
+            source = f.read()
+
+        assert "walk_cmd:${linear},${walkAngular}" in source
+        assert "walk_cmd:${walkLinear},${angular}" in source
+
+
 class TestSimulatorHealthEndpoint:
     """Test the main backend simulator health endpoint."""
 

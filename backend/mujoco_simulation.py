@@ -872,10 +872,19 @@ class MuJoCoSensorReader:
             return reading.data
 
         # Fallback to root body velocities
-        if self.imu is None or len(data.xvelp) < 1:
+        if self.imu is None or model is None or model.nbody < 2:
             return {"acceleration": [0, 0, -9.81], "angular_velocity": [0, 0, 0]}
-        accel = data.xvelp[0].tolist() if len(data.xvelp) > 0 else [0, 0, 0]
-        gyro = data.xvelr[0].tolist() if len(data.xvelr) > 0 else [0, 0, 0]
+        velocity = np.zeros(6)
+        mujoco.mj_objectVelocity(
+            model,
+            data,
+            mujoco.mjtObj.mjOBJ_BODY,
+            1,
+            velocity,
+            0,
+        )
+        accel = velocity[3:6].tolist()
+        gyro = velocity[0:3].tolist()
         reading = self.imu.read(
             linear_accel=accel,
             angular_vel=gyro,
@@ -973,6 +982,8 @@ class MuJoCoSimulation:
         self.model = None
         self.data = None
         self.renderer = None
+        self.camera = None
+        self._ctrl_index_map: dict[str, int] = {}
 
         # Robot model selection
         try:
@@ -1004,10 +1015,37 @@ class MuJoCoSimulation:
         if not os.path.exists(G1_XML):
             print(f"[MuJoCo] G1 XML not found: {G1_XML}", flush=True)
             return
+        augmented_xml_path = None
         try:
-            self.model = mujoco.MjModel.from_xml_path(G1_XML)
+            with open(G1_XML, encoding="utf-8") as f:
+                xml = f.read()
+            ground = (
+                '<geom name="ontogeny_ground" type="plane" size="0 0 0.05" '
+                'rgba="0.08 0.08 0.08 1" friction="0.9 0.02 0.001"/>'
+            )
+            xml = xml.replace("<worldbody>", f"<worldbody>{ground}", 1)
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                suffix=".xml",
+                dir=G1_DIR,
+                encoding="utf-8",
+                delete=False,
+            ) as augmented_xml:
+                augmented_xml.write(xml)
+                augmented_xml_path = augmented_xml.name
+
+            self.model = mujoco.MjModel.from_xml_path(augmented_xml_path)
             self.data = mujoco.MjData(self.model)
             self.renderer = mujoco.Renderer(self.model, height=480, width=640)
+            self.camera = mujoco.MjvCamera()
+            mujoco.mjv_defaultCamera(self.camera)
+            self.camera.type = mujoco.mjtCamera.mjCAMERA_TRACKING
+            self.camera.trackbodyid = mujoco.mj_name2id(
+                self.model, mujoco.mjtObj.mjOBJ_BODY, "pelvis"
+            )
+            self.camera.distance = 3.0
+            self.camera.azimuth = 90.0
+            self.camera.elevation = -10.0
 
             # Build ctrl index mapping from MuJoCo actuator table
             ctrl_index_map: dict[str, int] = {}
@@ -1017,26 +1055,9 @@ class MuJoCoSimulation:
                 jname = self.model.joint(joint_id).name
                 ctrl_index_map[jname] = i
 
+            self._ctrl_index_map = ctrl_index_map
             self.controller.set_ctrl_index_map(ctrl_index_map)
-
-            # Reset and apply standing keyframe
-            mujoco.mj_resetData(self.model, self.data)
-            # Free joint: qpos[0:3]=pos, qpos[3:7]=quat
-            self.data.qpos[0] = 0.0   # x
-            self.data.qpos[1] = 0.0   # y
-            self.data.qpos[2] = 0.79  # z (standing height)
-            self.data.qpos[3] = 1.0   # qw
-
-            # Apply standing joint angles
-            for i in range(self.model.njnt):
-                jname = self.model.joint(i).name
-                if jname in ctrl_index_map:
-                    ctrl_idx = ctrl_index_map[jname]
-                    adr = self.model.joint(i).qposadr[0]
-                    if adr < len(self.data.qpos) and ctrl_idx < len(G1_STANDING_POSE):
-                        self.data.qpos[adr] = G1_STANDING_POSE[ctrl_idx]
-
-            mujoco.mj_forward(self.model, self.data)
+            self._reset_simulation_state()
 
             print(f"[MuJoCo] G1 loaded: {self.model.nbody} bodies, "
                   f"{self.model.njnt} joints, {self.model.ngeom} geoms, "
@@ -1049,6 +1070,9 @@ class MuJoCoSimulation:
             import traceback
             traceback.print_exc()
             self.model = None
+        finally:
+            if augmented_xml_path and os.path.exists(augmented_xml_path):
+                os.unlink(augmented_xml_path)
 
     def _load_tocabi_model(self):
         """Load TOCABI from URDF → MJCF conversion."""
@@ -1074,24 +1098,13 @@ class MuJoCoSimulation:
                 jname = self.model.joint(joint_id).name
                 ctrl_index_map[jname] = i
 
+            self._ctrl_index_map = ctrl_index_map
             # Update JOINT_INFO_MAP with correct ctrl indices
             for name, info in JOINT_INFO_MAP.items():
                 if name in ctrl_index_map:
                     info.mj_index = ctrl_index_map[name]
 
-            mujoco.mj_resetData(self.model, self.data)
-            # Free joint: qpos[0:3]=pos, qpos[3:7]=quat, qpos[7:]=joint angles
-            self.data.qpos[2] = 1.2
-            self.data.qpos[3] = 1.0  # qw=1 (unit quaternion)
-
-            # Apply standing pose to joint angles via qposadr
-            for i in range(self.model.njnt):
-                jname = self.model.joint(i).name
-                if jname in STANDING_POSE:
-                    adr = self.model.joint(i).qposadr[0]
-                    self.data.qpos[adr] = STANDING_POSE[jname]
-
-            mujoco.mj_forward(self.model, self.data)
+            self._reset_simulation_state()
 
             print(f"[MuJoCo] Model loaded: {self.model.nbody} bodies, "
                   f"{self.model.njnt} joints, {self.model.ngeom} geoms", flush=True)
@@ -1104,6 +1117,36 @@ class MuJoCoSimulation:
             import traceback
             traceback.print_exc()
             self.model = None
+
+    def _reset_simulation_state(self):
+        """Restore the selected robot to its deterministic standing state."""
+        self.frame = 0
+        self.controller.mode = ControlMode.STAND
+        self.controller.walk_phase = 0.0
+        self.controller.walk_cmd_linear = 0.0
+        self.controller.walk_cmd_angular = 0.0
+        self.controller.time = 0.0
+
+        if self.model is None or self.data is None:
+            return
+
+        mujoco.mj_resetData(self.model, self.data)
+        self.data.qpos[2] = 0.79 if self.robot_model == RobotModel.G1 else 1.2
+        self.data.qpos[3] = 1.0
+
+        standing_pose = G1_STANDING_POSE if self.robot_model == RobotModel.G1 else None
+        for jname, ctrl_idx in self._ctrl_index_map.items():
+            joint = self.model.joint(jname)
+            qpos_adr = joint.qposadr[0]
+            if standing_pose is not None:
+                if ctrl_idx < len(standing_pose):
+                    self.data.qpos[qpos_adr] = standing_pose[ctrl_idx]
+            elif jname in STANDING_POSE:
+                self.data.qpos[qpos_adr] = STANDING_POSE[jname]
+
+        targets = self.controller.compute_ctrl(self.model, self.data)
+        self.data.ctrl[: len(targets)] = targets
+        mujoco.mj_forward(self.model, self.data)
 
     def _step_physics(self, dt: float = 0.002):
         if self.model is None or self.data is None:
@@ -1120,11 +1163,14 @@ class MuJoCoSimulation:
         except Exception as e:
             print(f"[MuJoCo] Step error: {e}", flush=True)
 
+    def _should_step_physics(self) -> bool:
+        return self.running and self.controller.mode != ControlMode.FREEZE
+
     def _render_frame(self) -> str | None:
         if self.model is None or self.data is None or self.renderer is None:
             return self._placeholder_frame()
         try:
-            self.renderer.update_scene(self.data)
+            self.renderer.update_scene(self.data, camera=self.camera)
             pixels = self.renderer.render()
             return self._encode_png(pixels)
         except Exception as e:
@@ -1167,15 +1213,14 @@ class MuJoCoSimulation:
         if self.model is None or self.data is None:
             return {}
         state = {}
-        for i in range(self.model.njnt):
-            name = self.model.joint(i).name
-            if name == "root_free":
-                continue
-            adr = self.model.joint(i).qposadr[0]
+        for name, ctrl_idx in self._ctrl_index_map.items():
+            joint = self.model.joint(name)
+            qpos_adr = joint.qposadr[0]
+            dof_adr = joint.dofadr[0]
             state[name] = {
-                "pos": float(self.data.qpos[adr]),
-                "vel": float(self.data.qvel[adr]),
-                "target": float(self.data.ctrl[i - 1]) if i - 1 < len(self.data.ctrl) else 0.0,
+                "pos": float(self.data.qpos[qpos_adr]),
+                "vel": float(self.data.qvel[dof_adr]),
+                "target": float(self.data.ctrl[ctrl_idx]),
             }
         return state
 
@@ -1184,11 +1229,20 @@ class MuJoCoSimulation:
             return {"pos": [0, 0, 1], "quat": [1, 0, 0, 0], "vel": [0, 0, 0], "angvel": [0, 0, 0]}
         # Root body (tocabi_root) is body index 1
         body_idx = 1
+        velocity = np.zeros(6)
+        mujoco.mj_objectVelocity(
+            self.model,
+            self.data,
+            mujoco.mjtObj.mjOBJ_BODY,
+            body_idx,
+            velocity,
+            0,
+        )
         return {
             "pos": self.data.xpos[body_idx].tolist() if len(self.data.xpos) > body_idx else [0, 0, 1],
             "quat": self.data.xquat[body_idx].tolist() if len(self.data.xquat) > body_idx else [1, 0, 0, 0],
-            "vel": self.data.xvelp[body_idx].tolist() if len(self.data.xvelp) > body_idx else [0, 0, 0],
-            "angvel": self.data.xvelr[body_idx].tolist() if len(self.data.xvelr) > body_idx else [0, 0, 0],
+            "vel": velocity[3:6].tolist(),
+            "angvel": velocity[0:3].tolist(),
         }
 
     def _get_telemetry(self) -> dict:
@@ -1226,6 +1280,8 @@ class MuJoCoSimulation:
             "joint_count": len(joints),
             "com": com,
             "sensor": sensor_data,
+            "sim_time": float(self.data.time) if self.data is not None else 0.0,
+            "step_count": self.frame,
             "controller": {
                 "mode": self.controller.mode.value,
                 "walk_phase": self.controller.walk_phase,
@@ -1246,7 +1302,8 @@ class MuJoCoSimulation:
             while True:
                 try:
                     if self.running:
-                        self._step_physics(physics_dt)
+                        if self._should_step_physics():
+                            self._step_physics(physics_dt)
                         self.frame += 1
 
                         frame_data = self._render_frame()
@@ -1296,30 +1353,8 @@ class MuJoCoSimulation:
                         if data.get("type") == "command":
                             cmd = data.get("command", "")
                             if cmd == "reset":
-                                self.frame = 0
                                 self.emotion = "neutral"
-                                self.controller.mode = ControlMode.STAND
-                                self.controller.walk_phase = 0.0
-                                if self.model and self.data:
-                                    mujoco.mj_resetData(self.model, self.data)
-                                    if self.robot_model == RobotModel.G1:
-                                        self.data.qpos[2] = 0.79
-                                        self.data.qpos[3] = 1.0
-                                        for i in range(self.model.njnt):
-                                            jname = self.model.joint(i).name
-                                            if jname in self.controller._ctrl_index_map:
-                                                ctrl_idx = self.controller._ctrl_index_map[jname]
-                                                adr = self.model.joint(i).qposadr[0]
-                                                if adr < len(self.data.qpos) and ctrl_idx < len(G1_STANDING_POSE):
-                                                    self.data.qpos[adr] = G1_STANDING_POSE[ctrl_idx]
-                                    else:
-                                        self.data.qpos[2] = 1.2
-                                        self.data.qpos[3] = 1.0
-                                        for i in range(self.model.njnt):
-                                            jname = self.model.joint(i).name
-                                            if jname in STANDING_POSE:
-                                                adr = self.model.joint(i).qposadr[0]
-                                                self.data.qpos[adr] = STANDING_POSE[jname]
+                                self._reset_simulation_state()
                             elif cmd.startswith("model:"):
                                 new_model = cmd.split(":", 1)[1].lower()
                                 if new_model in ("tocabi", "g1") and new_model != self.robot_model.value:
@@ -1353,6 +1388,11 @@ class MuJoCoSimulation:
                                 print("[MuJoCo] Mode → STAND", flush=True)
                             elif cmd == "walk":
                                 self.controller.mode = ControlMode.WALK
+                                if abs(self.controller.walk_cmd_linear) < 0.01:
+                                    self.controller.set_walk_cmd(
+                                        self.controller.walk_speed,
+                                        self.controller.walk_cmd_angular,
+                                    )
                                 print("[MuJoCo] Mode → WALK", flush=True)
                             elif cmd == "freeze":
                                 self.controller.mode = ControlMode.FREEZE

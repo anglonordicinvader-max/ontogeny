@@ -31,6 +31,8 @@ export function MuJoCoEmbed({ backendPort = 8768 }: MuJoCoEmbedProps) {
   const [fps, setFps] = useState(0);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [telemetry, setTelemetry] = useState<Telemetry | null>(null);
+  const [walkLinear, setWalkLinear] = useState(0);
+  const [walkAngular, setWalkAngular] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const frameCount = useRef(0);
   const lastFpsTime = useRef(Date.now());
@@ -84,6 +86,10 @@ export function MuJoCoEmbed({ backendPort = 8768 }: MuJoCoEmbedProps) {
           } else if (msg.type === 'telemetry' || msg.type === 'health') {
             setTelemetry(msg as Telemetry);
             if (msg.controller?.mode) setControlMode(msg.controller.mode);
+            if (msg.controller?.walk_cmd) {
+              setWalkLinear(msg.controller.walk_cmd[0]);
+              setWalkAngular(msg.controller.walk_cmd[1]);
+            }
           }
         } catch { /* ignore */ }
       };
@@ -289,8 +295,12 @@ export function MuJoCoEmbed({ backendPort = 8768 }: MuJoCoEmbedProps) {
                 <input
                   type="range"
                   min="-1" max="1" step="0.05"
-                  defaultValue={ctrl?.walk_cmd?.[0]?.toString() || '0'}
-                  onChange={(e) => sendCommand(`walk_cmd:${e.target.value},0`)}
+                  value={walkLinear}
+                  onChange={(e) => {
+                    const linear = Number(e.target.value);
+                    setWalkLinear(linear);
+                    sendCommand(`walk_cmd:${linear},${walkAngular}`);
+                  }}
                   className="w-20 accent-[var(--accent-glow)]"
                 />
               </div>
@@ -299,8 +309,12 @@ export function MuJoCoEmbed({ backendPort = 8768 }: MuJoCoEmbedProps) {
                 <input
                   type="range"
                   min="-1" max="1" step="0.05"
-                  defaultValue={ctrl?.walk_cmd?.[1]?.toString() || '0'}
-                  onChange={(e) => sendCommand(`walk_cmd:0,${e.target.value}`)}
+                  value={walkAngular}
+                  onChange={(e) => {
+                    const angular = Number(e.target.value);
+                    setWalkAngular(angular);
+                    sendCommand(`walk_cmd:${walkLinear},${angular}`);
+                  }}
                   className="w-20 accent-[var(--accent-glow)]"
                 />
               </div>
