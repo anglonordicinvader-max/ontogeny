@@ -70,6 +70,8 @@ Click the **Reset** button in the Demo panel, or use the command palette:
 - Press `Ctrl/Cmd+K`
 - Type "reset demo"
 
+From any tab, press `Ctrl/Cmd+Shift+R` to reset Demo Mode without triggering a browser refresh.
+
 Demo mode uses a separate session namespace. Resetting clears demo state without affecting normal agent data.
 
 ## Expected Demo Duration
