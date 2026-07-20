@@ -727,24 +727,9 @@ class BlenderSimulation:
     # ================================================================
     def _render_to_file(self):
         with self._render_lock:
-            try:
-                # Aggressively clean depsgraph triggers before render
-                self._cleanup_depsgraph_triggers()
-                # Try real Cycles render
-                self._try_render_cycles()
-            except Exception as e:
-                print(f"[Blender] Cycles render failed: {e}", flush=True)
-                try:
-                    # Fallback: try Eevee (faster, different depsgraph path)
-                    self._try_render_eevee()
-                except Exception as e2:
-                    print(f"[Blender] Eevee render failed: {e2}", flush=True)
-                    try:
-                        # Last resort: OpenGL viewport capture
-                        self._try_viewport_capture()
-                    except Exception as e3:
-                        print(f"[Blender] Viewport capture failed: {e3}", flush=True)
-                        self._generate_placeholder_frame()
+            # Blender 5.2 segfaults on bpy.ops.render.render() in background mode.
+            # Generate informative placeholder frame showing scene state.
+            self._generate_placeholder_frame()
 
     def _cleanup_depsgraph_triggers(self):
         """Remove objects that trigger the Blender 5.2 depsgraph speaker crash."""

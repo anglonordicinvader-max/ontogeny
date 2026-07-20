@@ -1005,7 +1005,27 @@ class MuJoCoSimulation:
             print(f"[MuJoCo] G1 XML not found: {G1_XML}", flush=True)
             return
         try:
-            self.model = mujoco.MjModel.from_xml_path(G1_XML)
+            import tempfile, xml.etree.ElementTree as ET
+
+            # Patch XML: add floor + light + camera if missing
+            tree = ET.parse(G1_XML)
+            worldbody = tree.find('.//worldbody')
+            if worldbody is not None:
+                has_floor = any(g.get('type') == 'plane' for g in worldbody.findall('.//geom'))
+                has_cam = len(worldbody.findall('.//camera')) > 0
+                if not has_floor:
+                    ET.SubElement(worldbody, 'geom', name='floor', type='plane',
+                                  size='10 10 0.01', rgba='0.2 0.3 0.4 1', contype='1', conaffinity='1')
+                    ET.SubElement(worldbody, 'light', pos='0 0 4', dir='0 0 -1',
+                                  diffuse='0.8 0.8 0.8', specular='0.3 0.3 0.3')
+                if not has_cam:
+                    ET.SubElement(worldbody, 'camera', name='track',
+                                  pos='2.0 1.0 1.0', xyaxes='0.87 -0.5 0 0.17 0.30 0.94', fovy='45')
+
+            tmp_xml = os.path.join(tempfile.gettempdir(), "g1_patched.xml")
+            tree.write(tmp_xml, xml_declaration=False, encoding='unicode')
+
+            self.model = mujoco.MjModel.from_xml_path(tmp_xml)
             self.data = mujoco.MjData(self.model)
             self.renderer = mujoco.Renderer(self.model, height=480, width=640)
 
@@ -1124,7 +1144,9 @@ class MuJoCoSimulation:
         if self.model is None or self.data is None or self.renderer is None:
             return self._placeholder_frame()
         try:
-            self.renderer.update_scene(self.data)
+            # Use the 'track' camera if available, else default
+            cam_name = 'track' if self.model.ncam > 0 else None
+            self.renderer.update_scene(self.data, camera=cam_name)
             pixels = self.renderer.render()
             return self._encode_png(pixels)
         except Exception as e:
