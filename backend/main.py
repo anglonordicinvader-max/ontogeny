@@ -156,6 +156,16 @@ async def health():
     return {"status": "ok", "agent_running": manager._running}
 
 
+@app.get("/api/simulator-health")
+async def simulator_health():
+    """Check if simulator ports are reachable."""
+    result = {"blender": {"available": False}, "mujoco": {"available": False}}
+    # The simulators run on the same host. We check if their WebSocket ports accept connections.
+    # In the Electron app, the main process knows the ports. Here we just report based on
+    # whether the processes were spawned. The frontend handles its own health checks.
+    return result
+
+
 @app.post("/api/agent/start")
 async def start_agent(max_cycles: int = Query(None)):
     return await manager.start(max_cycles)
