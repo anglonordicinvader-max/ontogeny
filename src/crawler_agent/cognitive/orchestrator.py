@@ -246,6 +246,7 @@ class CognitiveOrchestrator:
         # New: Verification, Grounding & Planning
         self.outcome_verifier: CompositeOutcomeVerifier | None = None
         self.blender_sandbox: BlenderSandbox | None = None
+        self.embodiment_registry = None
         self.mcts_planner: MCTSPlanner | None = None
 
         # Tool integrations
@@ -513,6 +514,7 @@ class CognitiveOrchestrator:
 
         # Initialize simulation library
         self.sim_library = SimulationLibrary(blender_sandbox=self.blender_sandbox)
+        self.embodiment_registry = self.sim_library.embodiments
 
         # Initialize self-auditor
         self.self_auditor = SelfAuditor()
@@ -2804,6 +2806,9 @@ class CognitiveOrchestrator:
             # Tools & Simulation
             "tools": list(self.tool_manager.tools.keys()) if self.tool_manager else [],
             "simulation": sim_status,
+            "embodiment": self.sim_library.get_embodiment_status()
+            if self.sim_library
+            else {},
             # Learning
             "learning": self.learner.get_stats() if self.learner else {},
             "knowledge_graph": self.knowledge_graph.get_stats() if self.knowledge_graph else {},

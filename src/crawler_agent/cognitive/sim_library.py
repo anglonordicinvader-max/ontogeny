@@ -24,6 +24,7 @@ from .blender_sandbox import (
     SimulationSpec,
     SimulationType,
 )
+from .embodiment import EmbodimentAdapter, EmbodimentRegistry, EmbodimentType
 
 logger = structlog.get_logger()
 
@@ -183,6 +184,7 @@ class MuJoCoBackend:
             return SimulationResult(success=False, error="MuJoCo not available")
         # MuJoCo requires XML model files - generate a simple one
         start = time.perf_counter()
+        model_path = None
         try:
             import os
             import tempfile
@@ -217,7 +219,6 @@ class MuJoCoBackend:
 
             model = self._mujoco.MjModel.from_xml_path(model_path)
             data = self._mujoco.MjData(model)
-            self._mujoco.MjRenderContextOffscreen(model)
 
             # Simulate
             frames = []
@@ -237,7 +238,6 @@ class MuJoCoBackend:
                         )
                     frames.append(frame_data)
 
-            os.unlink(model_path)
             elapsed = (time.perf_counter() - start) * 1000
             return SimulationResult(
                 success=True,
@@ -248,6 +248,74 @@ class MuJoCoBackend:
         except Exception as e:
             elapsed = (time.perf_counter() - start) * 1000
             return SimulationResult(success=False, error=str(e), execution_time_ms=elapsed)
+        finally:
+            if model_path and os.path.exists(model_path):
+                os.unlink(model_path)
+
+
+class SimulationEmbodimentAdapter(EmbodimentAdapter):
+    """NeoCorpus adapter over an existing batch simulation backend."""
+
+    def __init__(self, embodiment_type: EmbodimentType, backend: Any):
+        self._embodiment_type = embodiment_type
+        self.backend = backend
+        self._last_result: SimulationResult | None = None
+
+    @property
+    def embodiment_type(self) -> EmbodimentType:
+        return self._embodiment_type
+
+    @property
+    def is_available(self) -> bool:
+        if self.backend is None:
+            return False
+        return bool(getattr(self.backend, "is_available", True))
+
+    async def run_simulation(self, spec: SimulationSpec) -> SimulationResult:
+        if not self.is_available:
+            return SimulationResult(
+                success=False,
+                error=f"{self.embodiment_type.value} embodiment not available",
+            )
+        self._last_result = await self.backend.run_simulation(spec)
+        return self._last_result
+
+    async def send_action(self, action: dict[str, Any]) -> dict[str, Any]:
+        if action.get("action") != "simulate":
+            return {"success": False, "error": "Unsupported embodiment action"}
+        spec = action.get("spec")
+        if isinstance(spec, dict):
+            spec = SimulationSpec(**spec)
+        if not isinstance(spec, SimulationSpec):
+            return {"success": False, "error": "SimulationSpec required"}
+        result = await self.run_simulation(spec)
+        return {
+            "success": result.success,
+            "error": result.error,
+            "frames": result.frames,
+            "stats": result.stats,
+        }
+
+    async def observe(self) -> dict[str, Any]:
+        if self._last_result is None:
+            return {"available": self.is_available, "last_result": None}
+        return {
+            "available": self.is_available,
+            "last_result": {
+                "success": self._last_result.success,
+                "error": self._last_result.error,
+                "stats": self._last_result.stats,
+            },
+        }
+
+    async def reset_environment(self) -> None:
+        self._last_result = None
+
+    def get_joint_state(self) -> dict[str, Any]:
+        return {}
+
+    def get_sensor_data(self) -> dict[str, Any]:
+        return self._last_result.stats if self._last_result else {}
 
 
 # Pre-built simulation scenarios
@@ -506,6 +574,13 @@ class SimulationLibrary:
         self.blender = blender_sandbox
         self.pybullet = PyBulletBackend()
         self.mujoco = MuJoCoBackend()
+        self.embodiments = EmbodimentRegistry()
+        self.embodiments.register(
+            SimulationEmbodimentAdapter(EmbodimentType.BLENDER, self.blender)
+        )
+        self.embodiments.register(
+            SimulationEmbodimentAdapter(EmbodimentType.MUJOCO, self.mujoco)
+        )
         self.scenarios = dict(SIMULATION_SCENARIOS)
         self.logger = logger.bind(component="sim_library")
 
@@ -548,28 +623,7 @@ class SimulationLibrary:
                 if hasattr(spec, key):
                     setattr(spec, key, value)
 
-        chosen_backend = backend or scenario.backend
-
-        if chosen_backend == SimBackend.BLENDER:
-            if self.blender:
-                return await self.blender.run_simulation(spec)
-            # Fallback to PyBullet
-            self.logger.info("blender_unavailable_fallback", fallback="pybullet")
-            chosen_backend = SimBackend.PYBULLET
-
-        if chosen_backend == SimBackend.PYBULLET:
-            if self.pybullet.is_available:
-                return await self.pybullet.run_simulation(spec)
-            # Fallback to MuJoCo
-            self.logger.info("pybullet_unavailable_fallback", fallback="mujoco")
-            chosen_backend = SimBackend.MUJOCO
-
-        if chosen_backend == SimBackend.MUJOCO:
-            if self.mujoco.is_available:
-                return await self.mujoco.run_simulation(spec)
-            return SimulationResult(success=False, error="No simulation backend available")
-
-        return SimulationResult(success=False, error="No simulation backend available")
+        return await self.run_custom(spec, backend or scenario.backend)
 
     async def run_custom(
         self,
@@ -577,8 +631,9 @@ class SimulationLibrary:
         backend: SimBackend = SimBackend.BLENDER,
     ) -> SimulationResult:
         if backend == SimBackend.BLENDER:
-            if self.blender:
-                return await self.blender.run_simulation(spec)
+            adapter = self.embodiments.get(EmbodimentType.BLENDER)
+            if isinstance(adapter, SimulationEmbodimentAdapter) and adapter.is_available:
+                return await adapter.run_simulation(spec)
             self.logger.info("blender_unavailable_fallback", fallback="pybullet")
             backend = SimBackend.PYBULLET
 
@@ -588,14 +643,22 @@ class SimulationLibrary:
             backend = SimBackend.MUJOCO
 
         if backend == SimBackend.MUJOCO:
-            if self.mujoco.is_available:
-                return await self.mujoco.run_simulation(spec)
+            adapter = self.embodiments.get(EmbodimentType.MUJOCO)
+            if isinstance(adapter, SimulationEmbodimentAdapter) and adapter.is_available:
+                return await adapter.run_simulation(spec)
 
         return SimulationResult(success=False, error="No simulation backend available")
 
     def get_backend_status(self) -> dict[str, bool]:
         return {
-            "blender": self.blender is not None,
+            "blender": EmbodimentType.BLENDER in self.embodiments.available(),
             "pybullet": self.pybullet.is_available,
-            "mujoco": self.mujoco.is_available,
+            "mujoco": EmbodimentType.MUJOCO in self.embodiments.available(),
+        }
+
+    def get_embodiment_status(self) -> dict[str, bool]:
+        available = set(self.embodiments.available())
+        return {
+            embodiment.value: embodiment in available
+            for embodiment in self.embodiments.all_types()
         }

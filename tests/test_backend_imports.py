@@ -92,3 +92,48 @@ class TestSimulationTypeSeparation:
         assert "RIGID_BODY" in members
         assert "EMOTION" in members
         assert "PLANNING" not in members
+
+
+class TestNeoCorpusIntegration:
+    def test_registers_existing_simulation_backends(self):
+        from crawler_agent.cognitive.embodiment import EmbodimentType
+        from crawler_agent.cognitive.sim_library import SimulationLibrary
+
+        library = SimulationLibrary(blender_sandbox=None)
+
+        assert library.embodiments.get(EmbodimentType.BLENDER) is not None
+        assert library.embodiments.get(EmbodimentType.MUJOCO) is not None
+        assert set(library.get_embodiment_status()) == {"blender", "mujoco"}
+
+    @pytest.mark.asyncio
+    async def test_mujoco_simulation_routes_through_neocorpus(self):
+        from crawler_agent.cognitive.blender_sandbox import ObjectSpec, SimulationSpec
+        from crawler_agent.cognitive.sim_library import SimBackend, SimulationLibrary
+
+        library = SimulationLibrary(blender_sandbox=None)
+        result = await library.run_custom(
+            SimulationSpec(
+                objects=[ObjectSpec(type="sphere", position=(0, 0, 1))],
+                duration=0.2,
+                fps=10,
+            ),
+            SimBackend.MUJOCO,
+        )
+
+        assert result.success
+        assert result.stats["backend"] == "mujoco"
+        assert result.stats["steps"] == 2
+
+    def test_scenarios_share_neocorpus_custom_route(self):
+        path = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "src",
+            "crawler_agent",
+            "cognitive",
+            "sim_library.py",
+        )
+        with open(path, encoding="utf-8") as f:
+            source = f.read()
+
+        assert "return await self.run_custom(spec, backend or scenario.backend)" in source
