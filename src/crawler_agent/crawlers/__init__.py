@@ -5,6 +5,8 @@ Each module implements an evidence acquisition adapter for a specific data sourc
 """
 
 # Acquisition system
+# Academic
+from .academic import ArxivCrawler, SemanticScholarCrawler
 from .acquisition import (
     AcquisitionManager,
     ClaimValidator,
@@ -23,9 +25,6 @@ from .acquisition import (
     SourceCategory,
     SourceQualityScorer,
 )
-
-# Academic
-from .academic import ArxivCrawler, SemanticScholarCrawler
 
 # Additional
 from .additional import (

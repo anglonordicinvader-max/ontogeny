@@ -21,15 +21,15 @@ from typing import Any, AsyncIterator
 
 import structlog
 
-from ..base import BaseCrawler, CrawlResult, ContentType
+from ..base import BaseCrawler, ContentType, CrawlResult
 from .domain_policies import DomainPolicies
 from .evidence_store import EvidenceDocument, EvidenceStore
 from .knowledge_validator import ClaimValidator
 from .observability import AcquisitionObservability
 from .proxy_manager import ProxyManager
-from .revalidation import RevalidationScheduler
 from .request_manager import RequestManager
-from .research_planner import ResearchPlan, ResearchPlanner, ObjectiveStatus
+from .research_planner import ObjectiveStatus, ResearchPlan, ResearchPlanner
+from .revalidation import RevalidationScheduler
 from .source_scorer import SourceCategory, SourceQualityScorer
 
 
@@ -150,10 +150,11 @@ class AcquisitionManager:
         Handles: policy checks, proxy selection, fetching, caching,
         deduplication, evidence storage, and observability.
         """
-        from .request_manager import RequestPriority
-
         # Parse domain
         from urllib.parse import urlparse
+
+        from .request_manager import RequestPriority
+
         parsed = urlparse(url)
         domain = parsed.netloc
 
@@ -201,13 +202,23 @@ class AcquisitionManager:
 
         if crawler:
             doc = await self._fetch_via_crawler(
-                crawler, url, domain, source_score.quality_score,
-                plan_id, objective_id, query,
+                crawler,
+                url,
+                domain,
+                source_score.quality_score,
+                plan_id,
+                objective_id,
+                query,
             )
         else:
             doc = await self._fetch_direct(
-                url, domain, source_score.quality_score,
-                plan_id, objective_id, query,
+                url,
+                domain,
+                source_score.quality_score,
+                plan_id,
+                objective_id,
+                query,
+                proxy,
             )
 
         if doc:
@@ -216,7 +227,8 @@ class AcquisitionManager:
 
             # Update source scorer
             self.source_scorer.update_from_fetch(
-                domain, success=True,
+                domain,
+                success=True,
                 content_length=doc.content_length,
             )
 
@@ -226,8 +238,11 @@ class AcquisitionManager:
 
             # Cache the response
             self.request_manager.store_cache(
-                url, 200, doc.content.encode("utf-8", errors="replace"),
-                {}, content_type=doc.content_type,
+                url,
+                200,
+                doc.content.encode("utf-8", errors="replace"),
+                {},
+                content_type=doc.content_type,
             )
 
             self.observability.record_evidence(accepted=True)
@@ -256,7 +271,9 @@ class AcquisitionManager:
         async def _acquire_one(url: str):
             async with semaphore:
                 doc = await self.acquire(
-                    url, crawler_name=crawler_name, plan_id=plan_id,
+                    url,
+                    crawler_name=crawler_name,
+                    plan_id=plan_id,
                 )
                 if doc:
                     results.append(doc)
@@ -290,12 +307,10 @@ class AcquisitionManager:
             budget_remaining -= 1
 
             # Select sources based on preferred categories
-            candidate_domains = self._select_sources_for_objective(
-                obj, source_filter
-            )
+            candidate_domains = self._select_sources_for_objective(obj, source_filter)
 
             # Query each source
-            for domain in candidate_domains[:obj.max_budget]:
+            for domain in candidate_domains[: obj.max_budget]:
                 if budget_remaining <= 0:
                     break
 
@@ -304,7 +319,9 @@ class AcquisitionManager:
                     if budget_remaining <= 0:
                         break
                     doc = await self.acquire(
-                        url, plan_id=plan.id, objective_id=obj.id,
+                        url,
+                        plan_id=plan.id,
+                        objective_id=obj.id,
                         query=obj.query,
                     )
                     if doc:
@@ -347,7 +364,7 @@ class AcquisitionManager:
 
         # Add to episodic memory
         try:
-            episodic = memory_system.episodic if hasattr(memory_system, 'episodic') else None
+            episodic = memory_system.episodic if hasattr(memory_system, "episodic") else None
             if episodic:
                 await episodic.add(
                     content=f"Acquired information: {evidence.title} from {evidence.source_domain}",
@@ -365,7 +382,7 @@ class AcquisitionManager:
 
         # Add to semantic memory
         try:
-            semantic = memory_system.semantic if hasattr(memory_system, 'semantic') else None
+            semantic = memory_system.semantic if hasattr(memory_system, "semantic") else None
             if semantic:
                 for fact in evidence.key_facts:
                     await semantic.add(
@@ -423,6 +440,7 @@ class AcquisitionManager:
     def _find_crawler_for_url(self, url: str) -> BaseCrawler | None:
         """Find an appropriate crawler for a URL."""
         from urllib.parse import urlparse
+
         domain = urlparse(url).netloc.lower()
 
         # Map domains to crawlers
@@ -474,7 +492,9 @@ class AcquisitionManager:
                 source_domain=domain,
                 source_category=self.source_scorer.classify_domain(domain).value,
                 extraction_method="crawler",
-                content_type=r.content_type.value if hasattr(r.content_type, 'value') else str(r.content_type),
+                content_type=r.content_type.value
+                if hasattr(r.content_type, "value")
+                else str(r.content_type),
                 content_length=len(r.content),
                 quality_score=quality_score,
                 research_plan_id=plan_id,
@@ -494,6 +514,7 @@ class AcquisitionManager:
         plan_id: str,
         objective_id: str,
         query: str,
+        proxy_endpoint: Any | None = None,
     ) -> EvidenceDocument | None:
         """Direct HTTP fetch as fallback."""
         import httpx
@@ -503,7 +524,9 @@ class AcquisitionManager:
             timeout = policy.timeout_seconds if policy else 30.0
 
             async with httpx.AsyncClient(
-                timeout=timeout, follow_redirects=True,
+                timeout=timeout,
+                follow_redirects=True,
+                proxy=proxy_endpoint.url if proxy_endpoint else None,
             ) as client:
                 start = time.time()
                 response = await client.get(url)
@@ -579,7 +602,8 @@ class AcquisitionManager:
             "research": {
                 "active_plan": (
                     self.research_planner.get_plan_summary(self._active_plan)
-                    if self._active_plan else None
+                    if self._active_plan
+                    else None
                 ),
                 "total_plans": len(self.research_planner.plans),
             },

@@ -13,13 +13,13 @@ reasoning over external knowledge.
 
 from .domain_policies import DomainPolicies, DomainPolicy
 from .evidence_store import EvidenceDocument, EvidenceStore
-from .knowledge_validator import ClaimValidator, Claim
+from .knowledge_validator import Claim, ClaimValidator
 from .manager import AcquisitionManager
 from .observability import AcquisitionObservability, MetricsSnapshot
-from .proxy_manager import ProxyManager, ProxyEndpoint
-from .revalidation import RevalidationScheduler
+from .proxy_manager import ProxyEndpoint, ProxyManager
 from .request_manager import RequestManager
-from .research_planner import ResearchPlan, ResearchPlanner, ResearchObjective
+from .research_planner import ResearchObjective, ResearchPlan, ResearchPlanner
+from .revalidation import RevalidationScheduler
 from .source_scorer import SourceCategory, SourceQualityScorer
 
 # Backward compatibility alias

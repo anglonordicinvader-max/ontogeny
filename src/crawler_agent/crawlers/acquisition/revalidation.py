@@ -77,9 +77,7 @@ class RevalidationScheduler:
         self.tasks.append(task)
         return task
 
-    def schedule_link_check(
-        self, evidence_id: str, url: str, domain: str
-    ) -> RevalidationTask:
+    def schedule_link_check(self, evidence_id: str, url: str, domain: str) -> RevalidationTask:
         """Schedule a broken link check."""
         task = RevalidationTask(
             id=f"rv_{len(self.tasks)}",
@@ -110,20 +108,13 @@ class RevalidationScheduler:
         self.tasks.append(task)
         return task
 
-    def get_pending_tasks(
-        self, limit: int = 10, max_priority: int = 10
-    ) -> list[RevalidationTask]:
+    def get_pending_tasks(self, limit: int = 10, max_priority: int = 10) -> list[RevalidationTask]:
         """Get the next batch of tasks to execute."""
         pending = [t for t in self.tasks if not t.completed]
         pending.sort(key=lambda t: (-t.priority, t.scheduled_at))
-        return [
-            t for t in pending[:limit]
-            if t.priority <= max_priority
-        ]
+        return [t for t in pending[:limit] if t.priority <= max_priority]
 
-    def complete_task(
-        self, task_id: str, success: bool, summary: str = ""
-    ):
+    def complete_task(self, task_id: str, success: bool, summary: str = ""):
         """Mark a task as completed."""
         for task in self.tasks:
             if task.id == task_id:
@@ -141,7 +132,5 @@ class RevalidationScheduler:
             "pending": len(pending),
             "completed": len(self.completed_tasks),
             "by_type": {},
-            "avg_priority": (
-                sum(t.priority for t in pending) / max(1, len(pending))
-            ),
+            "avg_priority": (sum(t.priority for t in pending) / max(1, len(pending))),
         }

@@ -58,7 +58,10 @@ DEMO_PLAN = {
             "id": "step-1",
             "description": "Search ArXiv for recent neuromorphic computing papers",
             "action": "acquire",
-            "parameters": {"source": "arxiv", "query": "neuromorphic computing energy efficient inference 2024 2025"},
+            "parameters": {
+                "source": "arxiv",
+                "query": "neuromorphic computing energy efficient inference 2024 2025",
+            },
             "status": "completed",
             "confidence": 0.92,
             "result": "Found 12 relevant papers from 2024-2025",
@@ -67,7 +70,10 @@ DEMO_PLAN = {
             "id": "step-2",
             "description": "Search Semantic Scholar for citation-backed survey data",
             "action": "acquire",
-            "parameters": {"source": "semantic_scholar", "query": "neuromorphic hardware survey comparison"},
+            "parameters": {
+                "source": "semantic_scholar",
+                "query": "neuromorphic hardware survey comparison",
+            },
             "status": "completed",
             "confidence": 0.88,
             "result": "Found 8 highly-cited survey papers",
@@ -124,8 +130,16 @@ DEMO_EVIDENCE = [
         "confidence": 0.94,
         "summary": "Intel Loihi 2 achieves 10x energy efficiency over GPU inference for spiking neural network workloads. On-chip learning enables adaptive deployment without cloud connectivity.",
         "claims": [
-            {"text": "Loihi 2 achieves 10x energy efficiency over GPU", "confidence": 0.94, "supporting_sources": 3},
-            {"text": "On-chip learning eliminates cloud dependency", "confidence": 0.91, "supporting_sources": 2},
+            {
+                "text": "Loihi 2 achieves 10x energy efficiency over GPU",
+                "confidence": 0.94,
+                "supporting_sources": 3,
+            },
+            {
+                "text": "On-chip learning eliminates cloud dependency",
+                "confidence": 0.91,
+                "supporting_sources": 2,
+            },
         ],
         "relevance_score": 0.96,
     },
@@ -141,8 +155,16 @@ DEMO_EVIDENCE = [
         "confidence": 0.92,
         "summary": "Comprehensive survey covering 47 neuromorphic architectures. Identifies key bottleneck: software toolchain maturity, not hardware capability.",
         "claims": [
-            {"text": "Software toolchain is the primary adoption bottleneck", "confidence": 0.89, "supporting_sources": 5},
-            {"text": "47 architectures reviewed across 3 generations", "confidence": 0.97, "supporting_sources": 1},
+            {
+                "text": "Software toolchain is the primary adoption bottleneck",
+                "confidence": 0.89,
+                "supporting_sources": 5,
+            },
+            {
+                "text": "47 architectures reviewed across 3 generations",
+                "confidence": 0.97,
+                "supporting_sources": 1,
+            },
         ],
         "relevance_score": 0.93,
     },
@@ -158,8 +180,16 @@ DEMO_EVIDENCE = [
         "confidence": 0.90,
         "summary": "Quantitative comparison of Loihi 2, TrueNorth, and SpiNNaker2 on NLP, vision, and control tasks. Neuromorphic advantage is task-dependent: 5-50x efficiency on sparse workloads, marginal on dense matrices.",
         "claims": [
-            {"text": "5-50x efficiency advantage on sparse workloads", "confidence": 0.90, "supporting_sources": 4},
-            {"text": "Marginal advantage on dense matrix operations", "confidence": 0.88, "supporting_sources": 3},
+            {
+                "text": "5-50x efficiency advantage on sparse workloads",
+                "confidence": 0.90,
+                "supporting_sources": 4,
+            },
+            {
+                "text": "Marginal advantage on dense matrix operations",
+                "confidence": 0.88,
+                "supporting_sources": 3,
+            },
         ],
         "relevance_score": 0.91,
     },
@@ -175,7 +205,11 @@ DEMO_EVIDENCE = [
         "confidence": 0.85,
         "summary": "Standardized benchmark suite with energy measurements for 12 neuromorphic chips across 8 task categories. Includes power profiling scripts.",
         "claims": [
-            {"text": "12 chips benchmarked across 8 task categories", "confidence": 0.95, "supporting_sources": 1},
+            {
+                "text": "12 chips benchmarked across 8 task categories",
+                "confidence": 0.95,
+                "supporting_sources": 1,
+            },
         ],
         "relevance_score": 0.87,
     },
@@ -210,14 +244,62 @@ DEMO_MEMORY_WRITES = [
 
 DEMO_KNOWLEDGE_GRAPH = {
     "nodes": [
-        {"id": "n1", "name": "Neuromorphic Computing", "type": "concept", "connections": 5, "strength": 0.95},
-        {"id": "n2", "name": "Intel Loihi 2", "type": "hardware", "connections": 3, "strength": 0.9},
-        {"id": "n3", "name": "Spiking Neural Networks", "type": "algorithm", "connections": 4, "strength": 0.88},
-        {"id": "n4", "name": "Energy Efficiency", "type": "metric", "connections": 3, "strength": 0.92},
-        {"id": "n5", "name": "IBM TrueNorth", "type": "hardware", "connections": 2, "strength": 0.82},
-        {"id": "n6", "name": "Software Toolchain", "type": "bottleneck", "connections": 2, "strength": 0.85},
-        {"id": "n7", "name": "Sparse Workloads", "type": "workload", "connections": 2, "strength": 0.87},
-        {"id": "n8", "name": "On-Chip Learning", "type": "capability", "connections": 2, "strength": 0.84},
+        {
+            "id": "n1",
+            "name": "Neuromorphic Computing",
+            "type": "concept",
+            "connections": 5,
+            "strength": 0.95,
+        },
+        {
+            "id": "n2",
+            "name": "Intel Loihi 2",
+            "type": "hardware",
+            "connections": 3,
+            "strength": 0.9,
+        },
+        {
+            "id": "n3",
+            "name": "Spiking Neural Networks",
+            "type": "algorithm",
+            "connections": 4,
+            "strength": 0.88,
+        },
+        {
+            "id": "n4",
+            "name": "Energy Efficiency",
+            "type": "metric",
+            "connections": 3,
+            "strength": 0.92,
+        },
+        {
+            "id": "n5",
+            "name": "IBM TrueNorth",
+            "type": "hardware",
+            "connections": 2,
+            "strength": 0.82,
+        },
+        {
+            "id": "n6",
+            "name": "Software Toolchain",
+            "type": "bottleneck",
+            "connections": 2,
+            "strength": 0.85,
+        },
+        {
+            "id": "n7",
+            "name": "Sparse Workloads",
+            "type": "workload",
+            "connections": 2,
+            "strength": 0.87,
+        },
+        {
+            "id": "n8",
+            "name": "On-Chip Learning",
+            "type": "capability",
+            "connections": 2,
+            "strength": 0.84,
+        },
     ],
     "edges": [
         {"source": "n1", "target": "n2", "type": "implements", "weight": 0.9},
@@ -274,7 +356,7 @@ DEMO_MALDOROR_PROPOSAL = {
 +            "software": ["technical_documentation", "research_paper"],
 +            "science": ["research_paper", "government"],
 +        }
- 
+
      def prioritize_sources(self, topic: str, sources: list) -> list:
 -        return sorted(sources, key=lambda s: s.quality_score, reverse=True)
 +        topic_category = self._classify_topic(topic)
@@ -381,7 +463,9 @@ class DemoSession:
         return self.get_status()
 
     def get_status(self) -> dict[str, Any]:
-        current_step = DEMO_STEPS[self.step - 1] if self.step > 0 and self.step <= self.total_steps else None
+        current_step = (
+            DEMO_STEPS[self.step - 1] if self.step > 0 and self.step <= self.total_steps else None
+        )
         return {
             "active": self.active,
             "step": self.step,
@@ -432,12 +516,14 @@ class DemoSession:
         return self.events
 
     def _add_event(self, event_type: str, message: str):
-        self.events.append({
-            "id": _id(),
-            "timestamp": _now(),
-            "type": event_type,
-            "message": message,
-        })
+        self.events.append(
+            {
+                "id": _id(),
+                "timestamp": _now(),
+                "type": event_type,
+                "message": message,
+            }
+        )
 
 
 demo_session = DemoSession()

@@ -6,10 +6,10 @@ and emotional processor basic functionality.
 
 import os
 import sys
-
-import pytest
-import networkx as nx
 from types import SimpleNamespace
+
+import networkx as nx
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -73,6 +73,7 @@ class TestAgentManager:
     async def test_goal_serialization_awaits_goal_manager(self):
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
         from agent_manager import AgentManager
+
         from crawler_agent.cognitive.goals import GoalPriority, GoalStatus
 
         async def active_goals():
@@ -91,13 +92,15 @@ class TestAgentManager:
 
         goals = await manager.get_goals()
 
-        assert goals == [{
-            "id": "g1",
-            "description": "Validate embodiment",
-            "status": "active",
-            "progress": 0.5,
-            "priority": "high",
-        }]
+        assert goals == [
+            {
+                "id": "g1",
+                "description": "Validate embodiment",
+                "status": "active",
+                "progress": 0.5,
+                "priority": "high",
+            }
+        ]
 
 
 class TestMemorySystem:

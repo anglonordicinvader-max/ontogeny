@@ -136,23 +136,16 @@ class ProxyManager:
                 available = regional
 
         # Filter by allowed domains
-        domain_ok = [
-            p for p in available
-            if not p.allowed_domains or domain in p.allowed_domains
-        ]
+        domain_ok = [p for p in available if not p.allowed_domains or domain in p.allowed_domains]
         if domain_ok:
             available = domain_ok
 
         # Sort by: success rate (desc), latency (asc), current load (asc)
-        available.sort(
-            key=lambda p: (-p.success_rate, p.latency_ms, p.current_concurrent)
-        )
+        available.sort(key=lambda p: (-p.success_rate, p.latency_ms, p.current_concurrent))
 
         return available[0] if available else None
 
-    def record_result(
-        self, proxy_name: str, success: bool, latency_ms: float = 0.0
-    ):
+    def record_result(self, proxy_name: str, success: bool, latency_ms: float = 0.0):
         """Record a request result for a proxy."""
         for p in self.proxies:
             if p.name == proxy_name:
@@ -178,13 +171,7 @@ class ProxyManager:
             "total": len(self.proxies),
             "healthy": sum(1 for p in self.proxies if p.status == ProxyStatus.HEALTHY),
             "degraded": sum(1 for p in self.proxies if p.status == ProxyStatus.DEGRADED),
-            "unhealthy": sum(
-                1 for p in self.proxies if p.status == ProxyStatus.UNHEALTHY
-            ),
-            "avg_latency_ms": (
-                sum(p.latency_ms for p in self.proxies) / len(self.proxies)
-            ),
-            "avg_success_rate": (
-                sum(p.success_rate for p in self.proxies) / len(self.proxies)
-            ),
+            "unhealthy": sum(1 for p in self.proxies if p.status == ProxyStatus.UNHEALTHY),
+            "avg_latency_ms": (sum(p.latency_ms for p in self.proxies) / len(self.proxies)),
+            "avg_success_rate": (sum(p.success_rate for p in self.proxies) / len(self.proxies)),
         }

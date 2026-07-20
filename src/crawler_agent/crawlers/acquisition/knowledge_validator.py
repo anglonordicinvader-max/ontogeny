@@ -200,8 +200,7 @@ class ClaimValidator:
     def get_confident_claims(self, min_confidence: float = 0.8) -> list[Claim]:
         """Get high-confidence, undisputed claims."""
         return [
-            c for c in self.claims.values()
-            if c.confidence >= min_confidence and not c.is_disputed
+            c for c in self.claims.values() if c.confidence >= min_confidence and not c.is_disputed
         ]
 
     def merge_claims(self, claim_id_a: str, claim_id_b: str) -> Claim | None:
@@ -239,7 +238,5 @@ class ClaimValidator:
             "confirmed": sum(1 for c in self.claims.values() if c.is_confirmed),
             "disputed": sum(1 for c in self.claims.values() if c.is_disputed),
             "stale": sum(1 for c in self.claims.values() if c.is_stale),
-            "avg_confidence": sum(
-                c.confidence for c in self.claims.values()
-            ) / len(self.claims),
+            "avg_confidence": sum(c.confidence for c in self.claims.values()) / len(self.claims),
         }

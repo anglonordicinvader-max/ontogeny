@@ -19,7 +19,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Callable, Awaitable
+from typing import Any, Awaitable, Callable
 
 import structlog
 
@@ -145,9 +145,7 @@ class RequestManager:
     def clear_cache(self, domain: str = ""):
         """Clear cache entries, optionally filtered by domain."""
         if domain:
-            self._cache = {
-                k: v for k, v in self._cache.items() if domain not in v.url
-            }
+            self._cache = {k: v for k, v in self._cache.items() if domain not in v.url}
         else:
             self._cache.clear()
 
@@ -166,7 +164,8 @@ class RequestManager:
     def _compute_backoff(self, attempt: int) -> float:
         """Compute exponential backoff with jitter."""
         import random
-        delay = self._backoff_base * (2 ** attempt)
+
+        delay = self._backoff_base * (2**attempt)
         delay = min(delay, self._backoff_max)
         return delay * (0.5 + random.random() * 0.5)
 
@@ -232,21 +231,15 @@ class RequestManager:
             last_error = None
             for attempt in range(3):
                 try:
-                    result = await asyncio.wait_for(
-                        fetch_fn(url), timeout=timeout
-                    )
+                    result = await asyncio.wait_for(fetch_fn(url), timeout=timeout)
                     event.set()
                     return result
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     last_error = f"Timeout after {timeout}s"
-                    self.logger.warning(
-                        "request_timeout", url=url, attempt=attempt
-                    )
+                    self.logger.warning("request_timeout", url=url, attempt=attempt)
                 except Exception as e:
                     last_error = str(e)
-                    self.logger.warning(
-                        "request_error", url=url, error=last_error, attempt=attempt
-                    )
+                    self.logger.warning("request_error", url=url, error=last_error, attempt=attempt)
                 if attempt < 2:
                     backoff = self._compute_backoff(attempt)
                     await asyncio.sleep(backoff)
@@ -264,9 +257,7 @@ class RequestManager:
 
     def get_stats(self) -> dict[str, Any]:
         now = time.time()
-        recent_bytes = sum(
-            b for t, b in self._bytes_timeline if now - t < 60
-        )
+        recent_bytes = sum(b for t, b in self._bytes_timeline if now - t < 60)
         return {
             "total_requests": self._total_requests,
             "active_requests": self._active_requests,
@@ -275,9 +266,7 @@ class RequestManager:
             "cache_size": len(self._cache),
             "cache_hits": self._cache_hits,
             "cache_misses": self._cache_misses,
-            "cache_hit_rate": (
-                self._cache_hits / max(1, self._cache_hits + self._cache_misses)
-            ),
+            "cache_hit_rate": (self._cache_hits / max(1, self._cache_hits + self._cache_misses)),
             "bytes_downloaded": self._bytes_downloaded,
             "bytes_last_minute": recent_bytes,
             "queue_size": self._queue.qsize(),

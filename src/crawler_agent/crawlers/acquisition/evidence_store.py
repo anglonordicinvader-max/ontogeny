@@ -144,9 +144,7 @@ class EvidenceStore:
                     if claim not in existing.contradictory_claims:
                         existing.contradictory_claims.append(claim)
                 # Update confidence if new source corroborates
-                existing.confidence = min(
-                    1.0, existing.confidence + 0.05
-                )
+                existing.confidence = min(1.0, existing.confidence + 0.05)
             return existing_id
 
         # Store new document
@@ -205,15 +203,14 @@ class EvidenceStore:
         if category:
             results = [d for d in results if d.source_category == category]
         if tags:
-            results = [
-                d for d in results if any(t in d.tags for t in tags)
-            ]
+            results = [d for d in results if any(t in d.tags for t in tags)]
         if min_confidence > 0:
             results = [d for d in results if d.confidence >= min_confidence]
         if query:
             query_lower = query.lower()
             results = [
-                d for d in results
+                d
+                for d in results
                 if query_lower in d.title.lower()
                 or query_lower in d.content.lower()
                 or query_lower in d.query.lower()
@@ -296,9 +293,8 @@ class EvidenceStore:
         return {
             "total_documents": len(self.documents),
             "unique_domains": len(domains),
-            "avg_confidence": sum(
-                d.confidence for d in self.documents.values()
-            ) / len(self.documents),
+            "avg_confidence": sum(d.confidence for d in self.documents.values())
+            / len(self.documents),
             "total_claims": sum(
                 len(d.supporting_claims) + len(d.contradictory_claims)
                 for d in self.documents.values()

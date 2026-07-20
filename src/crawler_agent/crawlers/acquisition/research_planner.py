@@ -178,86 +178,95 @@ class ResearchPlanner:
         goal_lower = goal.lower()
 
         # Knowledge gap objectives
-        objectives.append({
-            "description": f"Find authoritative sources about: {goal}",
-            "query": goal,
-            "evidence_types": ["documentation", "academic", "official"],
-            "categories": ["official_docs", "academic", "tech_docs"],
-            "confidence_target": 0.7,
-            "budget": 50,
-            "priority": 10,
-            "reasoning": "Primary knowledge acquisition",
-        })
+        objectives.append(
+            {
+                "description": f"Find authoritative sources about: {goal}",
+                "query": goal,
+                "evidence_types": ["documentation", "academic", "official"],
+                "categories": ["official_docs", "academic", "tech_docs"],
+                "confidence_target": 0.7,
+                "budget": 50,
+                "priority": 10,
+                "reasoning": "Primary knowledge acquisition",
+            }
+        )
 
         # Contradiction checking
-        objectives.append({
-            "description": f"Find contradictory or alternative views on: {goal}",
-            "query": f"{goal} vs alternatives comparison",
-            "evidence_types": ["discussion", "forum", "news"],
-            "categories": ["forum", "community", "reputable_news"],
-            "confidence_target": 0.5,
-            "budget": 30,
-            "priority": 5,
-            "reasoning": "Contradiction detection for robustness",
-        })
+        objectives.append(
+            {
+                "description": f"Find contradictory or alternative views on: {goal}",
+                "query": f"{goal} vs alternatives comparison",
+                "evidence_types": ["discussion", "forum", "news"],
+                "categories": ["forum", "community", "reputable_news"],
+                "confidence_target": 0.5,
+                "budget": 30,
+                "priority": 5,
+                "reasoning": "Contradiction detection for robustness",
+            }
+        )
 
         # Recent developments
-        objectives.append({
-            "description": f"Find recent developments related to: {goal}",
-            "query": f"{goal} latest developments 2024 2025",
-            "evidence_types": ["news", "blog", "release"],
-            "categories": ["reputable_news", "blog", "tech_docs"],
-            "confidence_target": 0.6,
-            "budget": 30,
-            "priority": 7,
-            "reasoning": "Ensure knowledge is current",
-        })
+        objectives.append(
+            {
+                "description": f"Find recent developments related to: {goal}",
+                "query": f"{goal} latest developments 2024 2025",
+                "evidence_types": ["news", "blog", "release"],
+                "categories": ["reputable_news", "blog", "tech_docs"],
+                "confidence_target": 0.6,
+                "budget": 30,
+                "priority": 7,
+                "reasoning": "Ensure knowledge is current",
+            }
+        )
 
         # Practical examples
-        objectives.append({
-            "description": f"Find practical examples and implementations of: {goal}",
-            "query": f"{goal} implementation example tutorial",
-            "evidence_types": ["code", "documentation", "tutorial"],
-            "categories": ["tech_docs", "community"],
-            "confidence_target": 0.6,
-            "budget": 40,
-            "priority": 6,
-            "reasoning": "Practical grounding for understanding",
-        })
+        objectives.append(
+            {
+                "description": f"Find practical examples and implementations of: {goal}",
+                "query": f"{goal} implementation example tutorial",
+                "evidence_types": ["code", "documentation", "tutorial"],
+                "categories": ["tech_docs", "community"],
+                "confidence_target": 0.6,
+                "budget": 40,
+                "priority": 6,
+                "reasoning": "Practical grounding for understanding",
+            }
+        )
 
         # Domain-specific adjustments
         if any(kw in goal_lower for kw in ["library", "package", "framework", "tool"]):
-            objectives.append({
-                "description": f"Check package registries for: {goal}",
-                "query": goal,
-                "evidence_types": ["package", "repository"],
-                "categories": ["official_api", "tech_docs"],
-                "confidence_target": 0.8,
-                "budget": 20,
-                "priority": 9,
-                "reasoning": "Package registry verification",
-            })
+            objectives.append(
+                {
+                    "description": f"Check package registries for: {goal}",
+                    "query": goal,
+                    "evidence_types": ["package", "repository"],
+                    "categories": ["official_api", "tech_docs"],
+                    "confidence_target": 0.8,
+                    "budget": 20,
+                    "priority": 9,
+                    "reasoning": "Package registry verification",
+                }
+            )
 
         if any(kw in goal_lower for kw in ["research", "paper", "study", "theory"]):
-            objectives.append({
-                "description": f"Find academic papers on: {goal}",
-                "query": goal,
-                "evidence_types": ["paper", "academic"],
-                "categories": ["academic"],
-                "confidence_target": 0.8,
-                "budget": 40,
-                "priority": 8,
-                "reasoning": "Academic grounding",
-            })
+            objectives.append(
+                {
+                    "description": f"Find academic papers on: {goal}",
+                    "query": goal,
+                    "evidence_types": ["paper", "academic"],
+                    "categories": ["academic"],
+                    "confidence_target": 0.8,
+                    "budget": 40,
+                    "priority": 8,
+                    "reasoning": "Academic grounding",
+                }
+            )
 
         return objectives
 
     def get_next_objective(self, plan: ResearchPlan) -> ResearchObjective | None:
         """Get the next objective to execute in a plan."""
-        pending = [
-            o for o in plan.objectives
-            if o.status == ObjectiveStatus.PENDING
-        ]
+        pending = [o for o in plan.objectives if o.status == ObjectiveStatus.PENDING]
         if not pending:
             return None
         # Sort by priority (descending)
@@ -288,8 +297,10 @@ class ResearchPlanner:
 
         # Update plan completion
         completed = sum(
-            1 for o in plan.objectives
-            if o.status in (ObjectiveStatus.COMPLETED, ObjectiveStatus.FAILED, ObjectiveStatus.ABANDONED)
+            1
+            for o in plan.objectives
+            if o.status
+            in (ObjectiveStatus.COMPLETED, ObjectiveStatus.FAILED, ObjectiveStatus.ABANDONED)
         )
         plan.completion_percentage = (completed / max(1, len(plan.objectives))) * 100
         if completed == len(plan.objectives):
@@ -300,14 +311,8 @@ class ResearchPlanner:
         if plan.budget_used >= plan.total_budget:
             return True, StopCondition.BUDGET_EXHAUSTED.value
 
-        active = [
-            o for o in plan.objectives
-            if o.status == ObjectiveStatus.IN_PROGRESS
-        ]
-        pending = [
-            o for o in plan.objectives
-            if o.status == ObjectiveStatus.PENDING
-        ]
+        active = [o for o in plan.objectives if o.status == ObjectiveStatus.IN_PROGRESS]
+        pending = [o for o in plan.objectives if o.status == ObjectiveStatus.PENDING]
 
         if not active and not pending:
             return True, StopCondition.ALL_SOURCES_EXHAUSTED.value

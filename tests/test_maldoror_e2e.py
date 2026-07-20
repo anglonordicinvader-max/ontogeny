@@ -28,22 +28,44 @@ Path("data/modification_memory").mkdir(parents=True, exist_ok=True)
 from src.crawler_agent.cognitive.backend import HybridBackend, LLMBackend
 from src.crawler_agent.cognitive.custom_model_manager import CustomModelManager, ModelState
 from src.crawler_agent.cognitive.model_trainer import ModelTrainer
-from src.crawler_agent.cognitive.modification_memory import ModificationMemory
+from src.crawler_agent.cognitive.modification_memory import ModificationMemory, ModificationRecord
+
+
+def seeded_memory(tmp_path: Path) -> ModificationMemory:
+    """Create hermetic, successful records instead of relying on ignored runtime data."""
+    memory = ModificationMemory(storage_path=str(tmp_path / "modification_memory"))
+    for index in range(10):
+        memory.record(
+            ModificationRecord(
+                id=f"test-{index}",
+                source_module="test",
+                target_file="module.py",
+                task_type="bug_fix",
+                description=f"Correct deterministic test defect {index}",
+                reasoning="The verified change preserves behavior while correcting the defect.",
+                original_code="value = False",
+                modified_code="value = True",
+                diff="- value = False\n+ value = True",
+                success=True,
+                quality_score=0.9,
+            )
+        )
+    return memory
 
 
 class TestModificationMemory:
     """Test training data ingestion and export."""
 
-    def test_loads_seed_data(self):
-        mm = ModificationMemory()
+    def test_loads_seed_data(self, tmp_path):
+        mm = seeded_memory(tmp_path)
         assert len(mm.records) >= 10, f"Expected >=10 records, got {len(mm.records)}"
 
-    def test_ready_for_training(self):
-        mm = ModificationMemory()
+    def test_ready_for_training(self, tmp_path):
+        mm = seeded_memory(tmp_path)
         assert mm.ready_for_training(min_examples=10)
 
-    def test_chatml_format(self):
-        mm = ModificationMemory()
+    def test_chatml_format(self, tmp_path):
+        mm = seeded_memory(tmp_path)
         data = mm.get_training_data(format="chatml", min_quality=0.6)
         assert len(data) >= 10
         assert "messages" in data[0]
@@ -53,29 +75,29 @@ class TestModificationMemory:
         assert msgs[1]["role"] == "user"
         assert msgs[2]["role"] == "assistant"
 
-    def test_alpaca_format(self):
-        mm = ModificationMemory()
+    def test_alpaca_format(self, tmp_path):
+        mm = seeded_memory(tmp_path)
         data = mm.get_training_data(format="alpaca", min_quality=0.6)
         assert len(data) >= 10
         assert "instruction" in data[0]
         assert "output" in data[0]
 
-    def test_quality_filter(self):
-        mm = ModificationMemory()
+    def test_quality_filter(self, tmp_path):
+        mm = seeded_memory(tmp_path)
         all_data = mm.get_training_data(min_quality=0.0)
         high_data = mm.get_training_data(min_quality=0.9)
         assert len(high_data) <= len(all_data)
 
-    def test_stats(self):
-        mm = ModificationMemory()
+    def test_stats(self, tmp_path):
+        mm = seeded_memory(tmp_path)
         stats = mm.get_stats()
         assert stats["total_records"] >= 10
         # get_stats uses default min_examples=20; check with lower threshold
         assert mm.ready_for_training(min_examples=10) is True
         assert stats["avg_quality"] > 0
 
-    def test_context_string(self):
-        mm = ModificationMemory()
+    def test_context_string(self, tmp_path):
+        mm = seeded_memory(tmp_path)
         ctx = mm.to_context()
         assert "Modification Memory:" in ctx
         assert "Total Records:" in ctx
@@ -84,15 +106,15 @@ class TestModificationMemory:
 class TestModelTrainer:
     """Test training orchestration."""
 
-    def test_version_increment(self):
-        mm = ModificationMemory()
+    def test_version_increment(self, tmp_path):
+        mm = seeded_memory(tmp_path)
         t1 = ModelTrainer(modification_memory=mm, output_dir="data/maldoror")
         v1 = t1.current_version
         assert v1.startswith("v"), f"Version should start with 'v', got {v1}"
 
-    def test_prepare_dataset(self):
-        mm = ModificationMemory()
-        t = ModelTrainer(modification_memory=mm, output_dir="data/maldoror")
+    def test_prepare_dataset(self, tmp_path):
+        mm = seeded_memory(tmp_path)
+        t = ModelTrainer(modification_memory=mm, output_dir=tmp_path / "maldoror")
         path = t.prepare_dataset()
         assert path.exists()
         lines = path.read_text().strip().split("\n")
@@ -102,15 +124,15 @@ class TestModelTrainer:
             data = json.loads(line)
             assert "messages" in data
 
-    def test_stats(self):
-        mm = ModificationMemory()
+    def test_stats(self, tmp_path):
+        mm = seeded_memory(tmp_path)
         t = ModelTrainer(modification_memory=mm, output_dir="data/maldoror")
         stats = t.get_stats()
         assert "total_runs" in stats
         assert "current_version" in stats
 
-    def test_context_string(self):
-        mm = ModificationMemory()
+    def test_context_string(self, tmp_path):
+        mm = seeded_memory(tmp_path)
         t = ModelTrainer(modification_memory=mm, output_dir="data/maldoror")
         ctx = t.to_context()
         assert "Model Trainer:" in ctx
@@ -238,18 +260,18 @@ class TestHybridBackendModifier:
 class TestPipelineIntegration:
     """Integration test: data -> memory -> dataset -> trainer."""
 
-    def test_full_data_flow(self):
+    def test_full_data_flow(self, tmp_path):
         # Clean up any leftover state from prior tests
         models_json = Path("data/maldoror/models.json")
         if models_json.exists():
             models_json.unlink()
 
         # 1. Load memory
-        mm = ModificationMemory()
+        mm = seeded_memory(tmp_path)
         assert len(mm.records) >= 10
 
         # 2. Prepare dataset
-        trainer = ModelTrainer(modification_memory=mm, output_dir="data/maldoror")
+        trainer = ModelTrainer(modification_memory=mm, output_dir=tmp_path / "maldoror")
         dataset_path = trainer.prepare_dataset()
         assert dataset_path.exists()
 

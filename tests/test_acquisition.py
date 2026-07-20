@@ -19,8 +19,8 @@ from pathlib import Path
 
 import pytest
 
-
 # ── Fixtures ───────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def tmp_state_dir():
@@ -31,6 +31,7 @@ def tmp_state_dir():
 @pytest.fixture
 def acquisition_config(tmp_state_dir):
     from crawler_agent.crawlers.acquisition.manager import AcquisitionConfig
+
     return AcquisitionConfig(
         state_dir=tmp_state_dir,
         max_concurrent_requests=5,
@@ -43,34 +44,40 @@ def acquisition_config(tmp_state_dir):
 @pytest.fixture
 def manager(acquisition_config):
     from crawler_agent.crawlers.acquisition.manager import AcquisitionManager
+
     return AcquisitionManager(config=acquisition_config)
 
 
 @pytest.fixture
 def evidence_store(tmp_state_dir):
     from crawler_agent.crawlers.acquisition.evidence_store import EvidenceStore
+
     return EvidenceStore(state_path=Path(tmp_state_dir) / "evidence.json")
 
 
 @pytest.fixture
 def source_scorer():
     from crawler_agent.crawlers.acquisition.source_scorer import SourceQualityScorer
+
     return SourceQualityScorer()
 
 
 @pytest.fixture
 def domain_policies(tmp_state_dir):
     from crawler_agent.crawlers.acquisition.domain_policies import DomainPolicies
+
     return DomainPolicies(state_path=Path(tmp_state_dir) / "policies.json")
 
 
 @pytest.fixture
 def claim_validator():
     from crawler_agent.crawlers.acquisition.knowledge_validator import ClaimValidator
+
     return ClaimValidator()
 
 
 # ── AcquisitionManager Tests ───────────────────────────────────────────
+
 
 class TestAcquisitionManager:
     def test_initialization(self, manager):
@@ -119,6 +126,7 @@ class TestAcquisitionManager:
     def test_register_crawler(self, manager):
         class MockCrawler:
             name = "test_crawler"
+
         crawler = MockCrawler()
         manager.register_crawler("test", crawler)
         assert manager.get_crawler("test") is crawler
@@ -131,9 +139,11 @@ class TestAcquisitionManager:
 
 # ── ResearchPlanner Tests ──────────────────────────────────────────────
 
+
 class TestResearchPlanner:
     def test_create_plan(self):
         from crawler_agent.crawlers.acquisition.research_planner import ResearchPlanner
+
         planner = ResearchPlanner()
         plan = planner.create_plan(
             objective="Test objective",
@@ -149,6 +159,7 @@ class TestResearchPlanner:
 
     def test_create_plan_from_goal(self):
         from crawler_agent.crawlers.acquisition.research_planner import ResearchPlanner
+
         planner = ResearchPlanner()
         plan = planner.create_plan_from_goal(
             goal_description="Learn about Python libraries",
@@ -160,8 +171,10 @@ class TestResearchPlanner:
 
     def test_get_next_objective(self):
         from crawler_agent.crawlers.acquisition.research_planner import (
-            ResearchPlanner, ObjectiveStatus,
+            ObjectiveStatus,
+            ResearchPlanner,
         )
+
         planner = ResearchPlanner()
         plan = planner.create_plan(
             objective="Test",
@@ -176,8 +189,10 @@ class TestResearchPlanner:
 
     def test_should_stop_budget(self):
         from crawler_agent.crawlers.acquisition.research_planner import (
-            ResearchPlanner, ResearchPlan,
+            ResearchPlan,
+            ResearchPlanner,
         )
+
         planner = ResearchPlanner()
         plan = ResearchPlan(total_budget=5, budget_used=5)
         should_stop, reason = planner.should_stop(plan)
@@ -186,8 +201,12 @@ class TestResearchPlanner:
 
     def test_should_stop_all_completed(self):
         from crawler_agent.crawlers.acquisition.research_planner import (
-            ResearchPlanner, ResearchPlan, ResearchObjective, ObjectiveStatus,
+            ObjectiveStatus,
+            ResearchObjective,
+            ResearchPlan,
+            ResearchPlanner,
         )
+
         planner = ResearchPlanner()
         plan = ResearchPlan(total_budget=100)
         obj = ResearchObjective(status=ObjectiveStatus.COMPLETED)
@@ -197,6 +216,7 @@ class TestResearchPlanner:
 
     def test_plan_summary(self):
         from crawler_agent.crawlers.acquisition.research_planner import ResearchPlanner
+
         planner = ResearchPlanner()
         plan = planner.create_plan(
             objective="Test",
@@ -209,9 +229,11 @@ class TestResearchPlanner:
 
 # ── EvidenceStore Tests ────────────────────────────────────────────────
 
+
 class TestEvidenceStore:
     def test_store_document(self, evidence_store):
         from crawler_agent.crawlers.acquisition.evidence_store import EvidenceDocument
+
         doc = EvidenceDocument(
             canonical_url="https://example.com/article",
             title="Test Article",
@@ -226,6 +248,7 @@ class TestEvidenceStore:
 
     def test_deduplication(self, evidence_store):
         from crawler_agent.crawlers.acquisition.evidence_store import EvidenceDocument
+
         doc1 = EvidenceDocument(
             canonical_url="https://example.com/v1",
             title="Test",
@@ -249,6 +272,7 @@ class TestEvidenceStore:
 
     def test_search_by_domain(self, evidence_store):
         from crawler_agent.crawlers.acquisition.evidence_store import EvidenceDocument
+
         for i in range(3):
             doc = EvidenceDocument(
                 canonical_url=f"https://example.com/{i}",
@@ -263,6 +287,7 @@ class TestEvidenceStore:
 
     def test_search_by_tag(self, evidence_store):
         from crawler_agent.crawlers.acquisition.evidence_store import EvidenceDocument
+
         doc = EvidenceDocument(
             canonical_url="https://example.com/tagged",
             content="Tagged content",
@@ -276,6 +301,7 @@ class TestEvidenceStore:
 
     def test_aggregate_confidence(self, evidence_store):
         from crawler_agent.crawlers.acquisition.evidence_store import EvidenceDocument
+
         for i in range(3):
             doc = EvidenceDocument(
                 canonical_url=f"https://example.com/{i}",
@@ -295,8 +321,10 @@ class TestEvidenceStore:
 
     def test_save_load_state(self, tmp_state_dir):
         from crawler_agent.crawlers.acquisition.evidence_store import (
-            EvidenceStore, EvidenceDocument,
+            EvidenceDocument,
+            EvidenceStore,
         )
+
         path = Path(tmp_state_dir) / "test_evidence.json"
         store = EvidenceStore(state_path=path)
         doc = EvidenceDocument(
@@ -315,9 +343,11 @@ class TestEvidenceStore:
 
 # ── SourceQualityScorer Tests ──────────────────────────────────────────
 
+
 class TestSourceQualityScorer:
     def test_classify_domain(self, source_scorer):
         from crawler_agent.crawlers.acquisition.source_scorer import SourceCategory
+
         assert source_scorer.classify_domain("arxiv.org") == SourceCategory.ACADEMIC
         assert source_scorer.classify_domain("github.com") == SourceCategory.TECH_DOCS
         assert source_scorer.classify_domain("stackoverflow.com") == SourceCategory.FORUM
@@ -325,6 +355,7 @@ class TestSourceQualityScorer:
 
     def test_score(self, source_scorer):
         from crawler_agent.crawlers.acquisition.source_scorer import SourceCategory
+
         score = source_scorer.score("arxiv.org", SourceCategory.ACADEMIC)
         assert score.quality_score > 0.5
         assert score.category == SourceCategory.ACADEMIC
@@ -347,6 +378,7 @@ class TestSourceQualityScorer:
 
     def test_rank_sources(self, source_scorer):
         from crawler_agent.crawlers.acquisition.source_scorer import SourceCategory
+
         source_scorer.classify_domain("arxiv.org")
         source_scorer.classify_domain("blog.example.com")
         ranked = source_scorer.rank_sources(["arxiv.org", "blog.example.com"])
@@ -361,6 +393,7 @@ class TestSourceQualityScorer:
 
 
 # ── DomainPolicies Tests ──────────────────────────────────────────────
+
 
 class TestDomainPolicies:
     def test_get_policy(self, domain_policies):
@@ -403,6 +436,7 @@ class TestDomainPolicies:
 
     def test_save_load(self, tmp_state_dir):
         from crawler_agent.crawlers.acquisition.domain_policies import DomainPolicies
+
         path = Path(tmp_state_dir) / "test_policies.json"
         dp = DomainPolicies(state_path=path)
         dp.pause_domain("test.com", "testing")
@@ -418,11 +452,14 @@ class TestDomainPolicies:
 
 # ── ProxyManager Tests ────────────────────────────────────────────────
 
+
 class TestProxyManager:
     def test_register_and_select(self):
         from crawler_agent.crawlers.acquisition.proxy_manager import (
-            ProxyManager, ProxyEndpoint,
+            ProxyEndpoint,
+            ProxyManager,
         )
+
         pm = ProxyManager()
         proxy = ProxyEndpoint(url="http://proxy:8080", name="test_proxy", region="us")
         pm.register(proxy)
@@ -432,8 +469,11 @@ class TestProxyManager:
 
     def test_health_tracking(self):
         from crawler_agent.crawlers.acquisition.proxy_manager import (
-            ProxyManager, ProxyEndpoint, ProxyStatus,
+            ProxyEndpoint,
+            ProxyManager,
+            ProxyStatus,
         )
+
         pm = ProxyManager()
         proxy = ProxyEndpoint(url="http://proxy:8080", name="test")
         pm.register(proxy)
@@ -444,8 +484,10 @@ class TestProxyManager:
 
     def test_select_region(self):
         from crawler_agent.crawlers.acquisition.proxy_manager import (
-            ProxyManager, ProxyEndpoint,
+            ProxyEndpoint,
+            ProxyManager,
         )
+
         pm = ProxyManager()
         pm.register(ProxyEndpoint(url="http://us:8080", name="us", region="us"))
         pm.register(ProxyEndpoint(url="http://eu:8080", name="eu", region="eu"))
@@ -455,6 +497,7 @@ class TestProxyManager:
 
     def test_stats(self):
         from crawler_agent.crawlers.acquisition.proxy_manager import ProxyManager
+
         pm = ProxyManager()
         stats = pm.get_stats()
         assert stats["total"] == 0
@@ -462,9 +505,11 @@ class TestProxyManager:
 
 # ── RequestManager Tests ──────────────────────────────────────────────
 
+
 class TestRequestManager:
     def test_cache(self):
         from crawler_agent.crawlers.acquisition.request_manager import RequestManager
+
         rm = RequestManager()
         rm.store_cache("https://example.com", 200, b"content", {"ct": "text/html"})
         cached = rm.get_cached("https://example.com")
@@ -473,12 +518,14 @@ class TestRequestManager:
 
     def test_cache_miss(self):
         from crawler_agent.crawlers.acquisition.request_manager import RequestManager
+
         rm = RequestManager()
         cached = rm.get_cached("https://nonexistent.com")
         assert cached is None
 
     def test_deduplication(self):
         from crawler_agent.crawlers.acquisition.request_manager import RequestManager
+
         rm = RequestManager()
         assert rm.is_duplicate("https://example.com") is False
         rm._request_history["https://example.com"] = __import__("time").time()
@@ -486,6 +533,7 @@ class TestRequestManager:
 
     def test_budget(self):
         from crawler_agent.crawlers.acquisition.request_manager import RequestManager
+
         rm = RequestManager(budget_per_session=5)
         assert rm.can_request() is True
         rm._total_budget_used = 5
@@ -493,6 +541,7 @@ class TestRequestManager:
 
     def test_stats(self):
         from crawler_agent.crawlers.acquisition.request_manager import RequestManager
+
         rm = RequestManager()
         stats = rm.get_stats()
         assert "total_requests" in stats
@@ -501,9 +550,11 @@ class TestRequestManager:
 
 # ── ClaimValidator Tests ───────────────────────────────────────────────
 
+
 class TestClaimValidator:
     def test_add_claim(self, claim_validator):
         from crawler_agent.crawlers.acquisition.knowledge_validator import Claim
+
         claim = claim_validator.add_claim(
             text="Python is a programming language",
             subject="Python",
@@ -561,9 +612,11 @@ class TestClaimValidator:
 
 # ── RevalidationScheduler Tests ────────────────────────────────────────
 
+
 class TestRevalidationScheduler:
     def test_schedule_stale_check(self):
         from crawler_agent.crawlers.acquisition.revalidation import RevalidationScheduler
+
         rs = RevalidationScheduler()
         task = rs.schedule_stale_check("claim1", "https://example.com", "example.com")
         assert task is not None
@@ -572,6 +625,7 @@ class TestRevalidationScheduler:
 
     def test_complete_task(self):
         from crawler_agent.crawlers.acquisition.revalidation import RevalidationScheduler
+
         rs = RevalidationScheduler()
         task = rs.schedule_stale_check("claim1", "url", "domain")
         rs.complete_task(task.id, success=True, summary="Still valid")
@@ -580,6 +634,7 @@ class TestRevalidationScheduler:
 
     def test_stats(self):
         from crawler_agent.crawlers.acquisition.revalidation import RevalidationScheduler
+
         rs = RevalidationScheduler()
         stats = rs.get_stats()
         assert "total_tasks" in stats
@@ -587,9 +642,11 @@ class TestRevalidationScheduler:
 
 # ── AcquisitionObservability Tests ──────────────────────────────────────────
 
+
 class TestAcquisitionObservability:
     def test_record_request(self):
         from crawler_agent.crawlers.acquisition.observability import AcquisitionObservability
+
         obs = AcquisitionObservability()
         obs.record_request(latency_ms=150.0, success=True)
         obs.record_request(latency_ms=200.0, success=False)
@@ -599,6 +656,7 @@ class TestAcquisitionObservability:
 
     def test_record_evidence(self):
         from crawler_agent.crawlers.acquisition.observability import AcquisitionObservability
+
         obs = AcquisitionObservability()
         obs.record_evidence(accepted=True)
         obs.record_evidence(accepted=False, duplicate=True)
@@ -609,6 +667,7 @@ class TestAcquisitionObservability:
 
     def test_dashboard_data(self):
         from crawler_agent.crawlers.acquisition.observability import AcquisitionObservability
+
         obs = AcquisitionObservability()
         data = obs.get_dashboard_data()
         assert "status" in data
@@ -617,6 +676,7 @@ class TestAcquisitionObservability:
 
     def test_multiple_snapshots(self):
         from crawler_agent.crawlers.acquisition.observability import AcquisitionObservability
+
         obs = AcquisitionObservability()
         obs.record_request()
         obs.snapshot()
@@ -626,6 +686,7 @@ class TestAcquisitionObservability:
 
 
 # ── Integration Tests ─────────────────────────────────────────────────
+
 
 class TestIntegration:
     def test_full_pipeline(self, manager):
@@ -647,6 +708,7 @@ class TestIntegration:
     def test_source_scoring_integration(self, manager):
         """Test source scoring with the manager."""
         from crawler_agent.crawlers.acquisition.source_scorer import SourceCategory
+
         manager.source_scorer.classify_domain("docs.python.org")
         score = manager.source_scorer.score("docs.python.org", SourceCategory.OFFICIAL_DOCS)
         assert score.quality_score > 0.5
@@ -661,6 +723,7 @@ class TestIntegration:
     def test_claim_validator_with_evidence(self, manager):
         """Test claims linked to evidence."""
         from crawler_agent.crawlers.acquisition.evidence_store import EvidenceDocument
+
         doc = EvidenceDocument(
             canonical_url="https://example.com/claim",
             content="Test content with claims",

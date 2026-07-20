@@ -1,114 +1,56 @@
 # Ontogeny Demo Guide
 
-## What Is Ontogeny?
+## Purpose
 
-Ontogeny is a proto-AGI cognitive agent that autonomously acquires knowledge, reasons about evidence, and recursively improves its own capabilities. It operates in continuous cognitive cycles: setting goals, planning actions, acquiring evidence from external sources, writing to persistent memory, reflecting on outcomes, and proposing safe self-improvements.
+The Build Week demonstration presents Ontogeny as a live cognitive research workstation. It distinguishes controlled presentation data from live cognition and never substitutes placeholders for Blender or MuJoCo output.
 
-## What Makes It Distinct
+## Before presenting
 
-- **Integrated cognitive loop**: Goal → Planning → Knowledge Acquisition → Evidence → Memory → Reasoning → Reflection → Self-Improvement — all wired together in a single autonomous cycle
-- **Knowledge Acquisition System**: 30 specialized engines with source scoring, evidence validation, claim tracking, and provenance — not just web scraping
-- **Maldoror**: A QLoRA fine-tuned model specialized in recursive self-modification, with 6-phase training pipeline, quality gates, and rollback safety
-- **MuJoCo robotics**: Real-time physics simulation with TOCABI (33-DOF) and Unitree G1 (29-DOF) humanoids
-- **Four-tier hybrid LLM routing**: Automatic task-based routing between routine, code, reasoning, and self-modification models
+1. Install the Python and desktop dependencies from `README.md`.
+2. Confirm Blender 5.2 is installed or set `BLENDER_EXE`.
+3. Confirm the TOCABI and Unitree G1 assets described in `PACKAGING.md` are present.
+4. From `desktop/`, run `npm run dev` for development or launch the packaged portable executable.
+5. Wait for the status bar to report the backend connection.
+6. Open Blender and MuJoCo once and confirm each panel reports its own live connection.
 
-## Architecture Overview
+## Recommended sequence
 
-```
-Goal → Planning → Knowledge Acquisition → Evidence → Memory → Reasoning → Reflection → Self-Improvement
-```
+1. Open **Demo** and select **Start Demo**.
+2. Advance through the cognitive stages manually, or enable auto-play.
+3. Open **Knowledge** to show backend-derived concepts and relations. Empty state means no live knowledge has been ingested; it is not filled artificially.
+4. Open **Blender**, select a world, and show that only the embodiment reloads.
+5. Open **MuJoCo**, press **Reset**, **Walk**, then **Freeze**. Freeze should stop physics immediately; Reset should restore the deterministic initial pose.
+6. Use MuJoCo **Demo** for the repeatable walk, stop, turn, return, and reset sequence.
+7. Open **Cognitive** or **Activity** to show genuine backend status/events.
 
-Each component is a real, tested subsystem:
-- **30 Acquisition Engines** — GitHub, ArXiv, Semantic Scholar, HuggingFace, etc.
-- **10-module Knowledge Acquisition System** — evidence store, source scorer, claim validator, revalidation
-- **5-layer Memory** — working, episodic, semantic, procedural, identity
-- **6-phase Maldoror Pipeline** — self-training, contrastive, population, curriculum, adversarial, architecture
-- **MuJoCo Physics** — TOCABI + Unitree G1 with standing/walking controllers
-- **307 tests** — all passing
+## Demo Mode truth boundary
 
-## How to Install
+The cognitive walkthrough uses labeled controlled fixtures in an isolated demo session for repeatability. Live Blender frames, MuJoCo frames, physics telemetry, world changes, backend health, and autonomous embodiment results are never fixtures. Maldoror proposals shown in the controlled walkthrough are dry-run artifacts.
 
-```bash
-# Clone and install
-git clone https://github.com/anglonordicinvader-max/ontogeny.git
-cd ontogeny
-pip install -e .
+Autonomous embodiment occurs only when a genuine backend plan produces an allowlisted `embodiment_command`. The interface does not invent a plan or movement.
 
-# Install desktop UI dependencies
-cd desktop/renderer && npm install && cd ../..
-```
+## Reset
 
-## How to Launch
-
-### Desktop UI (recommended)
-```bash
-cd desktop && npx electron .
-```
-
-### Demo Mode
-```bash
-cd desktop && npx electron . --dev
-# In the UI, click the "Demo" tab in the sidebar, then click "Start Demo"
-```
-
-### CLI
-```bash
-python -m crawler_agent.main --demo
-```
-
-## How to Enter Demo Mode
-
-1. Launch the desktop UI
-2. Click the **Demo** tab in the sidebar (first tab, play icon)
-3. Click **Start Demo**
-4. Watch the guided walkthrough, or click **Next Step** to advance manually
-5. Use **Auto-play** to advance automatically every 2 seconds
-
-## How to Reset Demo Mode
-
-Click the **Reset** button in the Demo panel, or use the command palette:
-- Press `Ctrl/Cmd+K`
-- Type "reset demo"
-
-From any tab, press `Ctrl/Cmd+Shift+R` to reset Demo Mode without triggering a browser refresh.
-
-Demo mode uses a separate session namespace. Resetting clears demo state without affecting normal agent data.
-
-## Expected Demo Duration
-
-- **Auto-play**: ~16 seconds (8 steps × 2 seconds)
-- **Manual**: 2-5 minutes depending on narration
-- **Recorded demo**: 3-5 minutes with script
-
-## Optional Dependencies
-
-| Dependency | Required? | What it enables |
-|------------|-----------|-----------------|
-| Python 3.11+ | Yes | Backend, cognitive systems |
-| Ollama | No (fixtures used) | Live LLM routing |
-| MuJoCo 3.10+ | No | Robotics simulation |
-| Blender 5.2 | No | Physics sandbox |
-| Docker | No | Code execution sandbox |
-| Node.js 18+ | Yes | Desktop UI |
-
-## Known Limitations
-
-- Demo mode uses **controlled demonstration fixtures**, not live autonomous execution
-- MuJoCo and Blender panels show status but may not connect without the respective software installed
-- The Knowledge Acquisition System is fully implemented but currently decoupled from the orchestrator — demo shows fixture-based evidence
-- Maldoror proposals are **dry-run only** — no actual source code is modified during demo
-- WebSocket connection requires the Python backend to be running (started automatically by Electron)
+- Demo panel: **Reset**.
+- Command palette: `Ctrl/Cmd+K`, then **Reset Demo**.
+- Global shortcut: `Ctrl/Cmd+Shift+R`.
+- MuJoCo: **Reset** affects only the physics embodiment.
+- Blender world changes affect only the Blender embodiment.
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| "UI Disconnected" in status bar | Backend not running. Restart the app. |
-| Demo tab shows nothing | Ensure backend is running. Check `http://127.0.0.1:<port>/api/health` |
-| MuJoCo panel shows disconnected | MuJoCo not installed. Run `pip install mujoco>=3.10` |
-| Blender panel shows placeholder | Blender not installed or not at expected path |
-| Build fails | Run `cd desktop/renderer && npm install` |
+| Symptom | Check |
+|---|---|
+| UI disconnected | Restart Electron and inspect the backend process output. |
+| Blender disconnected | Verify `BLENDER_EXE`, Blender version, port 8766, and vendored `websockets`. |
+| Blender has no image | Check the Blender render error in process output; no fallback image is used. |
+| MuJoCo disconnected | Install `backend/requirements-ui.txt`, verify assets, and check port 8767. |
+| Walk has no visible motion | Reset, select Walk, and verify telemetry controller mode is `walk`. |
+| Freeze does not stop | Verify the command result and controller mode `freeze`; capture logs as a regression. |
+| World switch remains loading | Verify the selected ID is in the live `world_catalog`. |
+| Knowledge Graph is empty | Run live cognition/ingestion; the UI intentionally does not fabricate nodes. |
 
-## Which Portions Were Implemented Using Codex
+## Expected duration
 
-See `CODEX_INCREMENTAL_TASKS.md` for the list of practical features implemented by Codex in the isolated worktree. Codex contributions are limited to UI improvements and small functional additions — the core architecture, cognitive systems, and Knowledge Acquisition System were implemented by the primary developer.
+- Controlled walkthrough: roughly 20 seconds in auto-play.
+- Full narrated cognitive and embodiment demonstration: 3–5 minutes.

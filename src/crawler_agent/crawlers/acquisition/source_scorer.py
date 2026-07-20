@@ -141,6 +141,7 @@ class SourceQualityScorer:
 
         # Citation score (logarithmic scaling, capped at 1.0)
         import math
+
         if profile.citation_count > 0:
             components["citations"] = min(1.0, math.log1p(profile.citation_count) / 10.0)
         else:
@@ -167,9 +168,7 @@ class SourceQualityScorer:
         components["historical_reliability"] = profile.historical_reliability
 
         # Weighted sum
-        quality_score = sum(
-            components[k] * self.WEIGHTS[k] for k in self.WEIGHTS
-        )
+        quality_score = sum(components[k] * self.WEIGHTS[k] for k in self.WEIGHTS)
         quality_score = max(0.0, min(1.0, quality_score))
 
         # Confidence based on data availability
@@ -210,17 +209,13 @@ class SourceQualityScorer:
             profile.successful_fetches += 1
         # Exponential moving average for latency
         alpha = 0.3
-        profile.avg_latency_ms = (
-            alpha * latency_ms + (1 - alpha) * profile.avg_latency_ms
-        )
+        profile.avg_latency_ms = alpha * latency_ms + (1 - alpha) * profile.avg_latency_ms
         profile.last_updated = datetime.utcnow()
         # Completeness hint from content length
         if content_length > 0:
             expected = max(1000, profile.metadata.get("avg_content_length", 1000))
             profile.completeness = min(1.0, content_length / expected)
-            profile.metadata["avg_content_length"] = (
-                0.7 * expected + 0.3 * content_length
-            )
+            profile.metadata["avg_content_length"] = 0.7 * expected + 0.3 * content_length
 
     def update_corroboration(self, domain: str, agrees: bool):
         """Record corroboration or contradiction from another source."""
@@ -360,8 +355,6 @@ class SourceQualityScorer:
         return {
             "total_sources": len(self.profiles),
             "categories": categories,
-            "avg_reliability": sum(
-                p.historical_reliability for p in self.profiles.values()
-            )
+            "avg_reliability": sum(p.historical_reliability for p in self.profiles.values())
             / len(self.profiles),
         }
