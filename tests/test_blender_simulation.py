@@ -66,6 +66,37 @@ class TestBlenderSimulationSyntax:
         for field in ["status", "mode", "world", "emotion", "frame", "running"]:
             assert f'"{field}"' in source or f"'{field}'" in source, f"Missing field: {field}"
 
+    def test_real_renderer_has_single_blender_thread_owner(self):
+        """bpy rendering must not be delegated while the scene is mutated by async tasks."""
+        path = os.path.join(os.path.dirname(__file__), "..", "backend", "blender_simulation.py")
+        with open(path, encoding="utf-8") as f:
+            source = f.read()
+        assert "ThreadPoolExecutor" not in source
+        assert "_render_executor" not in source
+        assert "self._render_to_file()" in source
+
+    def test_renderer_never_generates_placeholder_frames(self):
+        path = os.path.join(os.path.dirname(__file__), "..", "backend", "blender_simulation.py")
+        with open(path, encoding="utf-8") as f:
+            source = f.read()
+        assert "_generate_placeholder_frame" not in source
+
+    def test_blender_frontend_owns_the_supplied_service_port(self):
+        """App supplies backend + 1; BlenderEmbed must not offset it into MuJoCo's port."""
+        path = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "desktop",
+            "renderer",
+            "src",
+            "components",
+            "BlenderEmbed.tsx",
+        )
+        with open(path, encoding="utf-8") as f:
+            source = f.read()
+        assert "useState<number>(backendPort);" in source
+        assert "useState<number>(backendPort + 1);" not in source
+
 
 class TestBlenderSimulationImportChain:
     """Verify the import chain in blender_simulation.py doesn't crash."""

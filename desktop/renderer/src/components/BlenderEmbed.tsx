@@ -30,7 +30,7 @@ export function BlenderEmbed({ backendPort = 8766 }: BlenderEmbedProps) {
   const wsRef = useRef<WebSocket | null>(null);
   const frameCount = useRef(0);
   const lastFpsTime = useRef(Date.now());
-  const [blenderPort, setBlenderPort] = useState<number>(backendPort + 1);
+  const [blenderPort, setBlenderPort] = useState<number>(backendPort);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && (window as any).electronAPI?.getBlenderPort) {

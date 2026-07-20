@@ -3,10 +3,8 @@ import math
 import os
 import sys
 import tempfile
-import threading
 import time
 import warnings
-from concurrent.futures import ThreadPoolExecutor
 
 import bpy
 
@@ -115,10 +113,9 @@ class BlenderSimulation:
         self.world_name = world_name
         self.world_info = None
         self.tmp_path = os.path.join(tempfile.gettempdir(), "ontogeny_rt.png")
-        self._render_lock = threading.Lock()
-        self._render_executor = ThreadPoolExecutor(max_workers=1)
         self._pending_frame = None
         self._render_ready = False
+        self._render_error = None
         self._skip_cache_setup = False
 
         # Initialize WorldSelector for autonomous world selection
@@ -723,28 +720,25 @@ class BlenderSimulation:
                 part.rotation_euler.x = 0.05 * math.sin(emotion_t * 0.3)
 
     # ================================================================
-    # Render (threaded)
+    # Render — bpy scene access must remain on Blender's owning thread.
     # ================================================================
     def _render_to_file(self):
-        with self._render_lock:
+        self._render_ready = False
+        self._pending_frame = None
+        self._render_error = None
+        try:
+            # Aggressively clean depsgraph triggers before render
+            self._cleanup_depsgraph_triggers()
+            # Try real Cycles render
+            self._try_render_cycles()
+        except Exception as e:
+            print(f"[Blender] Cycles render failed: {e}", flush=True)
             try:
-                # Aggressively clean depsgraph triggers before render
-                self._cleanup_depsgraph_triggers()
-                # Try real Cycles render
-                self._try_render_cycles()
-            except Exception as e:
-                print(f"[Blender] Cycles render failed: {e}", flush=True)
-                try:
-                    # Fallback: try Eevee (faster, different depsgraph path)
-                    self._try_render_eevee()
-                except Exception as e2:
-                    print(f"[Blender] Eevee render failed: {e2}", flush=True)
-                    try:
-                        # Last resort: OpenGL viewport capture
-                        self._try_viewport_capture()
-                    except Exception as e3:
-                        print(f"[Blender] Viewport capture failed: {e3}", flush=True)
-                        self._generate_placeholder_frame()
+                # Fallback: try Eevee (faster, different depsgraph path)
+                self._try_render_eevee()
+            except Exception as e2:
+                print(f"[Blender] Eevee render failed: {e2}", flush=True)
+                self._render_error = str(e2)
 
     def _cleanup_depsgraph_triggers(self):
         """Remove objects that trigger the Blender 5.2 depsgraph speaker crash."""
@@ -774,11 +768,14 @@ class BlenderSimulation:
 
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
             tmp_path = f.name
-        scene.render.filepath = tmp_path
-        bpy.ops.render.render(write_still=True)
-        with open(tmp_path, "rb") as f:
-            png_bytes = f.read()
-        os.unlink(tmp_path)
+        try:
+            scene.render.filepath = tmp_path
+            bpy.ops.render.render(write_still=True)
+            with open(tmp_path, "rb") as f:
+                png_bytes = f.read()
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
         if len(png_bytes) > 100:  # Valid PNG
             self._pending_frame = base64.b64encode(png_bytes).decode("ascii")
             self._render_ready = True
@@ -790,157 +787,26 @@ class BlenderSimulation:
         import bpy
         import base64
         scene = bpy.context.scene
-        scene.render.engine = "BLENDER_EEVEE_NEXT"
+        scene.render.engine = "BLENDER_EEVEE"
         scene.render.resolution_x = 480
         scene.render.resolution_y = 360
         scene.render.resolution_percentage = 100
 
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
             tmp_path = f.name
-        scene.render.filepath = tmp_path
-        bpy.ops.render.render(write_still=True)
-        with open(tmp_path, "rb") as f:
-            png_bytes = f.read()
-        os.unlink(tmp_path)
+        try:
+            scene.render.filepath = tmp_path
+            bpy.ops.render.render(write_still=True)
+            with open(tmp_path, "rb") as f:
+                png_bytes = f.read()
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
         if len(png_bytes) > 100:
             self._pending_frame = base64.b64encode(png_bytes).decode("ascii")
             self._render_ready = True
         else:
             raise RuntimeError("Empty Eevee render")
-
-    def _try_viewport_capture(self):
-        """Capture the 3D viewport via OpenGL offscreen buffer."""
-        import bpy
-        import base64
-        import gpu
-        from gpu_extras.batch import batch_for_shader
-
-        scene = bpy.context.scene
-        width, height = 480, 360
-
-        # Create offscreen buffer
-        offscreen = gpu.types.GPUOffScreen(width, height)
-        offscreen.bind()
-
-        # Clear and draw
-        fb = gpu.state.active_framebuffer_get()
-        fb.clear(color=(0.02, 0.02, 0.04, 1.0))
-
-        # Get viewport matrix from 3D view
-        region = None
-        for area in bpy.context.screen.areas:
-            if area.type == 'VIEW_3D':
-                for r in area.regions:
-                    if r.type == 'WINDOW':
-                        region = r
-                        break
-                break
-
-        if region:
-            override = bpy.context.copy()
-            override['area'] = area
-            override['region'] = region
-            with bpy.context.temp_override(**override):
-                bpy.ops.view3d.view3d_view_to_render()
-
-        # Read pixels
-        buffer = fb.read_color(0, 0, width, height, 4, 0, 'FLOAT')
-        pixels = bytes(buffer)
-
-        offscreen.unbind()
-        offscreen.free()
-
-        # Convert to PNG
-        import struct, zlib
-        def make_png(w, h, pixels):
-            def chunk(ctype, data):
-                c = ctype + data
-                crc = zlib.crc32(c) & 0xFFFFFFFF
-                return struct.pack(">I", len(data)) + c + struct.pack(">I", crc)
-            sig = b"\x89PNG\r\n\x1a\n"
-            ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0))
-            raw = b""
-            for y in range(h):
-                raw += b"\x00" + pixels[y * w * 4 : (y + 1) * w * 4]
-            idat = chunk(b"IDAT", zlib.compress(raw))
-            iend = chunk(b"IEND", b"")
-            return sig + ihdr + idat + iend
-
-        png_data = make_png(width, height, pixels)
-        self._pending_frame = base64.b64encode(png_data).decode("ascii")
-        self._render_ready = True
-
-    def _generate_placeholder_frame(self):
-        """Generate a placeholder PNG with scene info overlay."""
-        import struct
-        import zlib
-
-        width, height = 480, 360
-
-        # Generate a dark gradient with subtle scene indicators
-        if self.mode == "anatomy":
-            base_r, base_g, base_b = 26, 30, 42
-        elif self.mode == "sphere":
-            base_r, base_g, base_b = 20, 28, 40
-        else:
-            base_r, base_g, base_b = 22, 24, 32
-
-        # Add subtle animation based on frame count
-        pulse = int(3 * math.sin(self.frame * 0.1))
-
-        raw_data = bytearray(width * height * 3)
-        for y in range(height):
-            for x in range(width):
-                idx = (y * width + x) * 3
-                # Dark gradient from top to bottom
-                grad = y / height
-                r = max(0, min(255, int(base_r * (0.5 + 0.5 * grad)) + pulse))
-                g = max(0, min(255, int(base_g * (0.5 + 0.5 * grad)) + pulse))
-                b = max(0, min(255, int(base_b * (0.6 + 0.4 * grad))))
-                raw_data[idx] = r
-                raw_data[idx + 1] = g
-                raw_data[idx + 2] = b
-
-                # Draw a simple grid pattern
-                if x % 60 == 0 or y % 60 == 0:
-                    raw_data[idx] = min(255, r + 8)
-                    raw_data[idx + 1] = min(255, g + 8)
-                    raw_data[idx + 2] = min(255, b + 8)
-
-        # Draw a centered indicator circle
-        cx, cy, radius = width // 2, height // 2, 40
-        for y in range(max(0, cy - radius), min(height, cy + radius)):
-            for x in range(max(0, cx - radius), min(width, cx + radius)):
-                dist = math.sqrt((x - cx) ** 2 + (y - cy) ** 2)
-                if radius - 2 < dist < radius:
-                    idx = (y * width + x) * 3
-                    raw_data[idx] = min(255, base_r + 30)
-                    raw_data[idx + 1] = min(255, base_g + 40)
-                    raw_data[idx + 2] = min(255, base_b + 50)
-
-        def make_png(w, h, pixels):
-            def chunk(ctype, data):
-                c = ctype + data
-                crc = zlib.crc32(c) & 0xFFFFFFFF
-                return struct.pack(">I", len(data)) + c + struct.pack(">I", crc)
-
-            sig = b"\x89PNG\r\n\x1a\n"
-            ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
-            raw = b""
-            for y in range(h):
-                raw += b"\x00" + bytes(pixels[y * w * 3 : (y + 1) * w * 3])
-            idat = chunk(b"IDAT", zlib.compress(raw))
-            iend = chunk(b"IEND", b"")
-            return sig + ihdr + idat + iend
-
-        png_data = make_png(width, height, raw_data)
-        self._pending_frame = base64.b64encode(png_data).decode("ascii")
-        self._render_ready = True
-
-    def _render_async(self):
-        self._render_ready = False
-        self._pending_frame = None
-        self._render_executor.submit(self._render_to_file)
 
     # ================================================================
     # WebSocket + main loop
@@ -951,12 +817,7 @@ class BlenderSimulation:
                 try:
                     if self.running:
                         self.animate()
-                        self._render_async()
-
-                        for _ in range(100):
-                            if self._render_ready:
-                                break
-                            await asyncio.sleep(0.01)
+                        self._render_to_file()
 
                         frame = self._pending_frame
                         if frame:
@@ -979,6 +840,15 @@ class BlenderSimulation:
                                     dead.append(c)
                             for d in dead:
                                 self.clients.discard(d)
+                        elif self._render_error:
+                            error_msg = json.dumps(
+                                {"type": "render_error", "error": self._render_error}
+                            )
+                            for c in self.clients.copy():
+                                try:
+                                    await c.send(error_msg)
+                                except Exception:
+                                    self.clients.discard(c)
                 except Exception as e:
                     print(f"[RenderLoop] error: {e}")
                 await asyncio.sleep(0.01)
@@ -1127,8 +997,8 @@ class BlenderSimulation:
                         # Send status updates to connected clients (UI)
                         for c in self.clients.copy():
                             try:
-                                await c.send_json(
-                                    {
+                                await c.send(
+                                    json.dumps({
                                         "type": "blend",
                                         "payload": {
                                             "blend_mode": self.mode,
@@ -1139,7 +1009,7 @@ class BlenderSimulation:
                                             if isinstance(current_goals, list)
                                             else 0,
                                         },
-                                    }
+                                    })
                                 )
                             except Exception:
                                 pass
@@ -1155,9 +1025,12 @@ class BlenderSimulation:
             )
             render_task = asyncio.create_task(render_loop())
             agent_sync_task = asyncio.create_task(agent_loop())
-            await asyncio.Event().wait()
-            render_task.cancel()
-            agent_sync_task.cancel()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                render_task.cancel()
+                agent_sync_task.cancel()
+                await asyncio.gather(render_task, agent_sync_task, return_exceptions=True)
 
 
 def main():
