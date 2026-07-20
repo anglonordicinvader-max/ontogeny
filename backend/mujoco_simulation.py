@@ -1362,6 +1362,13 @@ class MuJoCoSimulation:
                                 if len(parts) >= 2:
                                     self.controller.set_walk_cmd(float(parts[0]), float(parts[1]))
                                     print(f"[MuJoCo] Walk cmd: linear={parts[0]} angular={parts[1]}", flush=True)
+                            elif cmd == "health":
+                                telem = self._get_telemetry()
+                                telem["type"] = "health"
+                                telem["status"] = "ok"
+                                telem["running"] = self.running
+                                telem["model_loaded"] = self.model is not None
+                                await ws.send(json.dumps(telem))
                             elif cmd == "telemetry":
                                 telem = self._get_telemetry()
                                 await ws.send(json.dumps(telem))

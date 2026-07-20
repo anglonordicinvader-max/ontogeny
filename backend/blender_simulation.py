@@ -847,6 +847,17 @@ class BlenderSimulation:
                                         self.valence = float(parts[2])
                                     except ValueError:
                                         pass
+                            elif cmd == "health":
+                                await ws.send(json.dumps({
+                                    "type": "health",
+                                    "status": "ok",
+                                    "mode": self.mode,
+                                    "world": self.world_name,
+                                    "emotion": self.emotion,
+                                    "frame": self.frame,
+                                    "running": self.running,
+                                    "clients": len(self.clients),
+                                }))
                             elif cmd.startswith("world:"):
                                 new_world = cmd.split(":", 1)[1]
                                 if new_world in ALL_WORLDS or new_world == "none":

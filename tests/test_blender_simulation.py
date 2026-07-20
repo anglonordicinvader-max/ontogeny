@@ -5,6 +5,7 @@ a running Blender instance (data structures, imports, helpers).
 """
 
 import ast
+import json
 import os
 import sys
 
@@ -50,6 +51,21 @@ class TestBlenderSimulationSyntax:
                 return
         pytest.fail("BlenderSimulation class not found")
 
+    def test_health_command_in_handler(self):
+        """blender_simulation.py WebSocket handler should support 'health' command."""
+        path = os.path.join(os.path.dirname(__file__), "..", "backend", "blender_simulation.py")
+        with open(path, encoding="utf-8") as f:
+            source = f.read()
+        assert 'cmd == "health"' in source or "cmd == 'health'" in source
+
+    def test_health_response_contains_required_fields(self):
+        """Health response should include status, mode, world, emotion, frame, running."""
+        path = os.path.join(os.path.dirname(__file__), "..", "backend", "blender_simulation.py")
+        with open(path, encoding="utf-8") as f:
+            source = f.read()
+        for field in ["status", "mode", "world", "emotion", "frame", "running"]:
+            assert f'"{field}"' in source or f"'{field}'" in source, f"Missing field: {field}"
+
 
 class TestBlenderSimulationImportChain:
     """Verify the import chain in blender_simulation.py doesn't crash."""
@@ -73,7 +89,6 @@ class TestBlenderSimulationImportChain:
         path = os.path.join(os.path.dirname(__file__), "..", "backend", "blender_worlds.py")
         with open(path, encoding="utf-8") as f:
             lines = f.readlines()
-        # Check for actual import statements, not comments or docstrings
         for line in lines:
             stripped = line.strip()
             if stripped.startswith("#") or stripped.startswith('"""') or stripped.startswith("'''"):

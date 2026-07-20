@@ -7,32 +7,36 @@ interface BlenderEmbedProps {
 
 type Mode = 'sphere' | 'anatomy' | 'both';
 
+interface BlenderHealth {
+  status: string;
+  mode: string;
+  world: string | null;
+  emotion: string;
+  frame: number;
+  running: boolean;
+}
+
 export function BlenderEmbed({ backendPort = 8766 }: BlenderEmbedProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<Mode>('sphere');
-  const [world, setWorld] = useState<{name: string; description: string; difficulty: number; tags: string[]} | null>(null);
+  const [world, setWorld] = useState<{ name: string; description: string; difficulty: number; tags: string[] } | null>(null);
   const [fps, setFps] = useState(0);
-  const [status, setStatus] = useState('Connecting...');
   const [emotion, setEmotion] = useState('neutral');
   const [drives, setDrives] = useState<Record<string, number>>({});
-  const [autonomousStatus, setAutonomousStatus] = useState('');
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [health, setHealth] = useState<BlenderHealth | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const frameCount = useRef(0);
   const lastFpsTime = useRef(Date.now());
   const [blenderPort, setBlenderPort] = useState<number>(backendPort + 1);
 
-  // Get dynamic blender port from electron API
   useEffect(() => {
     if (typeof window !== 'undefined' && (window as any).electronAPI?.getBlenderPort) {
       (window as any).electronAPI.getBlenderPort().then((port: number) => {
         setBlenderPort(port);
-      }).catch(() => {
-        // fallback to backendPort + 1
-      });
+      }).catch(() => {});
     }
   }, [backendPort]);
 
@@ -50,14 +54,17 @@ export function BlenderEmbed({ backendPort = 8766 }: BlenderEmbedProps) {
 
     const connect = () => {
       setConnectionError(null);
+      setLoading(true);
       const ws = new WebSocket(`ws://127.0.0.1:${blenderPort}`);
       wsRef.current = ws;
 
       ws.onopen = () => {
         setConnected(true);
         setLoading(false);
-        setStatus('Streaming');
         setConnectionError(null);
+        retryCount = 0;
+        // Request health status
+        ws.send(JSON.stringify({ type: 'command', command: 'health' }));
       };
 
       ws.onmessage = (event) => {
@@ -76,8 +83,15 @@ export function BlenderEmbed({ backendPort = 8766 }: BlenderEmbedProps) {
               frameCount.current = 0;
               lastFpsTime.current = now;
             }
-          } else if (msg.type === 'status') {
-            if (msg.payload.emotion) setEmotion(msg.payload.emotion);
+          } else if (msg.type === 'health') {
+            setHealth({
+              status: msg.status,
+              mode: msg.mode,
+              world: msg.world,
+              emotion: msg.emotion,
+              frame: msg.frame,
+              running: msg.running,
+            });
           } else if (msg.type === 'blend') {
             if (msg.payload.blend_mode) setMode(msg.payload.blend_mode);
             if (msg.payload.blend_world) setWorld({ name: msg.payload.blend_world, description: '', difficulty: 0.5, tags: [] });
@@ -90,14 +104,14 @@ export function BlenderEmbed({ backendPort = 8766 }: BlenderEmbedProps) {
       ws.onclose = () => {
         setConnected(false);
         setLoading(false);
+        setHealth(null);
         const delay = Math.min(BASE_DELAY * Math.pow(2, retryCount), MAX_RETRY_DELAY);
-        setAutonomousStatus(`Disconnected - retrying in ${(delay / 1000).toFixed(1)}s...`);
         retryCount++;
         retryTimeout = setTimeout(connect, delay);
       };
 
       ws.onerror = () => {
-        setConnectionError('Connection failed - is Blender running?');
+        setConnectionError('Blender is not running or unreachable');
         ws.close();
       };
     };
@@ -124,7 +138,7 @@ export function BlenderEmbed({ backendPort = 8766 }: BlenderEmbedProps) {
   };
 
   return (
-    <div ref={containerRef} className="relative w-full h-full glass-panel overflow-hidden">
+    <div className="relative w-full h-full glass-panel overflow-hidden">
       <canvas
         ref={canvasRef}
         width={480}
@@ -132,29 +146,35 @@ export function BlenderEmbed({ backendPort = 8766 }: BlenderEmbedProps) {
         className="w-full h-full object-contain"
       />
 
+      {/* Loading state */}
       {!connected && loading && (
         <div className="absolute inset-0 flex items-center justify-center glass-panel">
           <div className="text-center">
             <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-text-primary">{status}</p>
-            {autonomousStatus && <p className="text-sm text-text-tertiary mt-2">{autonomousStatus}</p>}
+            <p className="text-text-primary text-sm">Connecting to Blender...</p>
           </div>
         </div>
       )}
 
-      {!connected && !loading && connectionError && (
+      {/* Connection error — offline state */}
+      {!connected && !loading && (
         <div className="absolute inset-0 flex items-center justify-center glass-panel p-4">
           <div className="text-center max-w-md">
             <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-surface-3 flex items-center justify-center">
-              <svg className="w-6 h-6 text-status-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <svg className="w-6 h-6 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
               </svg>
             </div>
-            <p className="text-text-primary font-medium mb-1">Blender Connection Failed</p>
-            <p className="text-text-secondary text-sm mb-4">{connectionError}</p>
+            <p className="text-text-primary font-medium mb-1">Blender Offline</p>
+            <p className="text-text-secondary text-sm mb-1">
+              {connectionError || 'Blender process not detected'}
+            </p>
+            <p className="text-text-tertiary text-xs mb-4">
+              Start Blender with: blender --background --python blender_simulation.py -- --port {blenderPort}
+            </p>
             <button
-              onClick={() => window.location.reload()}
-              className="btn-ghost px-4 py-2"
+              onClick={() => { setLoading(true); setConnectionError(null); wsRef.current?.close(); }}
+              className="btn-ghost px-4 py-2 text-sm"
             >
               Retry Connection
             </button>
@@ -162,13 +182,18 @@ export function BlenderEmbed({ backendPort = 8766 }: BlenderEmbedProps) {
         </div>
       )}
 
+      {/* Telemetry overlay — only when connected */}
       {connected && (
         <Panel
-          title="Telemetry"
+          title="Scene"
           className="absolute top-2 left-2 w-48"
           accentGlow
         >
           <div className="space-y-1 font-mono text-xs">
+            <div className="flex justify-between">
+              <span className="text-text-tertiary">Status</span>
+              <span className="text-status-success">{health?.running ? 'Running' : 'Paused'}</span>
+            </div>
             <div className="flex justify-between">
               <span className="text-text-tertiary">FPS</span>
               <span className="text-text-primary tabular-nums">{fps}</span>
@@ -179,11 +204,15 @@ export function BlenderEmbed({ backendPort = 8766 }: BlenderEmbedProps) {
             </div>
             <div className="flex justify-between">
               <span className="text-text-tertiary">World</span>
-              <span className="text-text-primary truncate max-w-[120px]">{world?.name || 'none'}</span>
+              <span className="text-text-primary truncate max-w-[120px]">{world?.name || health?.world || 'none'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-text-tertiary">Emotion</span>
               <span className="text-text-primary capitalize">{emotion}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-text-tertiary">Frames</span>
+              <span className="text-text-primary tabular-nums">{health?.frame || 0}</span>
             </div>
             {Object.keys(drives).length > 0 && (
               <div className="pt-1 border-t border-border">
@@ -202,32 +231,34 @@ export function BlenderEmbed({ backendPort = 8766 }: BlenderEmbedProps) {
         </Panel>
       )}
 
-      {/* Autonomous status banner */}
-      {autonomousStatus && connected && (
-        <div className="absolute bottom-2 left-2 right-2 glass-panel rounded-lg px-3 py-2 text-xs animate-slide-up">
-          <div className="flex items-center gap-2">
-            <span className="status-dot status-dot-active" />
-            <span className="text-text-secondary flex-1 truncate">{autonomousStatus}</span>
-          </div>
+      {/* Mode control */}
+      {connected && (
+        <div className="absolute bottom-2 right-2 flex items-center gap-1 glass-panel rounded-lg p-1">
+          {(['sphere', 'anatomy', 'both'] as Mode[]).map((m) => (
+            <button
+              key={m}
+              onClick={() => { setMode(m); sendCommand(`mode:${m}`); }}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-150 ${
+                mode === m
+                  ? 'bg-surface-elevated text-text-primary shadow-md'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-3'
+              }`}
+            >
+              {m}
+            </button>
+          ))}
         </div>
       )}
 
-      {/* Mode segmented control */}
-      <div className="absolute bottom-2 right-2 flex items-center gap-1 glass-panel rounded-lg p-1">
-        {['sphere', 'anatomy', 'both'].map((m) => (
-          <button
-            key={m}
-            onClick={() => { setMode(m as Mode); sendCommand(`mode:${m}`); }}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-150 ${
-              mode === m
-                ? 'bg-surface-elevated text-text-primary shadow-md'
-                : 'text-text-secondary hover:text-text-primary hover:bg-surface-3'
-            }`}
-          >
-            {m}
-          </button>
-        ))}
-      </div>
+      {/* Bottom status */}
+      {connected && (
+        <div className="absolute bottom-2 left-2 glass-panel rounded-lg px-3 py-1.5 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-status-success"></span>
+            <span className="text-text-secondary">Blender Connected</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

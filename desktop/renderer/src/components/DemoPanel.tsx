@@ -136,8 +136,8 @@ export function DemoPanel({ status, send, backendPort }: DemoPanelProps) {
     <div className="h-full overflow-y-auto p-4 space-y-4 animate-panel-in">
       <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-status-success/10 border border-status-success/20 text-2xs text-status-success">
         <Play className="w-3 h-3" />
-        <span className="font-medium">Demo Mode Active</span>
-        <span className="text-status-success/60">— guided demonstration, no live LLM calls</span>
+        <span className="font-medium">Deterministic Demo Mode</span>
+        <span className="text-status-success/60">— reproducible workflow using controlled fixtures</span>
       </div>
       <Panel title="Demo Mode" accentGlow>
         <div className="flex items-center justify-between mb-3">
